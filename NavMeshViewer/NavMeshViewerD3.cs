@@ -4,15 +4,14 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using System.Diagnostics;
-using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.IO;
 using System.Runtime.InteropServices;
-using Enigma.D3;
-using Enigma.D3.Memory;
-using Enigma.D3.Helpers;
-using Enigma.D3.Collections;
-using Enigma.D3.Enums;
+using Enigma.D3.MemoryModel;
+using Enigma.D3.MemoryModel.Core;
+using Enigma.D3.MemoryModel.Caching;
+using Enigma.D3.MemoryModel.SymbolPatching;
 using Nav;
 using Nav.D3;
 
@@ -25,9 +24,53 @@ namespace NavMeshViewer
         {
         }
 
+        private MemoryContext CreateMemoryContext()
+        {
+            var ctx = default(MemoryContext);
+            while (ctx == null)
+            {
+                var processes = Process.GetProcessesByName("Diablo III64");
+                if (processes.Any())
+                {
+                    var process = default(Process);
+                    if (processes.Length == 1)
+                    {
+                        process = processes[0];
+                    }
+
+                    if (process != null)
+                    {
+                        ctx = MemoryContext.FromProcess(process);
+                        break;
+                    }
+                }
+                else
+                {
+                    Trace.WriteLine("Could not find any process.");
+                }
+                Thread.Sleep(1000);
+            }
+            Trace.WriteLine("Found a process.");
+
+            while (true)
+            {
+                try
+                {
+                    SymbolPatcher64.UpdateSymbolTable(ctx);
+                    Trace.WriteLine("Symbol table updated.");
+                    return ctx;
+                }
+                catch (Exception exception)
+                {
+                    Trace.WriteLine($"Could not update symbol table, optimized for patch {SymbolPatcher64.VerifiedBuild}, running {ctx.MainModuleVersion.Revision}: " + exception.Message);
+                    Thread.Sleep(5000);
+                }
+            }
+        }
+
         protected override void CreateNavigation()
         {
-            m_Enigma = Engine.Create();
+            m_Enigma = CreateMemoryContext();
 
             m_Navmesh = Nav.D3.Navmesh.Create(m_Enigma, true);
             m_Navigator = new Nav.NavigationEngine(m_Navmesh);
@@ -89,9 +132,9 @@ namespace NavMeshViewer
 
                 if (m_Enigma != null)
                 {
-                    LevelArea level_area = Engine.Current.LevelArea;
+                    Enigma.D3.MemoryModel.Core.LevelArea level_area = m_Enigma.DataSegment.LevelArea;
                     if (level_area != null)
-                        location = level_area.x044_SnoId;
+                        location = level_area.LevelAreaSNO;
                 }
                 //else
                 //    m_RenderAxis = false;
@@ -128,18 +171,22 @@ namespace NavMeshViewer
             base.OnRefresh(interval);
 
             Nav.D3.Navmesh navmesh_d3 = (m_Navmesh as Nav.D3.Navmesh);
+            m_AcdsObserver = m_AcdsObserver ?? new ContainerCache<ACD>(m_Enigma.DataSegment.ObjectManager.ACDManager.ActorCommonData);
+            m_AcdsObserver.Update();
 
             if (navmesh_d3.IsUpdating)
             {
-                Actor local_actor = ActorHelper.GetLocalActor();
+                var playerACDID = m_Enigma.DataSegment.ObjectManager.PlayerDataManager[m_Enigma.DataSegment.ObjectManager.Player.LocalPlayerIndex].ACDID;
 
-                if (local_actor == null)
+                ACD player = playerACDID != -1 ? m_AcdsObserver.Items[(short)playerACDID] : null;
+
+                if (player == null)
                     return;
 
-                m_RenderCenter.X = local_actor.x0A8_WorldPosX;
-                m_RenderCenter.Y = local_actor.x0AC_WorldPosY;
+                m_RenderCenter.X = player.Position.X;
+                m_RenderCenter.Y = player.Position.Y;
 
-                m_Navigator.CurrentPos = new Vec3(local_actor.x0A8_WorldPosX, local_actor.x0AC_WorldPosY, local_actor.x0B0_WorldPosZ);
+                m_Navigator.CurrentPos = new Vec3(player.Position.X, player.Position.Y, player.Position.Z);
             }
         }
 
@@ -191,7 +238,8 @@ namespace NavMeshViewer
             legend.Add(new LegendEntry("Ctrl+3: Toggle danger regions", true, navmesh_d3.DangerRegionsEnabled));
         }
 
-        private Enigma.D3.Engine m_Enigma = null;
+        private MemoryContext m_Enigma = null;
+        private ContainerCache<ACD> m_AcdsObserver;
         private int m_LastLocation = -1;
         private bool m_AutoClearOnLocationChange = false;
     }

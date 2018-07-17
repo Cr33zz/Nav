@@ -30,7 +30,7 @@ namespace Nav.D3
 
         public SceneSnoNavData(Enigma.D3.Assets.Scene sno_scene)
         {
-            scene_sno_id = sno_scene.x000_Header.x00_SnoId;
+            scene_sno_id = (int)sno_scene.x000_Header.x00_SnoId;
 
             Enigma.D3.Assets.Scene.NavCell[] nav_cells = sno_scene.x180_NavZoneDefinition.x08_NavCells;
 

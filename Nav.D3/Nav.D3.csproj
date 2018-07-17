@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -9,8 +9,9 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Nav.D3</RootNamespace>
     <AssemblyName>Nav.D3</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -29,6 +30,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Hybrid|AnyCPU'">
     <OutputPath>bin\Hybrid\</OutputPath>
@@ -41,20 +43,22 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Enigma.D3.Assets">
-      <HintPath>..\NavMeshViewer\Enigma.D3.Assets.dll</HintPath>
-    </Reference>
-    <Reference Include="Enigma.D3.Assets.MemoryExtensions">
-      <HintPath>..\NavMeshViewer\Enigma.D3.Assets.MemoryExtensions.dll</HintPath>
+      <HintPath>.\Enigma.D3.Assets.dll</HintPath>
     </Reference>
     <Reference Include="Enigma.D3.Core">
-      <HintPath>..\NavMeshViewer\Enigma.D3.Core.dll</HintPath>
+      <HintPath>.\Enigma.D3.Core.dll</HintPath>
     </Reference>
-    <Reference Include="Enigma.D3.Memory">
-      <HintPath>..\NavMeshViewer\Enigma.D3.Memory.dll</HintPath>
+    <Reference Include="Enigma.D3.MemoryModel">
+      <HintPath>.\Enigma.D3.MemoryModel.dll</HintPath>
     </Reference>
-    <Reference Include="Enigma.Memory, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\NavMeshViewer\Enigma.Memory.dll</HintPath>
+    <Reference Include="Enigma.D3.MemoryModel.Caching">
+      <HintPath>.\Enigma.D3.MemoryModel.Caching.dll</HintPath>
+    </Reference>
+    <Reference Include="Enigma.D3.MemoryModel.SymbolPatching">
+      <HintPath>.\Enigma.D3.MemoryModel.SymbolPatching.dll</HintPath>
+    </Reference>
+    <Reference Include="Enigma.Memory">
+      <HintPath>.\Enigma.Memory.dll</HintPath>
     </Reference>
     <Reference Include="Nav">
       <HintPath>.\Nav.dll</HintPath>

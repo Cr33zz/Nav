@@ -6,13 +6,13 @@ namespace Nav.D3
 {
     class SceneData
     {
-        public SceneData(Enigma.D3.Scene scene)
+        public SceneData(Enigma.D3.MemoryModel.Core.Scene scene)
         {
-            scene_sno_id = scene.x0E8_SceneSnoId;
-            area_sno_id = scene.x018_LevelAreaSnoId;
+            scene_sno_id = scene.SceneSNO;
+            area_sno_id = scene.LevelAreaSNO;
 
-            min = new Vec3(scene.x0FC_MeshMinX, scene.x100_MeshMinY, scene.x104_MeshMinZ);
-            max = new Vec3(scene.x174_MeshMaxX, scene.x178_MeshMaxY, scene.x104_MeshMinZ); //there is no max z, so consider all grid cells flat
+            min = new Vec3(scene.MeshMin.X, scene.MeshMin.Y, scene.MeshMin.Z);
+            max = new Vec3(scene.MeshMax.X, scene.MeshMax.Y, scene.MeshMin.Z); //there is no max z, so consider all grid cells flat
         }
 
         public class uid : IEquatable<uid>
@@ -43,7 +43,7 @@ namespace Nav.D3
 
             public override int GetHashCode()
             {
-                return sno_id;
+                return (int)sno_id;
             }
 
             public void Serialize(BinaryWriter w)

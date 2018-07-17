@@ -5,22 +5,19 @@ using System.Timers;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using Enigma;
-using Enigma.D3;
-using Enigma.D3.Memory;
-using Enigma.D3.Assets;
+using Enigma.D3.MemoryModel;
 using Enigma.D3.Enums;
-using Enigma.D3.Helpers;
+using Enigma.D3.MemoryModel.Core;
 using System.Diagnostics;
 
 namespace Nav.D3
 {
     public class Navmesh : Nav.Navmesh
     {
-        public Navmesh(Engine engine, bool verbose = false)
+        public Navmesh(MemoryContext engine, bool verbose = false)
             : base(verbose)
         {
-            m_Engine = engine;
+            m_MemoryContext = engine;
 
             if (engine != null)
                 Log("[Nav.D3] Navmesh created!");
@@ -136,7 +133,7 @@ namespace Nav.D3
             set { using (new WriteLock(D3InputLock)) m_AllowedGridCellsId = new List<int>(value); }
         }
 
-        public static Navmesh Create(Engine engine, bool verbose = false)
+        public static Navmesh Create(MemoryContext engine, bool verbose = false)
         {
             return Current = new Navmesh(engine, verbose);
         }
@@ -189,7 +186,12 @@ namespace Nav.D3
 
             //using (new Profiler("[Nav.D3.Navigation] Scene sno data aquired [{t}]", 70))
             {
-                var sno_scenes = SnoMemoryHelper.Enumerate<Enigma.D3.Assets.Scene>(SnoGroupId.Scene);
+                var sno_scenes = m_MemoryContext.DataSegment.SNOGroupStorage[(int)SNOType.Scene].
+                Cast<Enigma.D3.MemoryModel.Assets.SNOGroupStorage<Enigma.D3.Assets.Scene>>().
+                Dereference().
+                Container.Where(o => o != null && o.ID != -1 && o.SNOType == SNOType.Scene && !o.PtrValue.IsInvalid).
+                Select(o => o.PtrValue.Cast<Enigma.D3.Assets.Scene>().Dereference()).
+                ToList();
 
                 foreach (Enigma.D3.Assets.Scene sno_scene in sno_scenes)
                 {
@@ -225,9 +227,9 @@ namespace Nav.D3
             {
                 int scenes_available = 0;
 
-                foreach (Enigma.D3.Scene scene in m_Engine.ObjectManager.x998_Scenes.Dereference())
+                foreach (var scene in m_MemoryContext.DataSegment.ObjectManager.Scenes)
                 {
-                    if (scene == null || scene.x000_Id == -1)
+                    if (scene == null || scene.ID == -1)
                         continue;
 
                     ++scenes_available;
@@ -335,16 +337,16 @@ namespace Nav.D3
             {
                 try
                 {
-                    IEnumerable<ActorCommonData> objects = ActorCommonDataHelper.Enumerate(x => (x.x184_ActorType == ActorType.ServerProp || x.x184_ActorType == ActorType.Monster || x.x184_ActorType == ActorType.Projectile || x.x184_ActorType == ActorType.CustomBrain) && DANGERS.Exists(d => x.x004_Name.Contains(d.name)));
+                    IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => (x.ActorType == ActorType.ServerProp || x.ActorType == ActorType.Monster || x.ActorType == ActorType.Projectile || x.ActorType == ActorType.CustomBrain) && DANGERS.Exists(d => x.Name.Contains(d.name)));
 
                     HashSet<region_data> dangers = new HashSet<region_data>();
 
-                    foreach (ActorCommonData obj in objects)
+                    foreach (ACD obj in objects)
                     {
-                        danger_data data = DANGERS.Find(d => obj.x004_Name.Contains(d.name));
+                        danger_data data = DANGERS.Find(d => obj.Name.Contains(d.name));
                         if (data != null)
                         {
-                            Vec3 pos = new Vec3(obj.x0D0_WorldPosX, obj.x0D4_WorldPosY, obj.x0D8_WorldPosZ);
+                            Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
                             AABB area = new AABB(pos - new Vec3(data.range, data.range, pos.Z - 100), pos + new Vec3(data.range, data.range, pos.Z + 100));
                             dangers.Add(new region_data(area, data.move_cost_mult));
                         }
@@ -362,34 +364,25 @@ namespace Nav.D3
         {
             try
             {
-                if (m_Engine == null)
+                if (m_MemoryContext == null)
                     return false;
 
-                m_LocalData = m_LocalData ?? m_Engine.LocalData;
+                var valid = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex].ActorID != -1;
 
-                byte is_not_in_game = (byte)m_LocalData.x04_IsNotInGame;
-                if (is_not_in_game == 0xCD) // structure is being updated, everything is cleared with 0xCD ('-')
+                if (valid)
                 {
                     if (!m_IsLocalActorReady)
-                        return false;
+                        m_IsLocalActorReady = true;
+
+                    return true;
                 }
                 else
                 {
-                    if (is_not_in_game == 0)
-                    {
-                        if (!m_IsLocalActorReady)
-                            m_IsLocalActorReady = true;
-                    }
-                    else
-                    {
-                        if (m_IsLocalActorReady)
-                            m_IsLocalActorReady = false;
+                    if (m_IsLocalActorReady)
+                        m_IsLocalActorReady = false;
 
-                        return false;
-                    }
+                    return false;
                 }
-
-                return m_LocalData.x00_IsActorCreated == 1;
             }
             catch (Exception)
             {
@@ -402,13 +395,13 @@ namespace Nav.D3
         {
             try
             {
-                if (m_Engine == null)
+                if (m_MemoryContext == null)
                     return false;
 
-                m_ObjectManager = m_ObjectManager ?? m_Engine.ObjectManager;
+                m_ObjectManager = m_ObjectManager ?? m_MemoryContext.DataSegment.ObjectManager;
 
                 // Don't do anything unless game updated frame.
-                int currentFrame = m_ObjectManager.x038_Counter_CurrentFrame;
+                int currentFrame = m_ObjectManager.RenderTick;
 
                 if (currentFrame == m_LastFrame)
                     return false;
@@ -460,9 +453,8 @@ namespace Nav.D3
         private HashSet<SceneData.uid> m_ProcessedSceneId = new HashSet<SceneData.uid>(); // @ProcessedScenesLock
         private List<int> m_AllowedAreasSnoId = new List<int>(); //@D3InputLock
         private List<int> m_AllowedGridCellsId = new List<int>(); //@D3InputLock
-        private Engine m_Engine;
+        private MemoryContext m_MemoryContext;
         private int m_LastFrame;
-        private LocalData m_LocalData;
         private ObjectManager m_ObjectManager;
         private bool m_IsLocalActorReady = false;
     }
