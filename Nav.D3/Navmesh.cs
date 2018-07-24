@@ -337,22 +337,22 @@ namespace Nav.D3
             {
                 try
                 {
-                    IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => (x.ActorType == ActorType.ServerProp || x.ActorType == ActorType.Monster || x.ActorType == ActorType.Projectile || x.ActorType == ActorType.CustomBrain) && DANGERS.Exists(d => x.Name.Contains(d.name)));
+                    //IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => (x.ActorType == ActorType.ServerProp || x.ActorType == ActorType.Monster || x.ActorType == ActorType.Projectile || x.ActorType == ActorType.CustomBrain) && DANGERS.Exists(d => x.Name.Contains(d.name)));
 
-                    HashSet<region_data> dangers = new HashSet<region_data>();
+                    //HashSet<region_data> dangers = new HashSet<region_data>();
 
-                    foreach (ACD obj in objects)
-                    {
-                        danger_data data = DANGERS.Find(d => obj.Name.Contains(d.name));
-                        if (data != null)
-                        {
-                            Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
-                            AABB area = new AABB(pos - new Vec3(data.range, data.range, pos.Z - 100), pos + new Vec3(data.range, data.range, pos.Z + 100));
-                            dangers.Add(new region_data(area, data.move_cost_mult));
-                        }
-                    }
+                    //foreach (ACD obj in objects)
+                    //{
+                    //    danger_data data = DANGERS.Find(d => obj.Name.Contains(d.name));
+                    //    if (data != null)
+                    //    {
+                    //        Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
+                    //        AABB area = new AABB(pos - new Vec3(data.range, data.range, pos.Z - 100), pos + new Vec3(data.range, data.range, pos.Z + 100));
+                    //        dangers.Add(new region_data(area, data.move_cost_mult));
+                    //    }
+                    //}
 
-                    Regions = dangers;
+                    //Regions = dangers;
                 }
                 catch (Exception)
                 {
@@ -367,22 +367,8 @@ namespace Nav.D3
                 if (m_MemoryContext == null)
                     return false;
 
-                var valid = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex].ActorID != -1;
-
-                if (valid)
-                {
-                    if (!m_IsLocalActorReady)
-                        m_IsLocalActorReady = true;
-
-                    return true;
-                }
-                else
-                {
-                    if (m_IsLocalActorReady)
-                        m_IsLocalActorReady = false;
-
-                    return false;
-                }
+                var playerData = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
+                return m_IsLocalActorReady = (playerData.ActorID != -1 && playerData.ACDID != -1);
             }
             catch (Exception)
             {
@@ -398,10 +384,8 @@ namespace Nav.D3
                 if (m_MemoryContext == null)
                     return false;
 
-                m_ObjectManager = m_ObjectManager ?? m_MemoryContext.DataSegment.ObjectManager;
-
                 // Don't do anything unless game updated frame.
-                int currentFrame = m_ObjectManager.RenderTick;
+                int currentFrame = m_MemoryContext.DataSegment.ObjectManager.RenderTick;
 
                 if (currentFrame == m_LastFrame)
                     return false;
@@ -455,7 +439,6 @@ namespace Nav.D3
         private List<int> m_AllowedGridCellsId = new List<int>(); //@D3InputLock
         private MemoryContext m_MemoryContext;
         private int m_LastFrame;
-        private ObjectManager m_ObjectManager;
         private bool m_IsLocalActorReady = false;
     }
 }

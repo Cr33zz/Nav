@@ -70,9 +70,9 @@ namespace NavMeshViewer
 
         protected override void CreateNavigation()
         {
-            m_Enigma = CreateMemoryContext();
+            m_MemoryContext = CreateMemoryContext();
 
-            m_Navmesh = Nav.D3.Navmesh.Create(m_Enigma, true);
+            m_Navmesh = Nav.D3.Navmesh.Create(m_MemoryContext, true);
             m_Navigator = new Nav.NavigationEngine(m_Navmesh);
             m_Navmesh.RegionsMoveCostMode = Nav.Navmesh.RegionsMode.Mult;
             m_Explorer = new Nav.ExploreEngine.Nearest(m_Navmesh, m_Navigator);
@@ -113,7 +113,7 @@ namespace NavMeshViewer
 
         protected override void ModifyRenderMatrix(ref Matrix m)
         {
-            if (m_Enigma != null)
+            if (m_MemoryContext != null)
             {
                 // display navmesh in the same manner as Diablo does
                 m.Rotate(135);
@@ -130,9 +130,9 @@ namespace NavMeshViewer
             {
                 int location = -1;
 
-                if (m_Enigma != null)
+                if (m_MemoryContext != null)
                 {
-                    Enigma.D3.MemoryModel.Core.LevelArea level_area = m_Enigma.DataSegment.LevelArea;
+                    Enigma.D3.MemoryModel.Core.LevelArea level_area = m_MemoryContext.DataSegment.LevelArea;
                     if (level_area != null)
                         location = level_area.LevelAreaSNO;
                 }
@@ -160,7 +160,7 @@ namespace NavMeshViewer
 
         protected override void OnRenderUI(PaintEventArgs e)
         {
-            //if (m_Enigma == null)
+            //if (m_MemoryContext == null)
             //    e.Graphics.DrawString("Run viewer when Diablo 3 is running!", new Font("Arial", 16), Brushes.Black, Width / 2 - 190, Height / 2 - 50);
             //else
                 base.OnRenderUI(e);
@@ -171,14 +171,12 @@ namespace NavMeshViewer
             base.OnRefresh(interval);
 
             Nav.D3.Navmesh navmesh_d3 = (m_Navmesh as Nav.D3.Navmesh);
-            m_AcdsObserver = m_AcdsObserver ?? new ContainerCache<ACD>(m_Enigma.DataSegment.ObjectManager.ACDManager.ActorCommonData);
-            m_AcdsObserver.Update();
-
+            
             if (navmesh_d3.IsUpdating)
             {
-                var playerACDID = m_Enigma.DataSegment.ObjectManager.PlayerDataManager[m_Enigma.DataSegment.ObjectManager.Player.LocalPlayerIndex].ACDID;
+                var playerACDID = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex].ACDID;
 
-                ACD player = playerACDID != -1 ? m_AcdsObserver.Items[(short)playerACDID] : null;
+                ACD player = playerACDID != -1 ? m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData[(short)playerACDID] : null;
 
                 if (player == null)
                     return;
@@ -238,8 +236,7 @@ namespace NavMeshViewer
             legend.Add(new LegendEntry("Ctrl+3: Toggle danger regions", true, navmesh_d3.DangerRegionsEnabled));
         }
 
-        private MemoryContext m_Enigma = null;
-        private ContainerCache<ACD> m_AcdsObserver;
+        private MemoryContext m_MemoryContext = null;
         private int m_LastLocation = -1;
         private bool m_AutoClearOnLocationChange = false;
     }
