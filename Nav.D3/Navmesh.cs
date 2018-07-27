@@ -144,7 +144,7 @@ namespace Nav.D3
         {
             base.OnUpdate(time);
 
-            if (time - m_LastFetchNavDataTime > 500)
+            if (time - m_LastFetchNavDataTime > m_FetchNavDataInterval)
             {
                 FetchNavData();
                 m_LastFetchNavDataTime = time;
@@ -186,12 +186,11 @@ namespace Nav.D3
 
             //using (new Profiler("[Nav.D3.Navigation] Scene sno data aquired [{t}]", 70))
             {
-                var sno_scenes = m_MemoryContext.DataSegment.SNOGroupStorage[(int)SNOType.Scene].
-                Cast<Enigma.D3.MemoryModel.Assets.SNOGroupStorage<Enigma.D3.Assets.Scene>>().
-                Dereference().
-                Container.Where(o => o != null && o.ID != -1 && o.SNOType == SNOType.Scene && !o.PtrValue.IsInvalid).
-                Select(o => o.PtrValue.Cast<Enigma.D3.Assets.Scene>().Dereference()).
-                ToList();
+                var sno_scenes = m_MemoryContext.DataSegment.SNOGroupStorage[(int)SNOType.Scene].Cast<Enigma.D3.MemoryModel.Assets.SNOGroupStorage<Enigma.D3.Assets.Scene>>().
+                                                                                                 Dereference().
+                                                                                                 Container.Where(o => o != null && o.ID != -1 && o.SNOType == SNOType.Scene && !o.PtrValue.IsInvalid).
+                                                                                                 Select(o => o.PtrValue.Cast<Enigma.D3.Assets.Scene>().Dereference()).
+                                                                                                 ToList();
 
                 foreach (Enigma.D3.Assets.Scene sno_scene in sno_scenes)
                 {
@@ -254,9 +253,14 @@ namespace Nav.D3
                 {
                     SceneSnoNavData sno_nav_data = null;
 
-                    // allow empty grids
                     m_SnoCache.TryGetValue(scene_data.SceneSnoId, out sno_nav_data);
-                    
+
+                    if (sno_nav_data == null)
+                    {
+                        //wait for navigation data to be fetched before processing this scene
+                        continue;
+                    }
+
                     GridCell grid_cell = new GridCell(scene_data.Min, scene_data.Max, scene_data.SceneSnoId, scene_data.AreaSnoId);
                     grid_cell.UserData = scene_data.AreaSnoId;
 
@@ -440,5 +444,6 @@ namespace Nav.D3
         private MemoryContext m_MemoryContext;
         private int m_LastFrame;
         private bool m_IsLocalActorReady = false;
+        protected int m_FetchNavDataInterval = 500;
     }
 }

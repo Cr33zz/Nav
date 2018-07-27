@@ -385,7 +385,7 @@ namespace Nav
             {
                 long time = timer.ElapsedMilliseconds;
 
-                if (m_ForceNavUpdate || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || m_Navigator.GetDestinationType() < DestType.Explore)
+                if (m_ForceNavUpdate || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval)/* || m_Navigator.GetDestinationType() < DestType.Explore*/)
                 {
                     last_update_time = time;
                     m_ForceNavUpdate = false;
@@ -574,7 +574,7 @@ namespace Nav
         private Thread UpdatesThread = null;        
 
         private volatile bool m_ForceNavUpdate = false;
-        protected int m_UpdateExplorationInterval = 500;
+        protected int m_UpdateExplorationInterval = 300;
 
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         protected ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);

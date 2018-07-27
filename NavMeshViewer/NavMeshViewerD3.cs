@@ -132,9 +132,9 @@ namespace NavMeshViewer
 
                 if (m_MemoryContext != null)
                 {
-                    Enigma.D3.MemoryModel.Core.LevelArea level_area = m_MemoryContext.DataSegment.LevelArea;
-                    if (level_area != null)
-                        location = level_area.LevelAreaSNO;
+                    PlayerData localPlayerData = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
+                    if (localPlayerData != null)
+                        location = localPlayerData.LevelAreaSNO;
                 }
                 //else
                 //    m_RenderAxis = false;
