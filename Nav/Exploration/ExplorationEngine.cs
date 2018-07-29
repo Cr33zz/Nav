@@ -385,7 +385,7 @@ namespace Nav
             {
                 long time = timer.ElapsedMilliseconds;
 
-                if (m_ForceNavUpdate || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval)/* || m_Navigator.GetDestinationType() < DestType.Explore*/)
+                if (Enabled && (m_ForceNavUpdate || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || m_Navigator.GetDestinationType() < DestType.Explore))
                 {
                     last_update_time = time;
                     m_ForceNavUpdate = false;
@@ -405,7 +405,7 @@ namespace Nav
         {
             Vec3 current_pos = m_Navigator.CurrentPos;
 
-            if (!Enabled || current_pos.IsEmpty)
+            if (current_pos.IsEmpty)
                 return;
 
             if (!IsDataAvailable)

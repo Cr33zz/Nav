@@ -295,45 +295,65 @@ namespace Nav.D3
 
         class danger_data
         {
-            public danger_data(string name, float range, float move_cost_mult)
+            public danger_data(int actor_sno, float range, float move_cost_mult)
             {
-                this.name = name;
+                this.actor_sno = actor_sno;
                 this.range = range;
                 this.move_cost_mult = move_cost_mult;
             }
 
-            public string name;
+            public int actor_sno;
             public float range;
             public float move_cost_mult;
         }
 
-        private static readonly List<danger_data> DANGERS = new List<danger_data>() { new danger_data("sporeCloud_emitter", 15, 3),
-                                                                                      new danger_data("ChargedBolt_Projectile", 7, 3),
-                                                                                      new danger_data("monsterAffix_Desecrator_damage_AOE", 10, 3),
-                                                                                      new danger_data("monsterAffix_Plagued", 15, 3),
-                                                                                      new danger_data("monsterAffix_Molten_trail", 7, 3),
-                                                                                      new danger_data("monsterAffix_Molten_death", 20, 3),
-                                                                                      new danger_data("arcaneEnchantedDummy_spawn", 35, 3),
-                                                                                      new danger_data("MonsterAffix_ArcaneEnchanted_PetSweep", 35, 3),
-                                                                                      new danger_data("monsterAffix_frozen_iceClusters", 20, 3),
-                                                                                      new danger_data("MonsterAffix_Orbiter", 7, 3),
-                                                                                      new danger_data("MonsterAffix_frozenPulse", 15, 3),
-                                                                                      new danger_data("MonsterAffix_CorpseBomber", 15, 3),
-                                                                                      new danger_data("MorluSpellcaster_Meteor_Pending", 25, 3),
-                                                                                      new danger_data("_Generic_AOE_", 25, 3),
-                                                                                      new danger_data("ZoltunKulle_EnergyTwister", 20, 3),
-                                                                                      new danger_data("Gluttony_gasCloud", 25, 3),
-                                                                                      new danger_data("UberMaghda_Punish_", 20, 3),
-                                                                                      new danger_data("Random_FallingRocks", 40, 3),
-                                                                                      new danger_data("ringofFire_damageArea", 35, 3),
-                                                                                      new danger_data("BoneCage_Proxy", 20, 3),
-                                                                                      new danger_data("Brute_leap_telegraph", 20, 3),
-                                                                                      new danger_data("creepMobArm", 20, 3),
-                                                                                      new danger_data("Morlu_GroundBomb", 40, 3),
-                                                                                      new danger_data("grenadier_proj_trail", 40, 3),
-                                                                                      new danger_data("orbOfAnnihilation", 40, 3),
-                                                                                      //new danger_data("westmarchRanged_projectile", 15, 1.5f),
-                                                                                      new danger_data("Corpulent_A", 25, 3) };
+        private static readonly Dictionary<int, danger_data> DANGERS = new Dictionary<int, danger_data>() { { 219702, new danger_data(219702, 27, 3) }, //MonsterAffix_ArcaneEnchanted_PetSweep Arcane Sentry
+                                                                                                            { 221225, new danger_data(221225, 27, 3) }, //MonsterAffix_ArcaneEnchanted_PetSweep_reverse  
+                                                                                                            { 221560, new danger_data(221560, 27, 3) }, //MonsterAffix_ArcaneEnchanted_Proxy 
+                                                                                                            { 221658, new danger_data(221658, 27, 3) }, //MonsterAffix_ArcaneEnchanted_trailActor
+                                                                                                            { 384431, new danger_data(384431, 27, 3) }, //MonsterAffix_Avenger_ArcaneEnchanted_PetSweep Arcane Sentry
+                                                                                                            { 384433, new danger_data(384433, 27, 3) }, //MonsterAffix_Avenger_ArcaneEnchanted_PetSweep_reverse
+                                                                                                            { 108869, new danger_data(108869, 15, 3) }, //monsterAffix_Plagued_endCloud  
+                                                                                                            { 223933, new danger_data(223933, 15, 3) }, //monsterAffix_plagued_groundGeo
+                                                                                                            { 247980, new danger_data(247980, 20, 3) }, //monsterAffix_molten_bomb_buildUp_geo
+                                                                                                            { 4804, new danger_data(4804, 20, 3) },     //monsterAffix_Molten_deathExplosion_Proxy   
+                                                                                                            { 4803, new danger_data(4803, 20, 3) },     //monsterAffix_Molten_deathStart_Proxy   
+                                                                                                            { 224225, new danger_data(224225, 20, 3) }, //monsterAffix_molten_fireRing   
+                                                                                                            { 95868, new danger_data(95868, 7, 3) },    //monsterAffix_Molten_trail
+                                                                                                            { 402, new danger_data(402, 15, 3) },       //monsterAffix_Frozen_deathExplosion_Proxy   
+                                                                                                            { 223675, new danger_data(223675, 15, 3) }, //monsterAffix_frozen_iceClusters
+                                                                                                            { 84608, new danger_data(84608, 8, 3) },    //monsterAffix_Desecrator_damage_AOE 
+                                                                                                            { 84606, new danger_data(84606, 8, 3) },    //monsterAffix_Desecrator_telegraph
+                                                                                                            { 349779, new danger_data(349779, 15, 3) }, //x1_MonsterAffix_frozenPulse_shard
+                                                                                                          };
+
+        //private static readonly List<danger_data> DANGERS = new List<danger_data>() { new danger_data("sporeCloud_emitter", 15, 3),
+        //                                                                              new danger_data("ChargedBolt_Projectile", 7, 3),
+        //                                                                              new danger_data("monsterAffix_Desecrator_damage_AOE", 10, 3),
+        //                                                                              new danger_data("monsterAffix_Plagued", 15, 3),
+        //                                                                              new danger_data("monsterAffix_Molten_trail", 7, 3),
+        //                                                                              new danger_data("monsterAffix_Molten_death", 20, 3),
+        //                                                                              new danger_data("arcaneEnchantedDummy_spawn", 35, 3),
+        //                                                                              new danger_data("MonsterAffix_ArcaneEnchanted_PetSweep", 35, 3),
+        //                                                                              new danger_data("monsterAffix_frozen_iceClusters", 20, 3),
+        //                                                                              new danger_data("MonsterAffix_Orbiter", 7, 3),
+        //                                                                              new danger_data("MonsterAffix_frozenPulse", 15, 3),
+        //                                                                              new danger_data("MonsterAffix_CorpseBomber", 15, 3),
+        //                                                                              new danger_data("MorluSpellcaster_Meteor_Pending", 25, 3),
+        //                                                                              new danger_data("_Generic_AOE_", 25, 3),
+        //                                                                              new danger_data("ZoltunKulle_EnergyTwister", 20, 3),
+        //                                                                              new danger_data("Gluttony_gasCloud", 25, 3),
+        //                                                                              new danger_data("UberMaghda_Punish_", 20, 3),
+        //                                                                              new danger_data("Random_FallingRocks", 40, 3),
+        //                                                                              new danger_data("ringofFire_damageArea", 35, 3),
+        //                                                                              new danger_data("BoneCage_Proxy", 20, 3),
+        //                                                                              new danger_data("Brute_leap_telegraph", 20, 3),
+        //                                                                              new danger_data("creepMobArm", 20, 3),
+        //                                                                              new danger_data("Morlu_GroundBomb", 40, 3),
+        //                                                                              new danger_data("grenadier_proj_trail", 40, 3),
+        //                                                                              new danger_data("orbOfAnnihilation", 40, 3),
+        //                                                                              //new danger_data("westmarchRanged_projectile", 15, 1.5f),
+        //                                                                              new danger_data("Corpulent_A", 25, 3) };
 
         private void FetchDangerRegions(object source = null, ElapsedEventArgs e = null)
         {
@@ -341,22 +361,22 @@ namespace Nav.D3
             {
                 try
                 {
-                    //IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => (x.ActorType == ActorType.ServerProp || x.ActorType == ActorType.Monster || x.ActorType == ActorType.Projectile || x.ActorType == ActorType.CustomBrain) && DANGERS.Exists(d => x.Name.Contains(d.name)));
+                    IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => (x.ActorType == ActorType.ServerProp || x.ActorType == ActorType.Monster || x.ActorType == ActorType.Projectile || x.ActorType == ActorType.CustomBrain) && DANGERS.ContainsKey(x.ActorSNO));
 
-                    //HashSet<region_data> dangers = new HashSet<region_data>();
+                    HashSet<region_data> dangers = new HashSet<region_data>();
 
-                    //foreach (ACD obj in objects)
-                    //{
-                    //    danger_data data = DANGERS.Find(d => obj.Name.Contains(d.name));
-                    //    if (data != null)
-                    //    {
-                    //        Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
-                    //        AABB area = new AABB(pos - new Vec3(data.range, data.range, pos.Z - 100), pos + new Vec3(data.range, data.range, pos.Z + 100));
-                    //        dangers.Add(new region_data(area, data.move_cost_mult));
-                    //    }
-                    //}
+                    foreach (ACD obj in objects)
+                    {
+                        danger_data data = DANGERS[obj.ActorSNO];
+                        if (data != null)
+                        {
+                            Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
+                            AABB area = new AABB(pos - new Vec3(data.range, data.range, pos.Z - 100), pos + new Vec3(data.range, data.range, pos.Z + 100));
+                            dangers.Add(new region_data(area, data.move_cost_mult));
+                        }
+                    }
 
-                    //Regions = dangers;
+                    Regions = dangers;
                 }
                 catch (Exception)
                 {
