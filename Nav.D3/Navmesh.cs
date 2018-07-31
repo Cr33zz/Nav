@@ -14,12 +14,12 @@ namespace Nav.D3
 {
     public class Navmesh : Nav.Navmesh
     {
-        public Navmesh(MemoryContext engine, bool verbose = false)
+        public Navmesh(MemoryContext memCtx, bool verbose = false)
             : base(verbose)
         {
-            m_MemoryContext = engine;
+            m_MemoryContext = memCtx;
 
-            if (engine != null)
+            if (memCtx != null)
                 Log("[Nav.D3] Navmesh created!");
             else
                 Log("[Nav.D3] Navmesh not properly created, engine is null!");
@@ -444,10 +444,18 @@ namespace Nav.D3
 
             string[] file_paths = Directory.GetFiles(SCENE_SNO_CACHE_DIR);
 
-            foreach (string sno_file in file_paths)
+            try
             {
-                int scene_sno_id = int.Parse(Path.GetFileName(sno_file));
-                m_SnoCache.Add(scene_sno_id, new SceneSnoNavData(scene_sno_id));
+                foreach (string sno_file in file_paths)
+                {
+                    int scene_sno_id = int.Parse(Path.GetFileName(sno_file));
+                    m_SnoCache.Add(scene_sno_id, new SceneSnoNavData(scene_sno_id));
+                }
+            }
+            catch (Exception)
+            {
+                Log("Failed to load scene sno cache. Try removing sno cache directory.");
+                m_SnoCache.Clear();
             }
         }
 
