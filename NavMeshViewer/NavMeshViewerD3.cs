@@ -160,10 +160,13 @@ namespace NavMeshViewer
 
         protected override void OnRenderUI(PaintEventArgs e)
         {
-            //if (m_MemoryContext == null)
-            //    e.Graphics.DrawString("Run viewer when Diablo 3 is running!", new Font("Arial", 16), Brushes.Black, Width / 2 - 190, Height / 2 - 50);
-            //else
+            if (m_MemoryContext == null)
+                e.Graphics.DrawString("Run viewer when Diablo 3 is running!", new Font("Arial", 16), Brushes.Black, Width / 2 - 190, Height / 2 - 50);
+            else
+            {
                 base.OnRenderUI(e);
+                e.Graphics.DrawString("LevelAreaSnoId [" + m_LastLocation + "]", STATS_FONT, Brushes.Black, Width - 150, Height - 55);
+            }
         }
 
         protected override void OnRefresh(int interval)
@@ -172,19 +175,23 @@ namespace NavMeshViewer
 
             Nav.D3.Navmesh navmesh_d3 = (m_Navmesh as Nav.D3.Navmesh);
             
-            if (navmesh_d3.IsUpdating)
+            if (navmesh_d3.IsPlayerReady())
             {
-                var playerACDID = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex].ACDID;
+                try
+                {
+                    var playerACDID = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex].ACDID;
 
-                ACD player = playerACDID != -1 ? m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData[(short)playerACDID] : null;
+                    ACD player = playerACDID != -1 ? m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData[(short)playerACDID] : null;
 
-                if (player == null)
-                    return;
+                    if (player == null)
+                        return;
 
-                m_RenderCenter.X = player.Position.X;
-                m_RenderCenter.Y = player.Position.Y;
+                    m_RenderCenter.X = player.Position.X;
+                    m_RenderCenter.Y = player.Position.Y;
 
-                m_Navigator.CurrentPos = new Vec3(player.Position.X, player.Position.Y, player.Position.Z);
+                    m_Navigator.CurrentPos = new Vec3(player.Position.X, player.Position.Y, player.Position.Z);
+                }
+                catch (Exception) {}
             }
         }
 

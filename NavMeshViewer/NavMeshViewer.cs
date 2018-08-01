@@ -248,10 +248,7 @@ namespace NavMeshViewer
 
         protected virtual void OnRenderUI(PaintEventArgs e)
         {
-            Font legend_font = new Font("Arial", 8, FontStyle.Bold);
-            Font stats_font = new Font("Arial", 8);
-
-            TextRenderer.DrawText(e.Graphics, "L: Toggle render legend", legend_font, new Point(10, 10), m_RenderLegend ? Color.White : Color.Black, m_RenderLegend ? Color.Black : Color.Transparent);
+            TextRenderer.DrawText(e.Graphics, "L: Toggle render legend", LEGEND_FONT, new Point(10, 10), m_RenderLegend ? Color.White : Color.Black, m_RenderLegend ? Color.Black : Color.Transparent);
 
             if (m_RenderLegend)
             {
@@ -264,13 +261,13 @@ namespace NavMeshViewer
                 {
                     int Y = 10 + (i + 1) * Y_offset;
                     if (legend[i].toggleable)
-                        TextRenderer.DrawText(e.Graphics, legend[i].text, legend_font, new Point(10, Y), legend[i].toggled ? Color.White : Color.Black, legend[i].toggled ? Color.Black : Color.Transparent);
+                        TextRenderer.DrawText(e.Graphics, legend[i].text, LEGEND_FONT, new Point(10, Y), legend[i].toggled ? Color.White : Color.Black, legend[i].toggled ? Color.Black : Color.Transparent);
                     else
-                        e.Graphics.DrawString(legend[i].text, legend_font, Brushes.Black, 10, Y);
+                        e.Graphics.DrawString(legend[i].text, LEGEND_FONT, Brushes.Black, 10, Y);
                 }
             }
 
-            e.Graphics.DrawString("[" + m_RenderCenter.X + ", " + m_RenderCenter.Y + "]", stats_font, Brushes.Black, 10, Height - 55);
+            e.Graphics.DrawString("[" + m_RenderCenter.X + ", " + m_RenderCenter.Y + "]", STATS_FONT, Brushes.Black, 10, Height - 55);
         }
 
         protected virtual void OnRefresh(int interval)
@@ -701,6 +698,9 @@ namespace NavMeshViewer
         private List<Vec3> m_LastPositionsHistory = new List<Vec3>();
         private List<Vec3> m_LastExplorePath = new List<Vec3>();
         private float m_LastMaxMoveCostMult = 1;
+
+        public static readonly Font LEGEND_FONT = new Font("Arial", 8, FontStyle.Bold);
+        public static readonly Font STATS_FONT = new Font("Arial", 8);
     }
 
     class RenderHelper

@@ -65,8 +65,13 @@ namespace Nav.D3
         public SceneSnoNavData(int scene_sno_id)
         {
             this.scene_sno_id = scene_sno_id;
-
             Load();
+        }
+
+        public SceneSnoNavData(int scene_sno_id, BinaryReader br)
+        {
+            this.scene_sno_id = scene_sno_id;
+            Load(br);
         }
 
         public int SceneSnoId
@@ -87,11 +92,16 @@ namespace Nav.D3
             using (FileStream fs = File.OpenRead(FileName))
             using (BinaryReader br = new BinaryReader(fs))
             {
-                int cells_count = br.ReadInt32();
-
-                for (int i = 0; i < cells_count; ++i)
-                    cells.Add(new Cell(br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), (MovementFlag)br.ReadInt32()));
+                Load(br);
             }
+        }
+
+        private void Load(BinaryReader br)
+        {
+            int cells_count = br.ReadInt32();
+
+            for (int i = 0; i < cells_count; ++i)
+                cells.Add(new Cell(br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), br.ReadSingle(), (MovementFlag)br.ReadInt32()));
         }
 
         public void Save()
@@ -102,20 +112,25 @@ namespace Nav.D3
             using (FileStream fs = File.Create(FileName))
             using (BinaryWriter bw = new BinaryWriter(fs))
             {
-                bw.Write(cells.Count);
+                Save(bw);
+            }
+        }
 
-                foreach (Cell cell in cells)
-                {
-                    bw.Write(cell.Min.X);
-                    bw.Write(cell.Min.Y);
-                    bw.Write(cell.Min.Z);
+        public void Save(BinaryWriter bw)
+        {
+            bw.Write(cells.Count);
 
-                    bw.Write(cell.Max.X);
-                    bw.Write(cell.Max.Y);
-                    bw.Write(cell.Max.Z);
+            foreach (Cell cell in cells)
+            {
+                bw.Write(cell.Min.X);
+                bw.Write(cell.Min.Y);
+                bw.Write(cell.Min.Z);
 
-                    bw.Write((int)cell.Flags);
-                }
+                bw.Write(cell.Max.X);
+                bw.Write(cell.Max.Y);
+                bw.Write(cell.Max.Z);
+
+                bw.Write((int)cell.Flags);
             }
         }
 

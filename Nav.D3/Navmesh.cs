@@ -116,11 +116,6 @@ namespace Nav.D3
 
         public bool DangerRegionsEnabled { get; set; }
 
-        public bool IsUpdating
-        {
-            get { return IsLocalActorValid() && IsObjectManagerOnNewFrame(); }
-        }
-
         public List<int> AllowedAreasSnoId
         {
             get { using (new ReadLock(D3InputLock)) return new List<int>(m_AllowedAreasSnoId); }
@@ -155,14 +150,17 @@ namespace Nav.D3
                 FetchDangerRegions();
                 m_LastFetchDangerRegionsTime = time;
             }
-        }
 
-        private Int64 m_LastFetchNavDataTime = 0;
-        private Int64 m_LastFetchDangerRegionsTime = 0;
+            if (m_SnoCacheDirty && time - m_LastSnoCacheSaveTime > m_SnoCacheSaveInterval)
+            {
+                SaveSnoCache();
+                m_LastSnoCacheSaveTime = time;
+            }
+        }
 
         private void FetchNavData()
         {
-            if (IsUpdating)
+            if (IsPlayerReady())
             {
                 try
                 {
@@ -177,7 +175,7 @@ namespace Nav.D3
                 }
             }
             else
-                Log("[Nav.D3] No updating!");
+                Log("[Nav.D3] No player!");
         }
 
         private void FetchSceneSnoData()
@@ -211,7 +209,7 @@ namespace Nav.D3
                 foreach (SceneSnoNavData data in new_scene_sno_nav_data)
                 {
                     m_SnoCache.Add(data.SceneSnoId, data);
-                    data.Save();
+                    m_SnoCacheDirty = true;
 
                     Log("[Nav.D3] SceneSnoId " + data.SceneSnoId + " added to cache, now containing " + m_SnoCache.Count + " entries!");
                 }
@@ -357,7 +355,7 @@ namespace Nav.D3
 
         private void FetchDangerRegions(object source = null, ElapsedEventArgs e = null)
         {
-            if (DangerRegionsEnabled && IsUpdating)
+            if (DangerRegionsEnabled && IsPlayerReady())
             {
                 try
                 {
@@ -384,7 +382,7 @@ namespace Nav.D3
             }
         }
 
-        private bool IsLocalActorValid()
+        public bool IsPlayerReady()
         {
             try
             {
@@ -392,37 +390,7 @@ namespace Nav.D3
                     return false;
 
                 var playerData = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
-                return m_IsLocalActorReady = (playerData.ActorID != -1 && playerData.ACDID != -1);
-            }
-            catch (Exception)
-            {
-            }
-
-            return false;
-        }
-
-        private bool IsObjectManagerOnNewFrame()
-        {
-            try
-            {
-                if (m_MemoryContext == null)
-                    return false;
-
-                // Don't do anything unless game updated frame.
-                int currentFrame = m_MemoryContext.DataSegment.ObjectManager.RenderTick;
-
-                if (currentFrame == m_LastFrame)
-                    return false;
-
-                if (currentFrame < m_LastFrame)
-                {
-                    // Lesser frame than before = left game probably.
-                    m_LastFrame = currentFrame;
-                    return false;
-                }
-
-                m_LastFrame = currentFrame;
-                return true;
+                return playerData.ActorID != -1 && playerData.ACDID != -1;
             }
             catch (Exception)
             {
@@ -442,14 +410,21 @@ namespace Nav.D3
                 return;
             }
 
-            string[] file_paths = Directory.GetFiles(SCENE_SNO_CACHE_DIR);
+            if (!File.Exists(SCENE_SNO_CACHE_DIR + SCENE_SNO_CACHE_FILE))
+                return;
 
             try
             {
-                foreach (string sno_file in file_paths)
+                using (FileStream fs = File.OpenRead(SCENE_SNO_CACHE_DIR + SCENE_SNO_CACHE_FILE))
+                using (BinaryReader br = new BinaryReader(fs))
                 {
-                    int scene_sno_id = int.Parse(Path.GetFileName(sno_file));
-                    m_SnoCache.Add(scene_sno_id, new SceneSnoNavData(scene_sno_id));
+                    int scenes_count = br.ReadInt32();
+
+                    for (int i = 0; i < scenes_count; ++i)
+                    {
+                        int scene_sno_id = br.ReadInt32();
+                        m_SnoCache[scene_sno_id] = new SceneSnoNavData(scene_sno_id, br);
+                    }
                 }
             }
             catch (Exception)
@@ -459,7 +434,28 @@ namespace Nav.D3
             }
         }
 
+        private void SaveSnoCache()
+        {
+            if (!m_SnoCacheDirty)
+                return;
+
+            using (FileStream fs = File.Create(SCENE_SNO_CACHE_DIR + SCENE_SNO_CACHE_FILE))
+            using (BinaryWriter bw = new BinaryWriter(fs))
+            {
+                bw.Write(m_SnoCache.Count);
+
+                foreach (var entry in m_SnoCache)
+                {
+                    bw.Write(entry.Key);
+                    entry.Value.Save(bw);
+                }
+            }
+
+            m_SnoCacheDirty = false;
+        }
+
         private static string SCENE_SNO_CACHE_DIR = "sno_cache/";
+        private static string SCENE_SNO_CACHE_FILE = "scene_sno_cache";
         private static bool USE_SNO_CACHE = true;
 
         private ReaderWriterLockSlim ProcessedScenesLock = new ReaderWriterLockSlim();
@@ -470,8 +466,11 @@ namespace Nav.D3
         private List<int> m_AllowedAreasSnoId = new List<int>(); //@D3InputLock
         private List<int> m_AllowedGridCellsId = new List<int>(); //@D3InputLock
         private MemoryContext m_MemoryContext;
-        private int m_LastFrame;
-        private bool m_IsLocalActorReady = false;
-        protected int m_FetchNavDataInterval = 500;
+        private bool m_SnoCacheDirty = false;
+        private Int64 m_LastFetchNavDataTime = 0;
+        private Int64 m_LastFetchDangerRegionsTime = 0;
+        protected int m_FetchNavDataInterval = 250;
+        private Int64 m_LastSnoCacheSaveTime = 0;
+        protected int m_SnoCacheSaveInterval = 10000;
     }
 }
