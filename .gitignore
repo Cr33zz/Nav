@@ -1,0 +1,11 @@
+Nav/bin/*
+Nav/obj/*
+Nav.D3/Nav.dll
+Nav.D3/copy_enigma.bat
+Nav.D3/bin/*
+Nav.D3/obj/*
+NavMeshViewer/.vs/*
+NavMeshViewer/bin/*
+NavMeshViewer/obj/*
+NavMeshViewer/Nav.D3.dll
+NavMeshViewer/Nav.dll

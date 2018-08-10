@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>NavMeshViewer</RootNamespace>
     <AssemblyName>NavMeshViewer</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -63,9 +63,6 @@
     </Reference>
     <Reference Include="Enigma.D3.MemoryModel.Caching">
       <HintPath>..\Nav.D3\Enigma.D3.MemoryModel.Caching.dll</HintPath>
-    </Reference>
-    <Reference Include="Enigma.D3.MemoryModel.SymbolPatching">
-      <HintPath>..\Nav.D3\Enigma.D3.MemoryModel.SymbolPatching.dll</HintPath>
     </Reference>
     <Reference Include="Enigma.Memory">
       <HintPath>..\Nav.D3\Enigma.Memory.dll</HintPath>
