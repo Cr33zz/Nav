@@ -17,7 +17,7 @@ namespace Nav
             timer.Stop();
 
             if (timer.ElapsedMilliseconds > log_threshold)
-                Trace.WriteLine(message.Replace("{t}", timer.ElapsedMilliseconds.ToString() + " ms"));
+                Trace.WriteLine(message.Replace("%t", timer.ElapsedMilliseconds.ToString() + " ms"));
         }
 
         private Stopwatch timer = new Stopwatch();

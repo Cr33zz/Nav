@@ -86,7 +86,7 @@ namespace Nav
             using (new WriteLock(DataLock))
             {
                 // check if same grid is not already defined (merge then)
-                GridCell base_grid_cell = m_GridCells.Find(x => x.AABB.Equals(g_cell.AABB));
+                GridCell base_grid_cell = m_GridCells.FirstOrDefault(x => x.AABB.Equals(g_cell.AABB));
 
                 if (base_grid_cell != null)
                 {
@@ -105,7 +105,7 @@ namespace Nav
                     Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.Cells.Count + " cell(s) added");
                 }
 
-                m_AllCells.AddRange(g_cell.Cells);
+                m_AllCells.UnionWith(g_cell.Cells);
                 UpdateCellsPatches(g_cell.Cells);
 
                 NotifyOnGridCellAdded(g_cell);
@@ -118,7 +118,7 @@ namespace Nav
 
         private void UpdateCellsPatches(List<Cell> cells)
         {
-            //using (new Profiler("[Nav] Cells patches refreshed [{t}]"))
+            //using (new Profiler("[Nav] Cells patches refreshed [%t]"))
             {
                 foreach (Cell c in cells)
                 {
@@ -234,12 +234,12 @@ namespace Nav
         // Assume DataLock (read)
         internal GridCell GetGridCell(Vec3 pos)
         {
-            List<GridCell> grid_cells = GetGridCellsContaining(pos);
+            var grid_cells = GetGridCellsContaining(pos);
 
-            if (grid_cells.Count > 0)
+            if (grid_cells.Count() > 0)
             {
                 float min_grid_cell_area = grid_cells.Min(x => x.AABB.Area);
-                GridCell smallest_grid_cell = grid_cells.Find(x => x.AABB.Area.Equals(min_grid_cell_area));
+                GridCell smallest_grid_cell = grid_cells.FirstOrDefault(x => x.AABB.Area.Equals(min_grid_cell_area));
 
                 return smallest_grid_cell;
             }
@@ -286,7 +286,7 @@ namespace Nav
         private class overlapped_cell_data
         {
             public overlapped_cell_data(Cell replaced_cell) { this.replaced_cell = replaced_cell; }
-            public overlapped_cell_data(List<Cell> all_cells, BinaryReader r) { Deserialize(all_cells, r); }
+            public overlapped_cell_data(HashSet<Cell> all_cells, BinaryReader r) { Deserialize(all_cells, r); }
 
             public Cell replaced_cell;
             public List<Cell> replacement_cells = new List<Cell>();
@@ -310,16 +310,16 @@ namespace Nav
                     region.Serialize(w);
             }
 
-            public void Deserialize(List<Cell> all_cells, BinaryReader r)
+            public void Deserialize(HashSet<Cell> all_cells, BinaryReader r)
             {
                 int replaced_cell_global_id = r.ReadInt32();
-                replaced_cell = all_cells.Find(x => x.GlobalId == replaced_cell_global_id);
+                replaced_cell = all_cells.First(x => x.GlobalId == replaced_cell_global_id);
 
                 int replacement_cells_count = r.ReadInt32();
                 for (int i = 0; i < replacement_cells_count; ++i)
                 {
                     int replacement_cell_global_id = r.ReadInt32();
-                    replacement_cells.Add(all_cells.Find(x => x.GlobalId == replacement_cell_global_id));
+                    replacement_cells.Add(all_cells.First(x => x.GlobalId == replacement_cell_global_id));
                 }
 
                 int last_areas_count = r.ReadInt32();
@@ -342,7 +342,7 @@ namespace Nav
             while (!m_ShouldStopUpdates)
             {
                 OnUpdate(timer.ElapsedMilliseconds);
-                Thread.Sleep(50);
+                Thread.Sleep(15);
             }
         }
 
@@ -351,12 +351,14 @@ namespace Nav
 
         protected virtual void OnUpdate(Int64 time)
         {
-            if (time - m_LastUpdateRegionsTime > 250)
+            if (time - m_LastUpdateRegionsTime > UpdateRegionsInterval)
             {
                 UpdateRegions();
                 m_LastUpdateRegionsTime = time;
             }
         }
+
+        public uint UpdateRegionsInterval { get; set; } = 100;
 
         private Int64 m_LastUpdateRegionsTime = 0;
 
@@ -366,16 +368,17 @@ namespace Nav
             HashSet<region_data> regions_copy = Regions;
 
             using (new WriteLock(DataLock))
+            //using (new Profiler($"Updatind {m_Regions.Count} regions took %t"))
             {
                 foreach (var data in m_CellsOverlappedByRegions)
                     data.Value.areas.Clear();
-            
+
                 if (RegionsEnabled)
                 {
                     // update cells overlapped by avoid areas
                     foreach (region_data region in regions_copy)
                     {
-                        List<GridCell> g_cells = m_GridCells.FindAll(x => x.AABB.Overlaps2D(region.area));
+                        var g_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(region.area));
                         List<Cell> cells = new List<Cell>();
 
                         // do not ignore disabled cells on purpose so we don't have to iterate separately over
@@ -409,100 +412,100 @@ namespace Nav
                     {
                         anything_changed = true;
 
-                        //using (new Profiler("[Nav] Avoid areas updated [{t}]"))
+                        GridCell parent_grid_cell = GetGridCell(data.replaced_cell.Center);
+
+                        // grid cell containing this replacement has been removed
+                        if (parent_grid_cell == null)
+                            continue;
+
+                        List<Cell> potential_neighbors = data.replaced_cell.Neighbours.Select(x => x.cell).ToList();
+
                         {
-                            GridCell parent_grid_cell = GetGridCell(data.replaced_cell.Center);
+                            // disable original cell
+                            if (data.last_areas.Count == 0)
+                                data.replaced_cell.Disabled = true;
 
-                            // grid cell containing this replacement has been removed
-                            if (parent_grid_cell == null)
-                                continue;
-
-                            List<Cell> potential_neighbors = data.replaced_cell.Neighbours.Select(x => x.cell).ToList();
-
+                            // remove previous replacement cells
+                            foreach (Cell replacement_cell in data.replacement_cells)
                             {
-                                // disable original cell
-                                if (data.last_areas.Count == 0)
-                                    data.replaced_cell.Disabled = true;
-
-                                // remove previous replacement cells
-                                foreach (Cell replacement_cell in data.replacement_cells)
-                                {
-                                    parent_grid_cell.Remove(replacement_cell);
-                                    m_AllCells.RemoveAll(x => x.GlobalId == replacement_cell.GlobalId);
-                                }
-
-                                data.replacement_cells.Clear();
+                                parent_grid_cell.Remove(replacement_cell);
+                                m_AllCells.Remove(replacement_cell);
                             }
 
-                            if (data.areas.Count > 0)
+                            data.replacement_cells.Clear();
+                        }
+
+                        if (data.areas.Count > 0)
+                        {
+                            // generate new replacement cells
+                            data.replacement_cells.Add(data.replaced_cell);
+
+                            foreach (region_data region in data.areas)
                             {
-                                // generate new replacement cells
-                                data.replacement_cells.Add(data.replaced_cell);
+                                List<Cell> cells_to_check = new List<Cell>(data.replacement_cells);
 
-                                foreach (region_data region in data.areas)
+                                foreach (Cell c in cells_to_check)
                                 {
-                                    List<Cell> cells_to_check = new List<Cell>(data.replacement_cells);
+                                    AABB[] extracted = c.AABB.Extract2D(region.area);
 
-                                    foreach (Cell c in cells_to_check)
+                                    if (extracted != null)
                                     {
-                                        AABB[] extracted = c.AABB.Extract2D(region.area);
+                                        data.replacement_cells.Remove(c);
 
-                                        if (extracted != null)
+                                        for (int k = 0; k < extracted.Length; ++k)
                                         {
-                                            data.replacement_cells.Remove(c);
 
-                                            for (int k = 0; k < extracted.Length; ++k)
+                                            // in case of negative movement cost treat this region as dynamic obstacle
+                                            if (region.move_cost_mult < 0 && k == 0)
+                                                continue;
+
+                                            float movement_cost_mult = c.MovementCostMult;
+
+                                            // first cell is always the one overlapped by region
+                                            if (k == 0)
                                             {
-                                                // in case of negative movement cost treat this region as dynamic obstacle
-                                                if (region.move_cost_mult < 0 && k == 0)
-                                                    continue;
-
-                                                float movement_cost_mult = c.MovementCostMult;
-
-                                                // first cell is always the one overlapped by region
-                                                if (k == 0)
+                                                if (RegionsMoveCostMode == RegionsMode.Mult)
                                                 {
-                                                    if (RegionsMoveCostMode == RegionsMode.Mult)
-                                                        movement_cost_mult *= region.move_cost_mult;
-                                                    else if (RegionsMoveCostMode == RegionsMode.Max)
-                                                    {
-                                                        if (movement_cost_mult < 1 && region.move_cost_mult < 1)
-                                                            movement_cost_mult = Math.Min(region.move_cost_mult, movement_cost_mult);
-                                                        else
-                                                            movement_cost_mult = Math.Max(region.move_cost_mult, movement_cost_mult);
-                                                    }
+                                                    movement_cost_mult *= region.move_cost_mult;
                                                 }
-
-                                                Cell r_cell = new Cell(extracted[k], data.replaced_cell.Flags, movement_cost_mult);
-                                                r_cell.Replacement = true;
-                                                data.replacement_cells.Add(r_cell);
+                                                else if (RegionsMoveCostMode == RegionsMode.Max)
+                                                {
+                                                    if (movement_cost_mult < 1 && region.move_cost_mult < 1)
+                                                        movement_cost_mult = Math.Min(region.move_cost_mult, movement_cost_mult);
+                                                    else
+                                                        movement_cost_mult = Math.Max(region.move_cost_mult, movement_cost_mult);
+                                                }
                                             }
+
+                                            Cell r_cell = new Cell(extracted[k], data.replaced_cell.Flags, movement_cost_mult);
+                                            r_cell.Replacement = true;
+                                            data.replacement_cells.Add(r_cell);
                                         }
                                     }
                                 }
-
-                                // try to connect new replacement cells with potential neighbors
-                                foreach (Cell replacement_cell in data.replacement_cells)
-                                {
-                                    Vec3 border_point = null;
-
-                                    foreach (Cell potential_neighbor in potential_neighbors)
-                                        replacement_cell.AddNeighbour(potential_neighbor, out border_point);
-
-                                    parent_grid_cell.Cells.Add(replacement_cell);
-                                    m_AllCells.Add(replacement_cell);
-
-                                    // this cell is now potential neighbor as well, because can be interconnected with other replacement cells!
-                                    potential_neighbors.Add(replacement_cell);
-                                }
                             }
 
-                            item.Value.last_areas = new HashSet<region_data>(item.Value.areas);
+                            // try to connect new replacement cells with potential neighbors
+                            foreach (Cell replacement_cell in data.replacement_cells)
+                            {
+                                Vec3 border_point = null;
 
-                            // enable original cell when no longer overlapped
-                            if (data.areas.Count == 0)
-                                data.replaced_cell.Disabled = false;
+                                foreach (Cell potential_neighbor in potential_neighbors)
+                                    replacement_cell.AddNeighbour(potential_neighbor, ref border_point);
+
+                                parent_grid_cell.Cells.Add(replacement_cell);
+                                m_AllCells.Add(replacement_cell);
+
+                                // this cell is now potential neighbor as well, because can be interconnected with other replacement cells!
+                                potential_neighbors.Add(replacement_cell);
+                            }
                         }
+
+                        item.Value.last_areas = new HashSet<region_data>(item.Value.areas);
+
+                        // enable original cell when no longer overlapped
+                        if (data.areas.Count == 0)
+                            data.replaced_cell.Disabled = false;
 
                         m_CellsCache.Clear();
                     }
@@ -558,7 +561,7 @@ namespace Nav
             if (filename == null)
                 return false;
 
-            //using (new Profiler("[Nav] Loaded nav data [{t}]"))
+            //using (new Profiler("[Nav] Loaded nav data [%t]"))
             {
                 if (clear)
                     Clear();
@@ -622,7 +625,7 @@ namespace Nav
                         Random rng = new Random();
                         GridCell random_grid_cell = null;
 
-                        random_grid_cell = m_GridCells[rng.Next(m_GridCells.Count)];
+                        random_grid_cell = m_GridCells.ElementAt(rng.Next(m_GridCells.Count));
 
                         NotifyOnNavDataChanged();
                         
@@ -649,7 +652,7 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                GridCell g_cell = m_GridCells[Rng.Next(m_GridCells.Count)];
+                GridCell g_cell = m_GridCells.ElementAt(Rng.Next(m_GridCells.Count));
                 List<Cell> enabled_cells = g_cell.Cells.FindAll(x => !x.Disabled);
                 return enabled_cells[Rng.Next(enabled_cells.Count)].AABB.GetRandomPos();
             }
@@ -674,7 +677,7 @@ namespace Nav
 
             using (new ReadLock(DataLock))
             {
-                List<GridCell> g_cells = m_GridCells.FindAll(x => x.AABB.Overlaps2D(area));
+                var g_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(area));
                 List<Cell> cells = new List<Cell>();
 
                 // do not ignore disabled cells on purpose so we don't have to iterate separately over
@@ -823,7 +826,7 @@ namespace Nav
         }
 
         // Operations on this list are not thread safe! Use AquireReadDataLock to make it thread safe
-        public List<GridCell> dbg_GetGridCells()
+        public HashSet<GridCell> dbg_GetGridCells()
         {
             return m_GridCells;
         }
@@ -847,15 +850,15 @@ namespace Nav
         }
 
         // Aquire DataLock (read)
-        public List<GridCell> GetGridCellsContaining(Vec3 pos, bool check_2d = true)
+        public IEnumerable<GridCell> GetGridCellsContaining(Vec3 pos, bool check_2d = true)
         {
             using (new ReadLock(DataLock))
-                return check_2d ? m_GridCells.FindAll(x => x.Contains2D(pos)) : m_GridCells.FindAll(x => x.Contains(pos));
+                return check_2d ? m_GridCells.Where(x => x.Contains2D(pos)) : m_GridCells.Where(x => x.Contains(pos));
         }
 
         public Vec3 GetRandomPosInRing(Vec3 ring_center, float min_radius, float max_radius)
         {
-            List<GridCell> potential_grid_cells = GetCellsOverlappedByCircle(m_GridCells, ring_center, max_radius);
+            var potential_grid_cells = GetCellsOverlappedByCircle(m_GridCells, ring_center, max_radius);
 
             List<Cell> cells = new List<Cell>();
             foreach (GridCell grid_cell in potential_grid_cells)
@@ -903,8 +906,7 @@ namespace Nav
         // Extension will be automatically added
         public void Serialize(string name)
         {
-            using (FileStream fs = File.OpenWrite(name + ".navmesh"))
-            using (BinaryWriter w = new BinaryWriter(fs))
+            using (BinaryWriter w = new BinaryWriter(File.OpenWrite(name + ".navmesh")))
             {
                 OnSerialize(w);
             }
@@ -926,7 +928,7 @@ namespace Nav
 
                     foreach (var neighbour in cell.Neighbours)
                     {
-                        if (m_AllCells.Find(x => x.GlobalId == neighbour.cell.GlobalId) == null)
+                        if (m_AllCells.FirstOrDefault(x => x.GlobalId == neighbour.cell.GlobalId) == null)
                             Log("[Nav] Cell neighbour not on all cells list! Cell info [" +  neighbour.cell.ToString() + "]", true);
                     }
                 }
@@ -971,8 +973,7 @@ namespace Nav
         // Extension will be automatically added
         public void Deserialize(string name)
         {
-            using (FileStream fs = File.OpenRead(name + ".navmesh"))
-            using (BinaryReader r = new BinaryReader(fs))
+            using (BinaryReader r = new BinaryReader(File.OpenRead(name + ".navmesh")))
             {
                 OnDeserialize(r);
             }
@@ -983,7 +984,7 @@ namespace Nav
             using (new WriteLock(DataLock))
             using (new WriteLock(InputLock))
             {
-                //using (new Profiler("Navmesh deserialization took {t}"))
+                //using (new Profiler("Navmesh deserialization took %t"))
                 {
                     m_AllCells.Clear();
                     m_GridCells.Clear();
@@ -1002,8 +1003,6 @@ namespace Nav
                         m_AllCells.Add(cell);
                     }
 
-                    m_AllCells.Sort(comp_by_global_id);
-
                     foreach (Cell cell in m_AllCells)
                         cell.Deserialize(m_AllCells, r);
 
@@ -1018,8 +1017,6 @@ namespace Nav
                         grid_cell.GlobalId = r.ReadInt32();
                         m_GridCells.Add(grid_cell);
                     }
-
-                    m_GridCells.Sort(comp_by_global_id);
 
                     foreach (GridCell grid_cell in m_GridCells)
                         grid_cell.Deserialize(m_GridCells, m_AllCells, r);
@@ -1097,9 +1094,9 @@ namespace Nav
             return nearest_cell;
         }
 
-        internal List<T> GetCellsOverlappedByCircle<T>(List<T> cells, Vec3 circle_center, float radius) where T : Cell
+        internal IEnumerable<T> GetCellsOverlappedByCircle<T>(HashSet<T> cells, Vec3 circle_center, float radius) where T : Cell
         {
-            return cells.FindAll(x => x.Overlaps(circle_center, radius));
+            return cells.Where(x => x.Overlaps(circle_center, radius));
         }
 
         internal List<T> GetCellsInsideCircle<T>(List<T> cells, Vec3 circle_center, float radius) where T : Cell
@@ -1157,9 +1154,9 @@ namespace Nav
 
         public ReadLock AcquireReadDataLock() { return new ReadLock(DataLock); }
         
-        internal List<Cell> m_AllCells = new List<Cell>(); //@ DataLock
+        internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
         private HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
-        internal List<GridCell> m_GridCells = new List<GridCell>(); //@ DataLock
+        internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
         private HashSet<region_data> m_Regions = new HashSet<region_data>(); //@ InputLock
         private List<INavmeshObserver> m_Observers = new List<INavmeshObserver>(); //@ InputLock
     }

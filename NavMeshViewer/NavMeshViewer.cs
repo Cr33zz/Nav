@@ -107,7 +107,7 @@ namespace NavMeshViewer
                 {
                     using (m_Navmesh.AcquireReadDataLock())
                     {
-                        List<GridCell> grid_cells = m_Navmesh.dbg_GetGridCells();
+                        var grid_cells = m_Navmesh.dbg_GetGridCells();
 
                         if (m_RenderGrids)
                         {
@@ -141,7 +141,7 @@ namespace NavMeshViewer
                 {
                     using (m_Explorer.AquireReadDataLock())
                     {
-                        List<ExploreCell> explore_cells = m_Explorer.dbg_GetExploreCells();
+                        var explore_cells = m_Explorer.dbg_GetExploreCells();
 
                         foreach (Nav.ExploreCell explore_cell in explore_cells)
                         {

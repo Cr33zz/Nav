@@ -23,7 +23,7 @@ namespace Nav
                 w.Write(cell.GlobalId);
         }
 
-        internal void Deserialize(List<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<Cell> all_cells, BinaryReader r)
         {
             base.Deserialize(all_cells, r);
 
@@ -31,7 +31,7 @@ namespace Nav
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.Add(all_cells.Find(x => x.GlobalId == cell_global_id));
+                Cells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
             }
         }
 

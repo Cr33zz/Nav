@@ -109,7 +109,7 @@ namespace Nav
 
         public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible)
         {
-            using (new Profiler("[Nav-Profiler] FindPath updated [{t}]", 500))
+            using (new Profiler("[Nav-Profiler] FindPath updated [%t]", 500))
             return FindPath(from, to, MovementFlags, ref path, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
         }
 
@@ -795,9 +795,9 @@ namespace Nav
             {
                 using (m_Navmesh.AcquireReadDataLock())
                 {
-                    GridCell current_grid = m_Navmesh.m_GridCells.Find(g => g.Contains2D(CurrentPos));
+                    GridCell current_grid = m_Navmesh.m_GridCells.FirstOrDefault(g => g.Contains2D(CurrentPos));
 
-                    GridCell destination_grid = m_Navmesh.m_GridCells.Find(g => destination_grids_id.Contains(g.Id) && Algorihms.AreConnected(current_grid, ref g, MovementFlag.None));
+                    GridCell destination_grid = m_Navmesh.m_GridCells.FirstOrDefault(g => destination_grids_id.Contains(g.Id) && Algorihms.AreConnected(current_grid, ref g, MovementFlag.None));
 
                     if (destination_grid != null)
                         destination = m_Navmesh.GetNearestCell(destination_grid.Cells, destination_grid.Center).Center;
@@ -1133,8 +1133,7 @@ namespace Nav
         // Extension will be automatically added
         public void Serialize(string name)
         {
-            using (FileStream fs = File.OpenWrite(name + ".navigator"))
-            using (BinaryWriter w = new BinaryWriter(fs))
+            using (BinaryWriter w = new BinaryWriter(File.OpenWrite(name + ".navigator")))
             {
                 OnSerialize(w);
             }
@@ -1184,8 +1183,7 @@ namespace Nav
         // Extension will be automatically added
         public void Deserialize(string name)
         {
-            using (FileStream fs = File.OpenRead(name + ".navigator"))
-            using (BinaryReader r = new BinaryReader(fs))
+            using (BinaryReader r = new BinaryReader(File.OpenRead(name + ".navigator")))
             {
                 OnDeserialize(r);
             }

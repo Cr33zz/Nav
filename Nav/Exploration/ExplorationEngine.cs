@@ -79,8 +79,7 @@ namespace Nav
         // Extension will be automatically added
         public void Serialize(string name)
         {
-            using (FileStream fs = File.OpenWrite(name + ".explorer"))
-            using (BinaryWriter w = new BinaryWriter(fs))
+            using (BinaryWriter w = new BinaryWriter(File.OpenWrite(name + ".explorer")))
             {
                 OnSerialize(w);
             }
@@ -112,15 +111,14 @@ namespace Nav
         // Extension will be automatically added
         public void Deserialize(string name)
         {
-            using (FileStream fs = File.OpenRead(name + ".explorer"))
-            using (BinaryReader r = new BinaryReader(fs))
+            using (BinaryReader r = new BinaryReader(File.OpenRead(name + ".explorer")))
             using (m_Navmesh.AcquireReadDataLock())
             {                
                 OnDeserialize(m_Navmesh.m_AllCells, r);
             }
         }
 
-        protected virtual void OnDeserialize(List<Cell> all_cells, BinaryReader r)
+        protected virtual void OnDeserialize(HashSet<Cell> all_cells, BinaryReader r)
         {
             using (new WriteLock(DataLock))
             using (new WriteLock(InputLock))
@@ -138,8 +136,6 @@ namespace Nav
                     explore_cell.GlobalId = r.ReadInt32();
                     m_ExploreCells.Add(explore_cell);
                 }
-
-                m_ExploreCells.Sort(new Cell.CompareByGlobalId());
 
                 foreach (ExploreCell explore_cell in m_ExploreCells)
                     explore_cell.Deserialize(m_ExploreCells, all_cells, r);
@@ -187,7 +183,7 @@ namespace Nav
         }
 
         // Operations on this list are not thread safe! Use dbg_ReadLockGridCells to make it thread safe
-        public List<ExploreCell> dbg_GetExploreCells()
+        public HashSet<ExploreCell> dbg_GetExploreCells()
         {
             return m_ExploreCells;
         }
@@ -212,7 +208,7 @@ namespace Nav
             if (type != DestType.Explore)
                 return;
 
-            ExploreCell dest_cell = m_ExploreCells.Find(x => x.Position.Equals(dest));
+            ExploreCell dest_cell = m_ExploreCells.FirstOrDefault(x => x.Position.Equals(dest));
 
             if (dest_cell != null)
                 OnCellExplored(dest_cell);
@@ -231,14 +227,14 @@ namespace Nav
             using (new ReadLock(DataLock, true))
             {
                 // remove explore cells overlapping with grid cell
-                List<ExploreCell> cells_to_validate = m_ExploreCells.FindAll(x => x.Overlaps2D(grid_cell));
+                var cells_to_validate = m_ExploreCells.Where(x => x.Overlaps2D(grid_cell)).ToList();
 
                 using (new WriteLock(DataLock))
                 {
                     foreach (ExploreCell explore_cell in cells_to_validate)
                     {
                         explore_cell.Detach();
-                        m_ExploreCells.RemoveAll(x => x.GlobalId == explore_cell.GlobalId);
+                        m_ExploreCells.Remove(explore_cell);
                     }
                 }
 
@@ -258,7 +254,7 @@ namespace Nav
                         AABB cell_aabb = new AABB(x_index * m_ExploreCellSize, y_index * m_ExploreCellSize, -10000,
                                                   (x_index + 1) * m_ExploreCellSize, (y_index + 1) * m_ExploreCellSize, 10000);
 
-                        //using (new Profiler("[Nav] Explore cells generated [{t}]"))
+                        //using (new Profiler("[Nav] Explore cells generated [%t]"))
                         {
                             explore_cells_generated += GenerateExploreCells(cell_aabb);
                         }
@@ -309,10 +305,10 @@ namespace Nav
         {
             Vec3 curr_pos = m_Navigator.CurrentPos;
 
-            ExploreCell current_explore_cell = m_ExploreCells.Find(x => x.CellsContains2D(curr_pos));
+            ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => x.CellsContains2D(curr_pos));
 
             if (current_explore_cell == null)
-                current_explore_cell = m_ExploreCells.Find(x => x.Contains2D(curr_pos));
+                current_explore_cell = m_ExploreCells.FirstOrDefault(x => x.Contains2D(curr_pos));
 
             // find nearest explore cell
             if (current_explore_cell == null)
@@ -391,7 +387,7 @@ namespace Nav
                     last_update_time = time;
                     m_ForceNavUpdate = false;
 
-                    //using (new Profiler("[Nav] Nav updated [{t}]"))
+                    //using (new Profiler("[Nav] Nav updated [%t]"))
                         UpdateExploration();
                 }
                 else
@@ -433,7 +429,7 @@ namespace Nav
                 
                 {
                     // mark cells as explored when passing by close enough
-                    ExploreCell current_explore_cell = m_ExploreCells.Find(x => !x.Explored && x.Position.Distance2D(current_pos) < ExploreDestPrecision);
+                    ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => !x.Explored && x.Position.Distance2D(current_pos) < ExploreDestPrecision);
 
                     if (current_explore_cell != null)
                         OnCellExplored(current_explore_cell);
@@ -470,7 +466,7 @@ namespace Nav
 
             MovementFlag movement_flags = m_Navigator.MovementFlags;
 
-            //using (new Profiler("[Nav] Nav data generated [{t}]"))
+            //using (new Profiler("[Nav] Nav data generated [%t]"))
             //using (m_Navmesh.AquireReadDataLock())
             {
                 List<Cell> cells = new List<Cell>();
@@ -568,7 +564,7 @@ namespace Nav
         private bool m_Enabled = true;
         private int m_LastExploreCellId = 0;
 
-        protected List<ExploreCell> m_ExploreCells = new List<ExploreCell>(); //@ DataLock
+        protected HashSet<ExploreCell> m_ExploreCells = new HashSet<ExploreCell>(); //@ DataLock
         protected int m_ExploredCellsCount = 0;
         protected int m_CellsToExploreCount = 0;
         

@@ -71,7 +71,7 @@ namespace Nav
                 w.Write(g_cell_id);
         }
 
-        internal void Deserialize(List<ExploreCell> explore_cells, List<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<ExploreCell> explore_cells, HashSet<Cell> all_cells, BinaryReader r)
         {
             base.Deserialize(explore_cells, r);
 
@@ -84,7 +84,7 @@ namespace Nav
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.Add(all_cells.Find(x => x.GlobalId == cell_global_id));
+                Cells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
             }
 
             int grid_cells_id_count = r.ReadInt32();

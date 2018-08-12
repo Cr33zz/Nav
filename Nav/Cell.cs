@@ -236,8 +236,11 @@ namespace Nav
             // special case for single neighbor
             else if (Neighbours.Count == 1)
             {
-                if (Neighbours[0].border_segment != null)
-                    AlignPlane = new Plane(Neighbours[0].border_segment.Item1, Neighbours[0].border_segment.Item2, Center);
+                Vec3 v1 = null;
+                Vec3 v2 = null;
+
+                if (GetBorderSegmentWith(Neighbours[0].cell.AABB, ref v1, ref v2))
+                    AlignPlane = new Plane(v1, v2, Center);
             }
             else
             {
@@ -305,12 +308,11 @@ namespace Nav
         }
 
         // Try to add given cell as neighbour. Returns true when actually added.
-        public bool AddNeighbour(Cell cell, out Vec3 border_point)
+        public bool AddNeighbour(Cell cell, ref Vec3 border_point)
         {
-            border_point = null;
-
-            if (cell.Equals(this))
-                return false;
+            // should not happen - removed due to performance impact - deep down it only checks global ID matching
+            //if (cell.Equals(this))
+            //    return false;
 
             AABB intersection = AABB.Intersect(cell.AABB, true);
 
@@ -319,14 +321,31 @@ namespace Nav
                 if (Neighbours.Exists(x => x.cell.GlobalId == cell.GlobalId))
                     return false;
 
+                AddNeighbour(cell, intersection.Center, null);
+                cell.AddNeighbour(this, intersection.Center, null);
+
+                border_point = new Vec3(intersection.Center);
+                
+                return true;
+            }
+
+            return false;
+        }
+
+        bool GetBorderSegmentWith(AABB aabb, ref Vec3 v1, ref Vec3 v2)
+        {
+            AABB intersection = AABB.Intersect(aabb, true);
+
+            if (intersection != null)
+            {
                 // find widest vector inside intersection AABB along X or Y axis
                 Vec3 dimentions = intersection.Dimensions;
-                Tuple<Vec3, Vec3> border_segment = null;
+                Tuple<Vec3, Vec3> border_segment;
 
                 //if (intersection.Dimensions.Z < 3 && (Math.Abs(intersection.Center.Z - cell.AABB.Max.Z) < 1f || Math.Abs(intersection.Center.Z - cell.AABB.Min.Z) < 1f))
-                if (cell.AABB.Dimensions.Z < 3 || AABB.Dimensions.Z < 3)
+                if (aabb.Dimensions.Z < 3 || AABB.Dimensions.Z < 3)
                 {
-                    Vec3 intersection_center = intersection.Center;                    
+                    Vec3 intersection_center = intersection.Center;
 
                     if (dimentions.X > dimentions.Y)
                     {
@@ -338,14 +357,9 @@ namespace Nav
                         border_segment = new Tuple<Vec3, Vec3>(new Vec3(intersection_center.X, intersection.Min.Y, intersection_center.Z),
                                                                new Vec3(intersection_center.X, intersection.Max.Y, intersection_center.Z));
                     }
+
+                    return true;
                 }
-
-                AddNeighbour(cell, intersection.Center, border_segment);
-                cell.AddNeighbour(this, intersection.Center, border_segment);
-
-                border_point = new Vec3(intersection.Center);
-                
-                return true;
             }
 
             return false;
@@ -465,7 +479,7 @@ namespace Nav
             }
         }
 
-        internal void Deserialize<T>(List<T> all_cells, BinaryReader r) where T : Cell, new()
+        internal void Deserialize<T>(HashSet<T> all_cells, BinaryReader r) where T : Cell, new()
         {
             GlobalId = r.ReadInt32();
             Id = r.ReadInt32();
@@ -475,21 +489,13 @@ namespace Nav
             Disabled = r.ReadBoolean();
             MovementCostMult = r.ReadSingle();
 
-            T temp_cell = new T();
-            Cell.CompareByGlobalId comp_by_global_id = new Cell.CompareByGlobalId();
-
             int neighbours_num = r.ReadInt32();
             for (int i = 0; i < neighbours_num; ++i)
             {
                 Neighbour neighbour = new Neighbour(null, null, null, MovementFlag.None);
 
                 int neighbour_global_id = r.ReadInt32();
-                temp_cell.GlobalId = neighbour_global_id;
-
-                int cell_id = all_cells.BinarySearch((T)temp_cell, comp_by_global_id);
-
-                if (cell_id >= 0)
-                    neighbour.cell = all_cells.ElementAt(cell_id);
+                neighbour.cell = all_cells.FirstOrDefault(x => x.GlobalId == neighbour_global_id);
                 
                 if (r.ReadBoolean())
                     neighbour.border_point = new Vec3(r);

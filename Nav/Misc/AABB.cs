@@ -146,20 +146,8 @@ namespace Nav
 
         public bool Overlaps2D(AABB aabb, bool tangential_ok = false)
         {
-            if (tangential_ok)
-            {
-                if (max.X < aabb.min.X) return false;
-                if (min.X > aabb.max.X) return false;
-                if (max.Y < aabb.min.Y) return false;
-                if (min.Y > aabb.max.Y) return false;
-                return true;
-            }
-
-            if (max.X <= aabb.min.X) return false;
-            if (min.X >= aabb.max.X) return false;
-            if (max.Y <= aabb.min.Y) return false;
-            if (min.Y >= aabb.max.Y) return false;
-            return true;
+            return (tangential_ok && max.X >= aabb.min.X && min.X <= aabb.max.X && max.Y >= aabb.min.Y && min.Y <= aabb.max.Y) ||
+                   (max.X > aabb.min.X && min.X < aabb.max.X && max.Y > aabb.min.Y && min.Y < aabb.max.Y);
         }
 
         public AABB Intersect2D(AABB aabb, bool tangential_ok = false)
@@ -167,9 +155,7 @@ namespace Nav
             if (!Overlaps2D(aabb, tangential_ok))
                 return null;
 
-            AABB inter = new AABB(Vec3.Max(min, aabb.min), Vec3.Min(max, aabb.max));
-            inter.min.Z = inter.max.Z = 0;
-            return inter;
+            return new AABB(Vec3.Max2D(min, aabb.min), Vec3.Min2D(max, aabb.max));
         }
 
         public AABB Intersect(AABB aabb, bool tangential_ok = false)

@@ -41,7 +41,7 @@ namespace Nav
             Vec3 border_point = null;
 
             foreach (Cell our_cell in Cells)
-                our_cell.AddNeighbour(cell, out border_point);
+                our_cell.AddNeighbour(cell, ref border_point);
 
             Cells.Add(cell);
 
@@ -77,8 +77,7 @@ namespace Nav
                 foreach (Cell other_cell in grid_cell.Cells)
                 {
                     Vec3 border_point = null;
-
-                    bool cells_connected = our_cell.AddNeighbour(other_cell, out border_point);
+                    bool cells_connected = our_cell.AddNeighbour(other_cell, ref border_point);
 
                     if (cells_connected)
                     {
@@ -128,7 +127,7 @@ namespace Nav
                 w.Write(cell.GlobalId);
         }
 
-        internal void Deserialize(List<GridCell> grid_cells, List<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<GridCell> grid_cells, HashSet<Cell> all_cells, BinaryReader r)
         {
             base.Deserialize(grid_cells, r);
 
@@ -136,7 +135,7 @@ namespace Nav
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.Add(all_cells.Find(x => x.GlobalId == cell_global_id));
+                Cells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
             }
         }
 

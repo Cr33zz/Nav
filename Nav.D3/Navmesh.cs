@@ -29,10 +29,8 @@ namespace Nav.D3
         {
             base.Init();
 
-            using (new Profiler("[Nav.D3] Loading SNO data cache took {t}."))
+            using (new Profiler("[Nav.D3] Loading SNO data cache took %t."))
                 LoadSnoCache();
-
-            DangerRegionsEnabled = false;
         }
 
         public override void Clear()
@@ -114,7 +112,7 @@ namespace Nav.D3
             get { return SCENE_SNO_CACHE_DIR; }
         }
 
-        public bool DangerRegionsEnabled { get; set; }
+        public bool DangerRegionsEnabled { get; set; } = false;
 
         public List<int> AllowedAreasSnoId
         {
@@ -145,7 +143,7 @@ namespace Nav.D3
                 m_LastFetchNavDataTime = time;
             }
 
-            if (time - m_LastFetchDangerRegionsTime > 100)
+            if (time - m_LastFetchDangerRegionsTime > 50)
             {
                 FetchDangerRegions();
                 m_LastFetchDangerRegionsTime = time;
@@ -182,7 +180,7 @@ namespace Nav.D3
         {
             List<SceneSnoNavData> new_scene_sno_nav_data = new List<SceneSnoNavData>();
 
-            //using (new Profiler("[Nav.D3.Navigation] Scene sno data aquired [{t}]", 70))
+            //using (new Profiler("[Nav.D3.Navigation] Scene sno data aquired [%t]", 70))
             {
                 var sno_scenes = m_MemoryContext.DataSegment.SNOGroupStorage[(int)SNOType.Scene].Cast<Enigma.D3.MemoryModel.Assets.SNOGroupStorage<Enigma.D3.Assets.Scene>>().
                                                                                                  Dereference().
@@ -203,7 +201,7 @@ namespace Nav.D3
                 }
             }
 
-            //using (new Nav.Profiler("[Nav.D3.Navigation] Scene sno data added [{t}]"))
+            //using (new Nav.Profiler("[Nav.D3.Navigation] Scene sno data added [%t]"))
             {
                 // add and save new data later to reduce memory reading duration
                 foreach (SceneSnoNavData data in new_scene_sno_nav_data)
@@ -220,7 +218,7 @@ namespace Nav.D3
         {
             List<SceneData> new_scene_data = new List<SceneData>();
 
-            //using (new Nav.Profiler("[Nav.D3.Navigation] Navmesh data aquired [{t}]", 70))
+            //using (new Nav.Profiler("[Nav.D3.Navigation] Navmesh data aquired [%t]", 70))
             {
                 int scenes_available = 0;
 
@@ -243,7 +241,7 @@ namespace Nav.D3
                 }
             }
 
-            //using (new Nav.Profiler("[Nav.D3.Navigation] Navmesh data added [{t}]"))
+            //using (new Nav.Profiler("[Nav.D3.Navigation] Navmesh data added [%t]"))
             {
                 int grid_cells_added = 0;
 
@@ -359,9 +357,9 @@ namespace Nav.D3
             {
                 try
                 {
-                    IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => (x.ActorType == ActorType.ServerProp || x.ActorType == ActorType.Monster || x.ActorType == ActorType.Projectile || x.ActorType == ActorType.CustomBrain) && DANGERS.ContainsKey(x.ActorSNO));
-
                     HashSet<region_data> dangers = new HashSet<region_data>();
+
+                    IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => (x.ActorType == ActorType.ServerProp || x.ActorType == ActorType.Monster || x.ActorType == ActorType.Projectile || x.ActorType == ActorType.CustomBrain) && DANGERS.ContainsKey(x.ActorSNO));
 
                     foreach (ACD obj in objects)
                     {
@@ -373,6 +371,16 @@ namespace Nav.D3
                             dangers.Add(new region_data(area, data.move_cost_mult));
                         }
                     }
+
+                    //IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => x.ActorType == ActorType.Monster && x.TeamID == 10 && x.Hitpoints > 0);
+
+                    //foreach (ACD obj in objects)
+                    //{
+                    //    float radius = obj.Radius;
+                    //    Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
+                    //    AABB area = new AABB(pos - new Vec3(radius, radius, pos.Z - 100), pos + new Vec3(radius, radius, pos.Z + 100));
+                    //    dangers.Add(new region_data(area, 1.5f));
+                    //}
 
                     Regions = dangers;
                 }
