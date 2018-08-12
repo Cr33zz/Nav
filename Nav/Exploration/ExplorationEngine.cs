@@ -11,7 +11,7 @@ namespace Nav
     {
         public ExplorationEngine(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90)
         {
-            m_ExploreCellSize = explore_cell_size;
+            ExploreCellSize = explore_cell_size;
             MAX_AREA_TO_MARK_AS_SMALL = 2000;
             ExploreDestPrecision = 20;
 
@@ -30,6 +30,14 @@ namespace Nav
         }
 
         public float MAX_AREA_TO_MARK_AS_SMALL { get; protected set; }
+
+        public int ExploreCellSize { get; private set; }
+
+        public void ChangeExploreCellSize(int size)
+        {
+            ExploreCellSize = size;
+            Clear();
+        }
 
         // precision with explore destination will be accepted as reached
         public float ExploreDestPrecision { get; set; }
@@ -239,11 +247,11 @@ namespace Nav
                 }
 
                 // check if new explore cells should be added
-                int x_min = (int)Math.Floor(grid_cell.Min.X / m_ExploreCellSize);
-                int y_min = (int)Math.Floor(grid_cell.Min.Y / m_ExploreCellSize);
+                int x_min = (int)Math.Floor(grid_cell.Min.X / ExploreCellSize);
+                int y_min = (int)Math.Floor(grid_cell.Min.Y / ExploreCellSize);
 
-                int x_max = (int)Math.Ceiling(grid_cell.Max.X / m_ExploreCellSize);
-                int y_max = (int)Math.Ceiling(grid_cell.Max.Y / m_ExploreCellSize);
+                int x_max = (int)Math.Ceiling(grid_cell.Max.X / ExploreCellSize);
+                int y_max = (int)Math.Ceiling(grid_cell.Max.Y / ExploreCellSize);
 
                 int explore_cells_generated = 0;
 
@@ -251,8 +259,8 @@ namespace Nav
                 {
                     for (int x_index = x_min; x_index < x_max; ++x_index)
                     {
-                        AABB cell_aabb = new AABB(x_index * m_ExploreCellSize, y_index * m_ExploreCellSize, -10000,
-                                                  (x_index + 1) * m_ExploreCellSize, (y_index + 1) * m_ExploreCellSize, 10000);
+                        AABB cell_aabb = new AABB(x_index * ExploreCellSize, y_index * ExploreCellSize, -10000,
+                                                  (x_index + 1) * ExploreCellSize, (y_index + 1) * ExploreCellSize, 10000);
 
                         //using (new Profiler("[Nav] Explore cells generated [%t]"))
                         {
@@ -578,6 +586,5 @@ namespace Nav
 
         protected ExploreCell m_DestCell;
         private Vec3 m_HintPos = Vec3.Empty; //@ InputLock
-        private int m_ExploreCellSize;
     }
 }
