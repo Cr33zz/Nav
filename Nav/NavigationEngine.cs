@@ -31,16 +31,6 @@ namespace Nav
             UpdatesThread = new Thread(Updates);
             UpdatesThread.Name = "Navigator-UpdatesThread";
             UpdatesThread.Start();
-
-            DefaultPrecision = 10;
-            GridDestPrecision = 40;
-            PathRandomCoeff = 0;
-            PathNodesShiftDist = 10;
-            CurrentPosDiffRecalcThreshold = 15;
-            UpdatePathInterval = -1;
-            EnableAntiStuck = false;
-            IsStandingOnPurpose = true;
-            MovementFlags = MovementFlag.Walk;
         }
 
         public void AddObserver(INavigationObserver observer)
@@ -61,32 +51,41 @@ namespace Nav
         }
 
         // defines how user can move through navmesh
-        public MovementFlag MovementFlags { get; set; }
+        public MovementFlag MovementFlags { get; set; } = MovementFlag.Walk;
 
         // precision with each path node will be accepted as reached
-        public float DefaultPrecision { get; set; }
+        public float DefaultPrecision { get; set; } = 10;
 
         public float Precision { get; set; }
 
         // precision with grid destination will be accepted as reached
-        public float GridDestPrecision { get; set; }
+        public float GridDestPrecision { get; set; } = 40;
 
         // how much path will be randomized 0 by default
-        public float PathRandomCoeff { get; set; }
+        public float PathRandomCoeff { get; set; } = 0;
+
+        public float DistToKeepFromEdge { get; set; } = 0; // not supported
+
+        // only initial part of path of this length will be moved away from edges (to minimize performance impact if there are frequent enough path recalculates)
+        public float KeepAwayFromEdgesOnInitialLength { get; set; } = 50; // not supported
+
+        public float KeepFromEdgePrecision { get; set; } = 5;
 
         // each point on path will be offseted in direction from previous point so bot will move along path more precisely even with high precision parameter
-        public float PathNodesShiftDist { get; set; }
+        public float PathNodesShiftDist { get; set; } = 10;
 
-        // when new CurrentPos differ from last one by more than this value path update will be immediately requested
-        public float CurrentPosDiffRecalcThreshold { set; get; }
+        // when new CurrentPos differ from last one by more than this value path update will be automatically requested
+        public float CurrentPosDiffRecalcThreshold { set; get; } = 15;
 
-        // path will be automatically recalculated with this interval (miliseconds)
-        public int UpdatePathInterval { get; set; }
+        // path will be automatically recalculated with this interval (milliseconds)
+        public int UpdatePathInterval { get; set; } = -1;
 
-        public bool EnableAntiStuck { get; set; }
+        public float PathSmoothingPrecision { get; set; } = 3;
+
+        public bool EnableAntiStuck { get; set; } = false;
 
         // should be used when EnableAntiStuck is true to notify navigator that actor is not blocked by some obstacle but just standing
-        public bool IsStandingOnPurpose { get; set; }
+        public bool IsStandingOnPurpose { get; set; } = true;
 
         public List<int> DestinationGridsId
         {
@@ -114,7 +113,7 @@ namespace Nav
             return FindPath(from, to, MovementFlags, ref path, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool straighten = true)
+        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool smoothen = true)
         {
             using (m_Navmesh.AcquireReadDataLock())
             {
@@ -146,8 +145,11 @@ namespace Nav
                         return false;
                 }
 
-                if (straighten && random_coeff == 0)
-                    StraightenPath(ref tmp_path, flags, bounce ? 1 : 0);
+                if (smoothen && random_coeff == 0)
+                    SmoothenPath(ref tmp_path, flags, bounce ? 1 : 0);
+
+                if (DistToKeepFromEdge > 0 && random_coeff == 0)
+                    KeepAwayFromEdges(ref tmp_path, flags);
 
                 path = tmp_path.Select(x => x.pos).ToList();
 
@@ -160,9 +162,10 @@ namespace Nav
             }
         }
 
-        private void StraightenPath(ref List<path_pos> path, MovementFlag flags, int skip_first_count = 0)
+        private void SmoothenPath(ref List<path_pos> path, MovementFlag flags, int skip_first_count = 0)
         {
             int ray_start_index = skip_first_count;
+            Vec3 intersection = null;
 
             while (ray_start_index + 2 < path.Count)
             {
@@ -170,11 +173,116 @@ namespace Nav
                 path_pos intermediate_data = path[ray_start_index + 1];
                 path_pos ray_end_data = path[ray_start_index + 2];
 
-                if (m_Navmesh.RayCast2D(ray_start_data.pos, ray_end_data.pos, flags, false))
+                // try remove middle point completely
+                if (m_Navmesh.RayCast2D(ray_start_data.pos, ray_end_data.pos, flags, ref intersection, false))
                     path.RemoveAt(ray_start_index + 1);
                 else
                     ++ray_start_index;
             }
+
+            // perform second smoothing pass after getting rid of all unnecessary points to get better performance and results
+            // this pass is basically "moving" from point to point and checking at which step (in-between points) I can already see the next point
+            if (PathSmoothingPrecision > 0)
+            {
+                ray_start_index = skip_first_count;
+
+                while (ray_start_index + 2 < path.Count)
+                {
+                    path_pos ray_start_data = path[ray_start_index];
+                    path_pos intermediate_data = path[ray_start_index + 1];
+                    path_pos ray_end_data = path[ray_start_index + 2];
+
+                    Vec3 dir = intermediate_data.pos - ray_start_data.pos;
+                    float length = dir.Normalize();
+                    int steps = (int)(length / PathSmoothingPrecision);
+
+                    for (int i = 1; i < steps; ++i) // checking 0 is unnecessary since this is the current path
+                    {
+                        if (m_Navmesh.RayCast2D(ray_start_data.pos + dir * (float)i * PathSmoothingPrecision, ray_end_data.pos, flags, ref intersection, false))
+                        {
+                            intermediate_data.pos = ray_start_data.pos + dir * (float)i * PathSmoothingPrecision;
+                            break;
+                        }
+                    }
+
+                    ++ray_start_index;
+                }
+            }
+        }
+
+        private void KeepAwayFromEdges(ref List<path_pos> path, MovementFlag flags)
+        {
+            //WIP
+
+            //Vec3[] ray_dirs = new Vec3[4] { new Vec3(1, 0, 0), new Vec3(-1, 0, 0) , new Vec3(0, 1, 0) , new Vec3(0, -1, 0) };
+            //Vec3[] intersections = new Vec3[4] { null, null, null, null };
+            //float[] distances = new float[4] { 0, 0, 0, 0 };
+
+            //for (int i = 0; i < path.Count - 1; ++i)
+            //{
+            //    Vec3 start = path[i].pos;
+            //    Vec3 end = path[i + 1].pos;
+            //    Vec3 dir = end - start;
+            //    float length = dir.Length2D();
+            //    Vec3 dir_2d = dir.Normalized2D();
+            //    dir.Normalize();
+            //    int steps = (int)(length / KeepFromEdgePrecision);
+            //    Vec3 perp_dir = new Vec3(dir_2d.Y, -dir_2d.X, 0);
+
+            //    for (int s = 0; s <= steps; ++s) // checking 0 is unnecessary since this is the current path
+            //    {
+            //        Vec3 shift_dir = null;
+            //        float shift_dist = 0;
+
+            //        Vec3 ray_start = start + dir * (float)s * KeepFromEdgePrecision;
+
+            //        for (int r = 0; r < 4; ++r)
+            //        {
+            //            m_Navmesh.RayCast2D(ray_start, ray_start + ray_dirs[r] * 2 * DistToKeepFromEdge, flags, ref intersections[r]);
+            //            distances[r] = ray_start.Distance(intersections[r]);
+            //        }
+
+
+
+            //        //Vec3 intersection_1 = null;
+            //        //bool test_1 = m_Navmesh.RayCast2D(ray_start, ray_start + perp_dir * 2 * DistToKeepFromEdge, flags, ref intersection_1);
+            //        //float dist_to_1 = ray_start.Distance(intersection_1);
+
+            //        //Vec3 intersection_2 = null;
+            //        //bool test_2 = m_Navmesh.RayCast2D(ray_start, ray_start - perp_dir * 2 * DistToKeepFromEdge, flags, ref intersection_2);
+            //        //float dist_to_2 = ray_start.Distance(intersection_2);
+
+            //        //if (dist_to_1 < dist_to_2 && dist_to_1 < DistToKeepFromEdge)
+            //        //{
+            //        //    shift_dir = -perp_dir;
+            //        //    if (dist_to_2 > DistToKeepFromEdge + DistToKeepFromEdge - dist_to_1) // if there is enough room on the other side
+            //        //        shift_dist = DistToKeepFromEdge - dist_to_1;
+            //        //    else
+            //        //        shift_dist = (dist_to_1 + dist_to_2) * 0.5f - dist_to_1; // move to the middle so the distance from both edges is the same
+            //        //}
+            //        //else if (dist_to_2 < dist_to_1 && dist_to_2 < DistToKeepFromEdge)
+            //        //{
+            //        //    shift_dir = perp_dir;
+            //        //    if (dist_to_1 > DistToKeepFromEdge + DistToKeepFromEdge - dist_to_2) // if there is enough room on the other side
+            //        //        shift_dist = DistToKeepFromEdge - dist_to_2;
+            //        //    else
+            //        //        shift_dist = (dist_to_1 + dist_to_2) * 0.5f - dist_to_2; // move to the middle so the distance from both edges is the same
+            //        //}
+
+            //        if (shift_dir != null)
+            //        {
+            //            if (s == 0 && i > 0)
+            //            {
+            //                path[i].pos = new Vec3(start + shift_dir * shift_dist);
+            //            }
+            //            else
+            //            {
+            //                path.Insert(i + 1, new path_pos(new Vec3(ray_start + shift_dir * shift_dist), path[i].cell));
+            //                break;
+            //            }
+            //        }
+            //    }
+            //}
         }
 
         private void PostProcessPath(ref List<Vec3> path, float merge_distance, float shift_nodes_distance)
@@ -438,7 +546,7 @@ namespace Nav
         {
             return m_DestReachFailedTimer.ElapsedMilliseconds;
         }
-        
+
         public void dbg_StressTestPathing()
         {
             int timeout = 6000 * 1000;
@@ -446,12 +554,13 @@ namespace Nav
 
             Stopwatch timeout_watch = new Stopwatch();
             timeout_watch.Start();
+            Vec3 intersection = null;
 
             while (timeout_watch.ElapsedMilliseconds < timeout)
             {
                 CurrentPos = m_Navmesh.GetRandomPos();
                 Destination = m_Navmesh.GetRandomPos();
-                m_Navmesh.RayCast2D(m_Navmesh.GetRandomPos(), m_Navmesh.GetRandomPos(), MovementFlag.Fly);
+                m_Navmesh.RayCast2D(m_Navmesh.GetRandomPos(), m_Navmesh.GetRandomPos(), MovementFlag.Fly, ref intersection);
                 m_Navmesh.Log("[Nav] Ray cast done!");
             }
 
@@ -503,7 +612,7 @@ namespace Nav
             }
 
             ResetAntiStuckPrecition(Vec3.Empty);
-            ResetAntiStuckPathing(Vec3.Empty);            
+            ResetAntiStuckPathing(Vec3.Empty);
         }
 
         // May enter InputLock (read -> write)
@@ -568,7 +677,7 @@ namespace Nav
 
             while (!m_ShouldStopUpdates)
             {
-                OnUpdate(timer.ElapsedMilliseconds);                
+                OnUpdate(timer.ElapsedMilliseconds);
             }
         }
 
@@ -597,7 +706,7 @@ namespace Nav
                 UpdateAntiStuck();
                 UpdateDestReachFailed();
             }
-            
+
             Thread.Sleep(50);
         }
 
@@ -694,7 +803,7 @@ namespace Nav
                         destination = m_Navmesh.GetNearestCell(destination_grid.Cells, destination_grid.Center).Center;
                 }
             }
-            
+
             if (!destination.IsEmpty)
                 SetDestination(destination, DestType.Grid, GridDestPrecision);
         }
@@ -729,9 +838,9 @@ namespace Nav
 
         private void UpdatePathProgression(Vec3 current_pos)
         {
-            bool any_node_reached = false;            
+            bool any_node_reached = false;
             Vec3 reached_pos = Vec3.Empty;
-                
+
             // check and removed reached nodes from path
             using (new ReadLock(PathLock, true))
             {
@@ -902,7 +1011,7 @@ namespace Nav
                     m_PathRandomCoeffOverride = 1.5f;
                     m_UpdatePathIntervalOverride = 3000;
                     RequestPathUpdate();
-                }                
+                }
             }
         }
 
@@ -1077,7 +1186,7 @@ namespace Nav
         {
             using (FileStream fs = File.OpenRead(name + ".navigator"))
             using (BinaryReader r = new BinaryReader(fs))
-            {                
+            {
                 OnDeserialize(r);
             }
         }
@@ -1143,7 +1252,7 @@ namespace Nav
         private ReaderWriterLockSlim PathLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private ReaderWriterLockSlim AntiStuckLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
-        
+
         private List<Vec3> m_Path = new List<Vec3>(); //@ PathLock
         private Vec3 m_PathDestination = Vec3.Empty; //@ PathLock
         private DestType m_PathDestType = DestType.None; //@ PathLock
@@ -1152,7 +1261,7 @@ namespace Nav
         private List<Vec3> m_DebugPositionsHistory = new List<Vec3>(); //@ InputLock
         private int m_HistoryDestId = -1; //@ InputLock
         private List<int> m_DestinationGridsId = new List<int>(); //@ InputLock
-        
+
         private float m_PrecisionOverride = -1;
         private Stopwatch m_AntiStuckPrecisionTimer = new Stopwatch();
         private float m_PathRandomCoeffOverride = -1;
@@ -1166,12 +1275,12 @@ namespace Nav
         private Vec3 m_AntiStuckPathingTestPos = Vec3.Empty; //@ AntiStuckLock
         private Vec3 m_DestReachFailedTestPos = Vec3.Empty;
 
-        private Vec3 m_CurrentPos = Vec3.Empty; //@ InputLock        
+        private Vec3 m_CurrentPos = Vec3.Empty; //@ InputLock
         private Vec3 m_Destination = Vec3.Empty; //@ InputLock
         private DestType m_DestinationType = DestType.None; //@ InputLock
 
         private List<INavigationObserver> m_Observers = new List<INavigationObserver>(); //@ InputLock
-        
+
         private Navmesh m_Navmesh = null;
     }
 }

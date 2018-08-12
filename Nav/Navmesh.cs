@@ -711,31 +711,40 @@ namespace Nav
             }
         }
 
-        public bool RayCast(Vec3 from, Vec3 to, MovementFlag flags, bool ignore_movement_cost = true)
+        public bool RayCast(Vec3 from, Vec3 to, MovementFlag flags, ref Vec3 intersection, bool ignore_movement_cost = true)
         {
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
-            return RayCast(from, null, to, flags, false, ignore_movement_cost, ref ignored_cells);
+            return RayCast(from, null, to, flags, ref intersection, false, ignore_movement_cost, ref ignored_cells);
         }
 
-        public bool RayCast2D(Vec3 from, Vec3 to, MovementFlag flags, bool ignore_movement_cost = true)
+        public bool RayCast2D(Vec3 from, Vec3 to, MovementFlag flags, ref Vec3 intersection, bool ignore_movement_cost = true)
         {
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
-            return RayCast(from, null, to, flags, true, ignore_movement_cost, ref ignored_cells);
+            return RayCast(from, null, to, flags, ref intersection, true, ignore_movement_cost, ref ignored_cells);
         }
 
-        // Aquires DataLock (read)
-        private bool RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, bool ignore_movement_cost, ref HashSet<Cell> ignored_cells)
+        // Aquires DataLock (read); returns true when there is no obstacle
+        private bool RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, ref Vec3 intersection, bool test_2d, bool ignore_movement_cost, ref HashSet<Cell> ignored_cells)
         {
             using (new ReadLock(DataLock))
             {
                 if (to.IsEmpty)
+                {
+                    intersection = new Vec3(from);
                     return false;
+                }
 
                 if (from_cell == null && !GetCellContaining(from, out from_cell, flags, false, false, -1, test_2d, 2, ignored_cells))
+                {
+                    intersection = new Vec3(from);
                     return false;
+                }
 
                 if (test_2d ? from_cell.Contains2D(to) : from_cell.Contains(to, 2))
+                {
+                    intersection = new Vec3(to);
                     return true;
+                }
 
                 ignored_cells.Add(from_cell);
 
@@ -747,7 +756,10 @@ namespace Nav
 
                 Vec3 ray_origin = new Vec3(from);
 
-                // raycast through neighbours
+                bool ray_test_result = test_2d ? from_cell.AABB.RayTest2D(ray_origin, ray_dir, out intersection) :
+                                                 from_cell.AABB.RayTest(ray_origin, ray_dir, out intersection);
+
+                // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
                     if (neighbour.cell.Disabled || (neighbour.connection_flags & flags) != flags || (!ignore_movement_cost && neighbour.cell.MovementCostMult > from_cell.MovementCostMult))
@@ -757,11 +769,6 @@ namespace Nav
 
                     if (ignored_cells.Contains(neighbour_cell))
                         continue;
-
-                    Vec3 intersection = null;
-
-                    bool ray_test_result = test_2d ? neighbour_cell.AABB.RayTest2D(ray_origin, ray_dir, out intersection) :
-                                                     neighbour_cell.AABB.RayTest(ray_origin, ray_dir, out intersection);
 
                     // ray intersects on connection plane
                     if (ray_test_result)
@@ -774,7 +781,7 @@ namespace Nav
                             bool accepted = test_2d ? shared_aabb.Contains2D(intersection) :
                                                       shared_aabb.Contains(intersection);
 
-                            if (accepted && RayCast(intersection, neighbour_cell, to, flags, test_2d, ignore_movement_cost, ref ignored_cells))
+                            if (accepted && RayCast(intersection, neighbour_cell, to, flags, ref intersection, test_2d, ignore_movement_cost, ref ignored_cells))
                                 return true;
                         }
                     }

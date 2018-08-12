@@ -122,6 +122,13 @@ namespace Nav
                             LHS.Z / RHS);
         }
 
+        public static Vec3 operator /(Vec3 LHS, Vec3 RHS)
+        {
+            return new Vec3(LHS.X / RHS.X,
+                            LHS.Y / RHS.Y,
+                            LHS.Z / RHS.Z);
+        }
+
         public static Vec3 Rotate(Vec3 v, float angle, Vec3 axis)
         {
             if (angle.Equals(0))
@@ -195,12 +202,13 @@ namespace Nav
             return X * X + Y * Y;
         }
 
-        public void Normalize()
+        public float Normalize()
         {
             float len = Length();
             X /= len;
             Y /= len;
             Z /= len;
+            return len;
         }
 
         public Vec3 Normalized()
@@ -209,12 +217,13 @@ namespace Nav
             return new Vec3(X / len, Y / len, Z / len);
         }
 
-        public void Normalize2D()
+        public float Normalize2D()
         {
             float len = Length2D();
             X /= len;
             Y /= len;
             Z = 0;
+            return len;
         }
 
         public Vec3 Normalized2D()
@@ -325,6 +334,6 @@ namespace Nav
             return proj_len;
         }
 
-        public override string ToString() { return "[" + Math.Round(X, 3) + " " + Math.Round(Y, 3) + " " + Math.Round(Z, 3) + "]"; }
+        public override string ToString() { return "[" + X.ToString("0.00") + " " + Y.ToString("0.00") + " " + Z.ToString("0.00") + "]"; }
     }
 }

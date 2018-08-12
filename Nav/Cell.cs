@@ -449,11 +449,12 @@ namespace Nav
             foreach (Neighbour neighbour in Neighbours)
             {
                 w.Write(neighbour.cell.GlobalId);
-                w.Write(neighbour.border_point != null);
 
+                w.Write(neighbour.border_point != null);
                 if (neighbour.border_point != null)
                     neighbour.border_point.Serialize(w);
 
+                w.Write(neighbour.border_segment != null);
                 if (neighbour.border_segment != null)
                 {
                     neighbour.border_segment.Item1.Serialize(w);

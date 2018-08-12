@@ -215,7 +215,10 @@ namespace NavMeshViewer
                         }
 
                         if (m_RenderRayCast)
-                            RenderHelper.DrawLine(e.Graphics, m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk) ? Pens.Green : Pens.Red, m_RenderCenter, curr, dest);
+                        {
+                            Vec3 intersection = null;
+                            RenderHelper.DrawLine(e.Graphics, m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk, ref intersection) ? Pens.Green : Pens.Red, m_RenderCenter, curr, intersection);
+                        }
                     }
                 }
 
