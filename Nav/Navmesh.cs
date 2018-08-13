@@ -689,7 +689,7 @@ namespace Nav
             return result;
         }
 
-        public bool RayTrace(Vec3 from, Vec3 to, MovementFlag flags, out Vec3 intersection)
+        public bool RayTrace(Vec3 from, Vec3 to, MovementFlag flags, ref Vec3 intersection)
         {
             using (new ReadLock(DataLock))
             {

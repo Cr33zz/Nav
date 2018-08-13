@@ -44,7 +44,7 @@ namespace NavMeshViewer
                 m_Explorer.Deserialize(file);
 
                 Vec3 initial_pos = m_Navigator.CurrentPos;
-                if (initial_pos.IsEmpty)
+                if (initial_pos.IsZero())
                     initial_pos = m_Navmesh.GetCenter();
                 m_RenderCenter.X = initial_pos.X;
                 m_RenderCenter.Y = initial_pos.Y;
@@ -195,16 +195,16 @@ namespace NavMeshViewer
                     RenderHelper.DrawLines(e.Graphics, Pens.Green, m_RenderCenter, m_LastPositionsHistory, 1);
                 }
 
-                if (!m_Navigator.CurrentPos.IsEmpty)
+                if (!m_Navigator.CurrentPos.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.Blue, m_RenderCenter, m_Navigator.CurrentPos);
-                if (!m_Navigator.Destination.IsEmpty)
+                if (!m_Navigator.Destination.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, m_Navigator.Destination);
 
                 {
                     Vec3 curr = m_Navigator.CurrentPos;
                     Vec3 dest = m_Navigator.Destination;
 
-                    if (!curr.IsEmpty && !dest.IsEmpty)
+                    if (!curr.IsZero() && !dest.IsZero())
                     {
                         if (m_RenderOriginalPath)
                         {
@@ -216,7 +216,7 @@ namespace NavMeshViewer
 
                         if (m_RenderRayCast)
                         {
-                            Vec3 intersection = null;
+                            Vec3 intersection = default(Vec3);
                             RenderHelper.DrawLine(e.Graphics, m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk, ref intersection) ? Pens.Green : Pens.Red, m_RenderCenter, curr, intersection);
                         }
                     }
@@ -303,28 +303,28 @@ namespace NavMeshViewer
             {
                 if (e.KeyCode == System.Windows.Forms.Keys.S)
                 {
-                    Vec3 result = null;
-                    m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
-                                       new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
-                                       MovementFlag.Walk,
-                                       out result);
-
-                    if (result.IsEmpty)
+                    Vec3 result = default(Vec3);
+                    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                                            MovementFlag.Walk,
+                                            ref result))
+                    {
                         result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
+                    }
 
                     m_Navigator.CurrentPos = result;
                     e.Handled = true;
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.E)
                 {
-                    Vec3 result = null;
-                    m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
-                                       new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
-                                       MovementFlag.Walk,
-                                       out result);
-
-                    if (result.IsEmpty)
+                    Vec3 result = default(Vec3);
+                    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                                            MovementFlag.Walk,
+                                            ref result))
+                    {
                         result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
+                    }
 
                     m_Navigator.Destination = result;
                     e.Handled = true;
@@ -422,7 +422,7 @@ namespace NavMeshViewer
                     m_Explorer.Deserialize("nav_save");
 
                     Vec3 initial_pos = m_Navigator.CurrentPos;
-                    if (initial_pos.IsEmpty)
+                    if (initial_pos.IsZero())
                         initial_pos = m_Navmesh.GetCenter();
                     m_RenderCenter.X = initial_pos.X;
                     m_RenderCenter.Y = initial_pos.Y;
@@ -447,11 +447,11 @@ namespace NavMeshViewer
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.B)
                 {
-                    Vec3 result = null;
+                    Vec3 result = default(Vec3);
                     m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
                                        new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
                                        MovementFlag.Walk,
-                                       out result);
+                                       ref result);
 
                     if (m_Bot != null)
                         m_Bot.Dispose();
@@ -555,7 +555,8 @@ namespace NavMeshViewer
             using (var reader = File.OpenText(filename))
             {
                 string line;
-                Vec3 last_wp = Vec3.Empty;
+                Vec3 last_wp = Vec3.ZERO;
+                bool last_wp_set = false;
 
                 while ((line = reader.ReadLine()) != null)
                 {
@@ -565,7 +566,7 @@ namespace NavMeshViewer
                     {
                         Vec3 wp = new Vec3(float.Parse(coords[0]), float.Parse(coords[1]), float.Parse(coords[2]));
                         
-                        if (!last_wp.IsEmpty)
+                        if (last_wp_set)
                         {
                             List<Vec3> path = new List<Vec3>();
                             m_Navigator.FindPath(last_wp, wp, MovementFlag.Walk, ref path, -1, true, true);
@@ -573,6 +574,7 @@ namespace NavMeshViewer
                         }
 
                         last_wp = wp;
+                        last_wp_set = true;
                     }
                 }
             }
@@ -585,7 +587,7 @@ namespace NavMeshViewer
             if (m_Navmesh.Load(filename, clear, true))
             {
                 Vec3 initial_pos = m_Navigator.CurrentPos;
-                if (initial_pos.IsEmpty)
+                if (initial_pos.IsZero())
                     initial_pos = m_Navmesh.GetCenter();
 
                 m_RenderCenter.X = initial_pos.X;

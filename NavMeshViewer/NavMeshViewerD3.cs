@@ -218,14 +218,14 @@ namespace NavMeshViewer
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.H)
                 {
-                    Vec3 result = null;
-                    m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
-                                       new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
-                                       MovementFlag.Walk,
-                                       out result);
-
-                    if (result.IsEmpty)
+                    Vec3 result = default(Vec3);
+                    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                                            MovementFlag.Walk,
+                                            ref result))
+                    {
                         result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
+                    }
 
                     m_Explorer.HintPos = result;
                     e.Handled = true;
