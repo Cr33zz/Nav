@@ -200,7 +200,7 @@ namespace Nav
                     {
                         if (m_Navmesh.RayCast2D(ray_start_data.pos + dir * (float)i * PathSmoothingPrecision, ray_end_data.pos, flags, ref intersection, false))
                         {
-                            intermediate_data.pos = ray_start_data.pos + dir * (float)i * PathSmoothingPrecision;
+                            path[ray_start_index + 1] = new path_pos(ray_start_data.pos + dir * (float)i * PathSmoothingPrecision, intermediate_data.cell);
                             break;
                         }
                     }

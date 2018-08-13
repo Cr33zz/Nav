@@ -172,7 +172,7 @@ namespace Nav
 
             //foreach (AABB r in result)
             //    r.Extend(new AABB(r.Min - EXTENTS_INCREASE_VEC, r.Max + EXTENTS_INCREASE_VEC));
-            
+
             return result.ToArray();
         }
 
@@ -252,7 +252,7 @@ namespace Nav
                 return new Vec3(-1, 0, 0);
             else if (min_dist.Equals(dist_3))
                 return new Vec3(0, 1, 0);
-            else 
+            else
                 return new Vec3(0, -1, 0);
         }
 
@@ -262,110 +262,47 @@ namespace Nav
             return Min + new Vec3((float)rng.NextDouble() * (Max.X - Min.X), (float)rng.NextDouble() * (Max.Y - Min.Y), (float)rng.NextDouble() * (Max.Z - Min.Z));
         }
 
-        public bool RayTest(Vec3 ray_origin, Vec3 ray_dir, out Vec3 result)
+        public bool RayTest(Vec3 ray_origin, Vec3 ray_dir, ref Vec3 result)
         {
-            return InternalRayTest(ray_origin, ray_dir, out result, 3);
+            return InternalRayTest(ray_origin, ray_dir, ref result, 3);
         }
 
-        public bool RayTest2D(Vec3 ray_origin, Vec3 ray_dir, out Vec3 result)
+        public bool RayTest2D(Vec3 ray_origin, Vec3 ray_dir, ref Vec3 result)
         {
-            return InternalRayTest(ray_origin, ray_dir, out result, 2);
+            return InternalRayTest(ray_origin, ray_dir, ref result, 2);
         }
 
-        private bool InternalRayTest(Vec3 ray_origin, Vec3 ray_dir, out Vec3 result, int num_dim)
+        private bool InternalRayTest(Vec3 ray_origin, Vec3 ray_dir, ref Vec3 result, int num_dim)
         {
-            // implementation is brutal port from http://tog.acm.org/resources/GraphicsGems/gems/RayBox.c
-            result = Vec3.ZERO;
+            // implementation based upon https://www.gamedev.net/forums/topic/495636-raybox-collision-intersection-point/
+            Vec3 tmin = (Min - ray_origin) / ray_dir;
+            Vec3 tmax = (Max - ray_origin) / ray_dir;
 
-            const int RIGHT = 0;
-            const int LEFT = 1;
-            const int MIDDLE = 2;
+            Vec3 real_min = Vec3.Min(tmin, tmax);
+            Vec3 real_max = Vec3.Max(tmin, tmax);
 
-	        bool inside = true;
+            float minmax = Math.Min(real_max.X, real_max.Y);
+            float maxmin = Math.Max(real_min.X, real_min.Y);
 
-            float[] origin = new float[3]{ray_origin.X, ray_origin.Y, ray_origin.Z};
-            float[] minB = new float[3]{Min.X, Min.Y, Min.Z};
-            float[] maxB = new float[3]{Max.X, Max.Y, Max.Z};
-            float[] dir = new float[3]{ray_dir.X, ray_dir.Y, ray_dir.Z};
-            float[] coord = new float[3]{0,0,0};
-
-	        int[] quadrant = new int[3]{0,0,0};
-	        float[] candidatePlane = new float[3];
-
-	        /* Find candidate planes; this loop can be avoided if
-   	        rays cast all from the eye(assume perpsective view) */
-	        for (int i = 0; i < num_dim; ++i)
+            if (num_dim > 2)
             {
-		        if(origin[i] < minB[i])
-                {
-			        quadrant[i] = LEFT;
-			        candidatePlane[i] = minB[i];
-			        inside = false;
-		        }
-                else if (origin[i] > maxB[i])
-                {
-			        quadrant[i] = RIGHT;
-			        candidatePlane[i] = maxB[i];
-			        inside = false;
-		        }
-                else
-                {
-			        quadrant[i] = MIDDLE;
-		        }
+                minmax = Math.Min(minmax, real_max.Z);
+                maxmin = Math.Max(maxmin, real_min.Z);
             }
 
-	        /* Ray origin inside bounding box */
-	        if(inside)
+            // when both values are negative origin is 'after' aabb when looking in ray direction
+            if (minmax >= maxmin && minmax >= 0)
             {
-		        result = new Vec3(ray_origin);
-		        return true;
-	        }
-
-            float[] maxT = new float[3];
-
-	        /* Calculate T distances to candidate planes */
-	        for (int i = 0; i < num_dim; ++i)
-            {
-		        if (quadrant[i] != MIDDLE && dir[i] !=0)
-			        maxT[i] = (candidatePlane[i]-origin[i]) / dir[i];
-		        else
-			        maxT[i] = -1;
+                // when maxmin is negative we are inside the aabb
+                result = new Vec3(ray_origin + ray_dir * (maxmin < 0 ? minmax : maxmin));
+                return true;
             }
 
-	        /* Get largest of the maxT's for final choice of intersection */
-	        int whichPlane = 0;
-	        for (int i = 1; i < num_dim; ++i)
-            {
-		        if (maxT[whichPlane] < maxT[i])
-			        whichPlane = i;
-            }
-
-	        /* Check final candidate actually inside box */
-	        if (maxT[whichPlane] < 0)
-                return false;
-
-	        for (int i = 0; i < num_dim; ++i)
-            {
-		        if (whichPlane != i)
-                {
-			        coord[i] = origin[i] + maxT[whichPlane] *dir[i];
-
-			        if (coord[i] < minB[i] || coord[i] > maxB[i])
-				        return false;
-		        }
-                else
-                {
-			        coord[i] = candidatePlane[i];
-		        }
-            }
-
-            result = new Vec3(coord[0], coord[1], num_dim == 3 ? coord[2] : 0);
-
-	        return true;				/* ray hits box */
-        }	
+            return false;
+        }
 
         public static readonly AABB Empty = new AABB();
-        
+
         public Vec3 Min;
         public Vec3 Max;
     }

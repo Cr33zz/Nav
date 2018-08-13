@@ -15,15 +15,15 @@ namespace Nav
 
         public Vec3(float x, float y, float z)
         {
-            this.X = x; 
-            this.Y = y; 
+            this.X = x;
+            this.Y = y;
             this.Z = z;
         }
 
         public Vec3(Vec3 v)
         {
-            X = v.X; 
-            Y = v.Y; 
+            X = v.X;
+            Y = v.Y;
             Z = v.Z;
         }
 
@@ -34,7 +34,7 @@ namespace Nav
 
         // http://en.wikipedia.org/wiki/File:3D_Spherical.svg
         // theta is the angle between the positive Z-axis and the vector in question (0 ≤ θ ≤ π)
-        // phi is the angle between the projection of the vector onto the X-Y-plane and the positive X-axis (0 ≤ φ < 2π)        
+        // phi is the angle between the projection of the vector onto the X-Y-plane and the positive X-axis (0 ≤ φ < 2π)
         public static Vec3 FromSpherical(float theta, float phi)
         {
             return new Vec3((float)(Math.Sin(theta) * Math.Cos(phi)), (float)(Math.Sin(theta) * Math.Sin(phi)), (float)Math.Cos(theta));
@@ -66,7 +66,7 @@ namespace Nav
         public bool Equals(Vec3 v, float epsilon)
         {
             return Math.Abs(X - v.X) < epsilon &&
-                   Math.Abs(Y - v.Y) < epsilon && 
+                   Math.Abs(Y - v.Y) < epsilon &&
                    Math.Abs(Z - v.Z) < epsilon;
         }
 
@@ -264,22 +264,22 @@ namespace Nav
 
         public static Vec3 Max(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Max(v1.X, v2.X), Math.Max(v1.Y, v2.Y), Math.Max(v1.Z, v2.Z));
+            return new Vec3(v1.X > v2.X ? v1.X : v2.X, v1.Y > v2.Y ? v1.Y : v2.Y, v1.Z > v2.Z ? v1.Z : v2.Z);
         }
 
         public static Vec3 Max2D(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Max(v1.X, v2.X), Math.Max(v1.Y, v2.Y), 0);
+            return new Vec3(v1.X > v2.X ? v1.X : v2.X, v1.Y > v2.Y ? v1.Y : v2.Y, 0);
         }
 
         public static Vec3 Min(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Min(v1.X, v2.X), Math.Min(v1.Y, v2.Y), Math.Min(v1.Z, v2.Z));
+            return new Vec3(v1.X < v2.X ? v1.X : v2.X, v1.Y < v2.Y ? v1.Y : v2.Y, v1.Z < v2.Z ? v1.Z : v2.Z);
         }
 
         public static Vec3 Min2D(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Min(v1.X, v2.X), Math.Min(v1.Y, v2.Y), 0);
+            return new Vec3(v1.X < v2.X ? v1.X : v2.X, v1.Y < v2.Y ? v1.Y : v2.Y, 0);
         }
 
         public void Serialize(BinaryWriter w)

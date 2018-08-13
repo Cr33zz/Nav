@@ -139,7 +139,7 @@ namespace Nav
                         }
                     }
 
-                    m_CellsPatches.Add(new CellsPatch(merged_cells, c.Flags));                
+                    m_CellsPatches.Add(new CellsPatch(merged_cells, c.Flags));
                 }
             }
         }
@@ -626,9 +626,9 @@ namespace Nav
                         random_grid_cell = m_GridCells.ElementAt(rng.Next(m_GridCells.Count));
 
                         NotifyOnNavDataChanged();
-                        
+
                         Regions = avoid_areas;
-                        
+
                         Log("[Nav] Navmesh loaded.");
 
                         stream.Close();
@@ -705,7 +705,7 @@ namespace Nav
                         continue;
 
                     Vec3 new_intersection = default(Vec3);
-                    if (c.AABB.RayTest(from, ray_dir, out new_intersection) && from.DistanceSqr(new_intersection) < from.DistanceSqr(intersection))
+                    if (c.AABB.RayTest(from, ray_dir, ref new_intersection) && from.DistanceSqr(new_intersection) < from.DistanceSqr(intersection))
                     {
                         ray_hit = true;
                         intersection = new_intersection;
@@ -755,9 +755,6 @@ namespace Nav
 
                 Vec3 ray_origin = new Vec3(from);
 
-                bool ray_test_result = test_2d ? from_cell.AABB.RayTest2D(ray_origin, ray_dir, out intersection) :
-                                                 from_cell.AABB.RayTest(ray_origin, ray_dir, out intersection);
-
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
@@ -769,12 +766,15 @@ namespace Nav
                     if (ignored_cells.Contains(neighbour_cell))
                         continue;
 
-                    // ray intersects on connection plane
+                    bool ray_test_result = test_2d ? neighbour_cell.AABB.RayTest2D(ray_origin, ray_dir, ref intersection) :
+                                                     neighbour_cell.AABB.RayTest(ray_origin, ray_dir, ref intersection);
+
                     if (ray_test_result)
                     {
                         AABB shared_aabb = test_2d ? from_cell.AABB.Intersect2D(neighbour_cell.AABB, true) :
                                                      from_cell.AABB.Intersect(neighbour_cell.AABB, true);
 
+                        // ray intersects on connection plane
                         if (shared_aabb != null)
                         {
                             bool accepted = test_2d ? shared_aabb.Contains2D(intersection) :
@@ -891,7 +891,7 @@ namespace Nav
                     foreach (Cell cell in grid_cell.Cells)
                         file.WriteLine("n {0} {1} {2} {3} {4} {5} {6}", cell.Min.X, cell.Min.Y, cell.Min.Z, cell.Max.X, cell.Max.Y, cell.Max.Z, (int)cell.Flags);
                 }
-            
+
                 foreach (region_data region in Regions)
                     file.WriteLine("r {0} {1} {2} {3} {4} {5} {6}", region.area.Min.X, region.area.Min.Y, region.area.Min.Z, region.area.Max.X, region.area.Max.Y, region.area.Max.Z, region.move_cost_mult);
             }
@@ -1151,7 +1151,7 @@ namespace Nav
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         public ReadLock AcquireReadDataLock() { return new ReadLock(DataLock); }
-        
+
         internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
         private HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
