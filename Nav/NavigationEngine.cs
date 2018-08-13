@@ -134,14 +134,14 @@ namespace Nav
                     Vec3 new_from = from + bounce_dir * 10;
                     m_Navmesh.GetCellContaining(new_from, out start, flags, false, as_close_as_possible, -1, false, 2, null);
 
-                    if (!Algorihms.FindPath<Cell>(start, ref end, new_from, to, flags, ref tmp_path, random_coeff, true))
+                    if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, true))
                         return false;
 
                     tmp_path.Insert(0, new path_pos(start.AABB.Align(from), start));
                 }
                 else
                 {
-                    if (!Algorihms.FindPath<Cell>(start, ref end, from, to, flags, ref tmp_path, random_coeff, true))
+                    if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, true))
                         return false;
                 }
 

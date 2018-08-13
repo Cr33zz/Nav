@@ -273,7 +273,7 @@ namespace Nav
         public static bool AreConnected<T>(T start, ref T end, MovementFlag flags) where T : Cell
         {
             List<path_pos> path = null;
-            return FindPath(start, ref end, Vec3.Empty, Vec3.Empty, flags, ref path);
+            return FindPath(start, Vec3.Empty, new Algorihms.DestinationPathFindStrategy<T>(Vec3.Empty, end), flags, ref path);
         }
 
         private static NodeInfo GetNodeInfoFromList(Cell node, Vec3 leading_point, List<NodeInfo> list)
@@ -321,7 +321,33 @@ namespace Nav
             public float h; //heuristic cost to end node            
         }
 
-        public static bool FindPath<T>(T start, ref T end, Vec3 from, Vec3 to, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false) where T : Cell
+        public abstract class PathFindStrategy<T> 
+            where T : Cell
+        {
+            public abstract bool IsValid();
+            public abstract float GetMinDistance(Vec3 from);
+            public abstract Vec3 GetDestination();
+            public abstract bool IsDestCell(T cell);
+            public T FinalDestCell { get; set; }
+        }
+
+        public class DestinationPathFindStrategy<T> : PathFindStrategy<T> 
+            where T : Cell
+        {
+            public DestinationPathFindStrategy(Vec3 dest, T dest_cell) { Dest = dest; DestCell = dest_cell; FinalDestCell = dest_cell; }
+
+            public override bool IsValid() { return DestCell != null; }
+            public override float GetMinDistance(Vec3 from) { return from.Distance(Dest); }
+            public override Vec3 GetDestination() { return Dest; }
+            public override bool IsDestCell(T cell) { return cell == DestCell; }
+
+            private Vec3 Dest;
+            private T DestCell;
+        }
+
+        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false) 
+            where T : Cell
+            where S : PathFindStrategy<T>
         {
             if (path != null)
                 path.Clear();
@@ -333,10 +359,10 @@ namespace Nav
 
             Random rng = new Random();
 
-            if (start == null || end == null)
+            if (start == null || !strategy.IsValid())
                 return false;
 
-            NodeInfo s = new NodeInfo(start, from, null, 0, from.Distance(to));
+            NodeInfo s = new NodeInfo(start, from, null, 0, strategy.GetMinDistance(from));
             open.Add(s);
 
             while (open.Count > 0)
@@ -350,9 +376,9 @@ namespace Nav
                 //take node with lower cost from open list
                 NodeInfo info = best;
 
-                if (info.cell == end)
+                if (strategy.IsDestCell((T)info.cell))
                 {
-                    BuildPath(start, end, from, to, info, ref path);
+                    BuildPath(start, info.cell, from, strategy.GetDestination(), info, ref path);
                     return true;
                 }
 
@@ -383,7 +409,7 @@ namespace Nav
                     // if not in open list
                     if (info_neighbour == null)
                     {
-                        info_neighbour = new NodeInfo(cell_neighbour, leading_point, null, 0, leading_point.Distance(to) * (1 + random_dist_mod) * info.cell.MovementCostMult);
+                        info_neighbour = new NodeInfo(cell_neighbour, leading_point, null, 0, strategy.GetMinDistance(leading_point) * (1 + random_dist_mod) * info.cell.MovementCostMult);
                         is_better = true;
 
                         open.Insert(0, info_neighbour);
@@ -405,9 +431,9 @@ namespace Nav
             {
                 float min_total_cost = closed.Min(x => x.h);
                 NodeInfo best = closed.Find(x => x.h.Equals(min_total_cost));
-                end = (T)best.cell;
+                strategy.FinalDestCell = (T)best.cell;
 
-                BuildPath(start, end, from, to, best, ref path);
+                BuildPath(start, best.cell, from, strategy.GetDestination() , best, ref path);
                 return true;
             }
 
