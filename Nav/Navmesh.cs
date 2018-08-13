@@ -706,7 +706,7 @@ namespace Nav
                         continue;
 
                     Vec3 new_intersection = null;
-                    if (c.AABB.RayTest(from, ray_dir, out new_intersection) && from.DistanceSqr(new_intersection) < from.DistanceSqr(intersection))
+                    if (c.AABB.RayTest(from, ray_dir, ref new_intersection) && from.DistanceSqr(new_intersection) < from.DistanceSqr(intersection))
                         intersection = new_intersection;
                 }
 
@@ -759,8 +759,8 @@ namespace Nav
 
                 Vec3 ray_origin = new Vec3(from);
 
-                bool ray_test_result = test_2d ? from_cell.AABB.RayTest2D(ray_origin, ray_dir, out intersection) :
-                                                 from_cell.AABB.RayTest(ray_origin, ray_dir, out intersection);
+                bool ray_test_result = test_2d ? from_cell.AABB.RayTest2D(ray_origin, ray_dir, ref intersection) :
+                                                 from_cell.AABB.RayTest(ray_origin, ray_dir, ref intersection);
 
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
