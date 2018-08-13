@@ -365,7 +365,7 @@ namespace Nav
                     if (cell_neighbour.Disabled || (neighbour.connection_flags & flags) != flags)
                         continue;
 
-                    Vec3 leading_point = neighbour.border_point != null ? neighbour.border_point : cell_neighbour.Center;
+                    Vec3 leading_point = !neighbour.border_point.IsZero() ? neighbour.border_point : cell_neighbour.Center;
 
                     NodeInfo info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
 
