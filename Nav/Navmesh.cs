@@ -757,9 +757,6 @@ namespace Nav
 
                 Vec3 ray_origin = new Vec3(from);
 
-                bool ray_test_result = test_2d ? from_cell.AABB.RayTest2D(ray_origin, ray_dir, ref intersection) :
-                                                 from_cell.AABB.RayTest(ray_origin, ray_dir, ref intersection);
-
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
@@ -771,12 +768,15 @@ namespace Nav
                     if (ignored_cells.Contains(neighbour_cell))
                         continue;
 
-                    // ray intersects on connection plane
+                    bool ray_test_result = test_2d ? neighbour_cell.AABB.RayTest2D(ray_origin, ray_dir, ref intersection) :
+                                                     neighbour_cell.AABB.RayTest(ray_origin, ray_dir, ref intersection);
+
                     if (ray_test_result)
                     {
                         AABB shared_aabb = test_2d ? from_cell.AABB.Intersect2D(neighbour_cell.AABB, true) :
                                                      from_cell.AABB.Intersect(neighbour_cell.AABB, true);
 
+                        // ray intersects on connection plane
                         if (shared_aabb != null)
                         {
                             bool accepted = test_2d ? shared_aabb.Contains2D(intersection) :

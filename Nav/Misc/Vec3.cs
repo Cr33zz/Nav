@@ -269,21 +269,25 @@ namespace Nav
 
         public static Vec3 Max(Vec3 LHS, Vec3 RHS)
         {
+            //reimplement using < instead of Min since there are differences when it comes to NaN comparison
             return new Vec3(Math.Max(LHS.X, RHS.X), Math.Max(LHS.Y, RHS.Y), Math.Max(LHS.Z, RHS.Z));
         }
 
         public static Vec3 Max2D(Vec3 LHS, Vec3 RHS)
         {
+            //reimplement using < instead of Min since there are differences when it comes to NaN comparison
             return new Vec3(Math.Max(LHS.X, RHS.X), Math.Max(LHS.Y, RHS.Y), 0);
         }
 
         public static Vec3 Min(Vec3 LHS, Vec3 RHS)
         {
+            //reimplement using < instead of Min since there are differences when it comes to NaN comparison
             return new Vec3(Math.Min(LHS.X, RHS.X), Math.Min(LHS.Y, RHS.Y), Math.Min(LHS.Z, RHS.Z));
         }
 
         public static Vec3 Min2D(Vec3 LHS, Vec3 RHS)
         {
+            //reimplement using < instead of Min since there are differences when it comes to NaN comparison
             return new Vec3(Math.Min(LHS.X, RHS.X), Math.Min(LHS.Y, RHS.Y), 0);
         }
 
