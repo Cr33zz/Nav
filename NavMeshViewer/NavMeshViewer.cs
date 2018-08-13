@@ -550,6 +550,8 @@ namespace NavMeshViewer
             if (!File.Exists(filename))
                 return;
 
+            Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+
             using (var reader = File.OpenText(filename))
             {
                 string line;
@@ -561,9 +563,7 @@ namespace NavMeshViewer
 
                     if (coords.Length >= 3)
                     {
-                        Vec3 wp = new Vec3(float.Parse(coords[0], CultureInfo.InvariantCulture),
-                                           float.Parse(coords[1], CultureInfo.InvariantCulture),
-                                           float.Parse(coords[2], CultureInfo.InvariantCulture));
+                        Vec3 wp = new Vec3(float.Parse(coords[0]), float.Parse(coords[1]), float.Parse(coords[2]));
                         
                         if (!last_wp.IsEmpty)
                         {

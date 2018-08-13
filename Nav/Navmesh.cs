@@ -561,6 +561,8 @@ namespace Nav
             if (filename == null)
                 return false;
 
+            Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+
             //using (new Profiler("[Nav] Loaded nav data [%t]"))
             {
                 if (clear)
@@ -577,10 +579,6 @@ namespace Nav
                         Vec3 cell_shrink_size = Vec3.Empty;
                         HashSet<region_data> avoid_areas = new HashSet<region_data>();
 
-                        CultureInfo inv = (CultureInfo)CultureInfo.CurrentCulture.Clone();
-                        inv.NumberFormat.CurrencyDecimalSeparator = ",";
-                        inv.NumberFormat.NumberDecimalSeparator = ",";
-
                         while ((line = stream.ReadLine()) != null)
                         {
                             string[] data = line.Split(' ');
@@ -592,7 +590,7 @@ namespace Nav
 
                                 m_LastCellId = 0;
 
-                                g_cell = new GridCell(float.Parse(data[1], inv), float.Parse(data[2], inv), float.Parse(data[3], inv), float.Parse(data[4], inv), float.Parse(data[5], inv), float.Parse(data[6], inv), (data.Length > 7 ? int.Parse(data[7]) : m_LastGridCellId++));
+                                g_cell = new GridCell(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]), float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6]), (data.Length > 7 ? int.Parse(data[7]) : m_LastGridCellId++));
                             }
                             else if (data[0] == "n")
                             {
@@ -601,12 +599,12 @@ namespace Nav
                                 if (data.Length > 7)
                                     flags = (MovementFlag)int.Parse(data[7]);
 
-                                Cell n_cell = new Cell(new Vec3(float.Parse(data[1], inv), float.Parse(data[2], inv), float.Parse(data[3], inv)) - cell_shrink_size, new Vec3(float.Parse(data[4], inv), float.Parse(data[5], inv), float.Parse(data[6], inv)) - cell_shrink_size, flags, m_LastCellId++);
+                                Cell n_cell = new Cell(new Vec3(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3])) - cell_shrink_size, new Vec3(float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])) - cell_shrink_size, flags, m_LastCellId++);
                                 g_cell.Add(n_cell);
                             }
                             else if (data[0] == "r")
                             {
-                                avoid_areas.Add(new region_data(new AABB(float.Parse(data[1], inv), float.Parse(data[2], inv), float.Parse(data[3], inv), float.Parse(data[4], inv), float.Parse(data[5], inv), float.Parse(data[6], inv)), float.Parse(data[7], inv)));
+                                avoid_areas.Add(new region_data(new AABB(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]), float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])), float.Parse(data[7])));
                             }
                         }
 
@@ -882,6 +880,8 @@ namespace Nav
         public void Dump(string filename)
         {
             System.IO.StreamWriter file = new System.IO.StreamWriter(filename);
+
+            Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
 
             using (new ReadLock(DataLock))
             using (new ReadLock(InputLock))
