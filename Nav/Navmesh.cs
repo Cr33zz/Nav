@@ -156,7 +156,7 @@ namespace Nav
             {
                 c = null;
 
-                if (p.IsEmpty)
+                if (p.IsZero())
                     return false;
 
                 // check cache first
@@ -488,7 +488,7 @@ namespace Nav
                             // try to connect new replacement cells with potential neighbors
                             foreach (Cell replacement_cell in data.replacement_cells)
                             {
-                                Vec3 border_point = null;
+                                Vec3 border_point = default(Vec3);
 
                                 foreach (Cell potential_neighbor in potential_neighbors)
                                     replacement_cell.AddNeighbour(potential_neighbor, ref border_point);
@@ -576,7 +576,7 @@ namespace Nav
                     {
                         string line;
                         GridCell g_cell = null;
-                        Vec3 cell_shrink_size = Vec3.Empty;
+                        Vec3 cell_shrink_size = Vec3.ZERO;
                         HashSet<region_data> avoid_areas = new HashSet<region_data>();
 
                         while ((line = stream.ReadLine()) != null)
@@ -660,7 +660,7 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                Vec3 avg_pos = Vec3.Empty;
+                Vec3 avg_pos = Vec3.ZERO;
 
                 foreach (GridCell g_cell in m_GridCells)
                     avg_pos += g_cell.AABB.Center;
@@ -693,22 +693,26 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                intersection = Vec3.Empty;
+                intersection = Vec3.ZERO;
 
                 Vec3 ray_dir = to - from;
                 ray_dir.Normalize();
+                bool ray_hit = false;
 
                 foreach (Cell c in m_AllCells)
                 {
                     if (!c.HasFlags(flags))
                         continue;
 
-                    Vec3 new_intersection = null;
+                    Vec3 new_intersection = default(Vec3);
                     if (c.AABB.RayTest(from, ray_dir, out new_intersection) && from.DistanceSqr(new_intersection) < from.DistanceSqr(intersection))
+                    {
+                        ray_hit = true;
                         intersection = new_intersection;
+                    }
                 }
 
-                return !intersection.IsEmpty;
+                return ray_hit;
             }
         }
 
@@ -729,12 +733,6 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                if (to.IsEmpty)
-                {
-                    intersection = new Vec3(from);
-                    return false;
-                }
-
                 if (from_cell == null && !GetCellContaining(from, out from_cell, flags, false, false, -1, test_2d, 2, ignored_cells))
                 {
                     intersection = new Vec3(from);

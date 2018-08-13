@@ -273,7 +273,7 @@ namespace Nav
         public static bool AreConnected<T>(T start, ref T end, MovementFlag flags) where T : Cell
         {
             List<path_pos> path = null;
-            return FindPath(start, ref end, Vec3.Empty, Vec3.Empty, flags, ref path);
+            return FindPath(start, ref end, Vec3.ZERO, Vec3.ZERO, flags, ref path);
         }
 
         private static NodeInfo GetNodeInfoFromList(Cell node, Vec3 leading_point, List<NodeInfo> list)
@@ -375,7 +375,7 @@ namespace Nav
 
                     float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
 
-                    float new_g = info.g + (info.leading_point.IsEmpty ? info.cell.Distance(leading_point) : info.leading_point.Distance(leading_point)) * (1 + random_dist_mod) * info.cell.MovementCostMult;
+                    float new_g = info.g + (info.leading_point.IsZero() ? info.cell.Distance(leading_point) : info.leading_point.Distance(leading_point)) * (1 + random_dist_mod) * info.cell.MovementCostMult;
                     bool is_better = false;
 
                     info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, open);
@@ -435,7 +435,7 @@ namespace Nav
 
                     if (i == 0)
                     {
-                        if (from.IsEmpty)
+                        if (from.IsZero())
                             path.Add(new path_pos(cell.Center, cell));
                         else
                             path.Add(new path_pos(cell.AABB.Align(from), cell));
@@ -447,7 +447,7 @@ namespace Nav
 
                     if (i == cells_list.Count - 1)
                     {
-                        if (to.IsEmpty)
+                        if (to.IsZero())
                             path.Add(new path_pos(cell.Center, cell));
                         else
                             path.Add(new path_pos(cell.AABB.Align(to), cell));

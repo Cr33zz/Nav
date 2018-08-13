@@ -236,8 +236,8 @@ namespace Nav
             // special case for single neighbor
             else if (Neighbours.Count == 1)
             {
-                Vec3 v1 = null;
-                Vec3 v2 = null;
+                Vec3 v1 = default(Vec3);
+                Vec3 v2 = default(Vec3);
 
                 if (GetBorderSegmentWith(Neighbours[0].cell.AABB, ref v1, ref v2))
                     AlignPlane = new Plane(v1, v2, Center);
@@ -301,9 +301,9 @@ namespace Nav
             return point;
         }
 
-        private void AddNeighbour(Cell cell, Vec3 border_point, Tuple<Vec3, Vec3> border_segment)
+        private void AddNeighbour(Cell cell, Vec3 border_point)
         {
-            Neighbours.Add(new Neighbour(cell, border_point, border_segment, Flags & cell.Flags));
+            Neighbours.Add(new Neighbour(cell, border_point, Flags & cell.Flags));
             AlignPlaneDirty = true;
         }
 
@@ -321,8 +321,8 @@ namespace Nav
                 if (Neighbours.Exists(x => x.cell.GlobalId == cell.GlobalId))
                     return false;
 
-                AddNeighbour(cell, intersection.Center, null);
-                cell.AddNeighbour(this, intersection.Center, null);
+                AddNeighbour(cell, intersection.Center);
+                cell.AddNeighbour(this, intersection.Center);
 
                 border_point = new Vec3(intersection.Center);
                 
@@ -421,17 +421,15 @@ namespace Nav
 
         public class Neighbour
         {
-            public Neighbour(Cell cell, Vec3 border_point, Tuple<Vec3, Vec3> border_segment, MovementFlag connection_flags)
+            public Neighbour(Cell cell, Vec3 border_point, MovementFlag connection_flags)
             {
                 this.cell = cell;
                 this.border_point = border_point;
-                this.border_segment = border_segment;
                 this.connection_flags = connection_flags;
             }
 
             public Cell cell;
             public Vec3 border_point;
-            public Tuple<Vec3, Vec3> border_segment;
             public MovementFlag connection_flags;
         }
 
@@ -468,13 +466,6 @@ namespace Nav
                 if (neighbour.border_point != null)
                     neighbour.border_point.Serialize(w);
 
-                w.Write(neighbour.border_segment != null);
-                if (neighbour.border_segment != null)
-                {
-                    neighbour.border_segment.Item1.Serialize(w);
-                    neighbour.border_segment.Item2.Serialize(w);
-                }
-
                 w.Write((int)neighbour.connection_flags);
             }
         }
@@ -492,16 +483,13 @@ namespace Nav
             int neighbours_num = r.ReadInt32();
             for (int i = 0; i < neighbours_num; ++i)
             {
-                Neighbour neighbour = new Neighbour(null, null, null, MovementFlag.None);
+                Neighbour neighbour = new Neighbour(null, Vec3.ZERO, MovementFlag.None);
 
                 int neighbour_global_id = r.ReadInt32();
                 neighbour.cell = all_cells.FirstOrDefault(x => x.GlobalId == neighbour_global_id);
                 
                 if (r.ReadBoolean())
                     neighbour.border_point = new Vec3(r);
-
-                if (r.ReadBoolean())
-                    neighbour.border_segment = new Tuple<Vec3,Vec3>(new Vec3(r), new Vec3(r));
 
                 neighbour.connection_flags = (MovementFlag)r.ReadInt32();
 

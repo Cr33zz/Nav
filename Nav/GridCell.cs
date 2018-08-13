@@ -38,7 +38,7 @@ namespace Nav
             if (cell.AABB.Area < MIN_CELL_AREA_TO_CONSIDER)
                 return false;
 
-            Vec3 border_point = null;
+            Vec3 border_point = default(Vec3);
 
             foreach (Cell our_cell in Cells)
                 our_cell.AddNeighbour(cell, ref border_point);
@@ -76,7 +76,7 @@ namespace Nav
             {
                 foreach (Cell other_cell in grid_cell.Cells)
                 {
-                    Vec3 border_point = null;
+                    Vec3 border_point = default(Vec3);
                     bool cells_connected = our_cell.AddNeighbour(other_cell, ref border_point);
 
                     if (cells_connected)
@@ -97,8 +97,8 @@ namespace Nav
                 // if they were not connected before, simply connect them
                 if (n1 == null)
                 {
-                    Neighbours.Add(new Neighbour(grid_cell, null, null, connection_flags));
-                    grid_cell.Neighbours.Add(new Neighbour(this, null, null, connection_flags));
+                    Neighbours.Add(new Neighbour(grid_cell, Vec3.ZERO, connection_flags));
+                    grid_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, connection_flags));
                 }
                 // otherwise verify connection flags
                 else if (n1.connection_flags < connection_flags)

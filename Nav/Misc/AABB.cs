@@ -5,129 +5,112 @@ using System.Collections.Generic;
 
 namespace Nav
 {
-    public class AABB : IEquatable<AABB>
+    public struct AABB : IEquatable<AABB>
     {
-        public AABB()
-        {
-            min = Vec3.Empty;
-            max = Vec3.Empty;
-            is_empty = true;
-        }
+        public static readonly AABB ZERO = default(AABB);
 
         public AABB(float min_x, float min_y, float min_z, float max_x, float max_y, float max_z)
         {
-            min = new Vec3(min_x, min_y, min_z);
-            max = new Vec3(max_x, max_y, max_z);
+            Min = new Vec3(min_x, min_y, min_z);
+            Max = new Vec3(max_x, max_y, max_z);
         }
 
         public AABB(Vec3 min, Vec3 max)
         {
-            this.min = new Vec3(min);
-            this.max = new Vec3(max);
+            Min = new Vec3(min);
+            Max = new Vec3(max);
         }
 
         public AABB(AABB aabb)
         {
-            min = new Vec3(aabb.min);
-            max = new Vec3(aabb.max);
+            Min = new Vec3(aabb.Min);
+            Max = new Vec3(aabb.Max);
         }
 
-        public AABB(BinaryReader r)
+        public AABB(BinaryReader r) : this()
         {
             Deserialize(r);
         }
 
-        public static AABB operator +(AABB LHS, Vec3 RHS)
+        public static AABB operator +(AABB aabb1, Vec3 aabb2)
         {
-            return new AABB(LHS.min + RHS, LHS.max + RHS);
+            return new AABB(aabb1.Min + aabb2, aabb1.Max + aabb2);
         }
 
         public float Area
         {
-            get { return (max.X - min.X) * (max.Y - min.Y); }
+            get { return (Max.X - Min.X) * (Max.Y - Min.Y); }
         }
 
         public float Radius
         {
-            get { return Math.Min(max.X - min.X, max.Y - min.Y) * 0.5f; }
+            get { return Math.Min(Max.X - Min.X, Max.Y - Min.Y) * 0.5f; }
         }
 
         public Vec3 Dimensions
         {
-            get { return new Vec3(max.X - min.X, max.Y - min.Y, max.Z - min.Z); }
+            get { return new Vec3(Max.X - Min.X, Max.Y - Min.Y, Max.Z - Min.Z); }
         }
 
         public float Volume
         {
-            get { return Area * (max.Z - min.Z); }
+            get { return Area * (Max.Z - Min.Z); }
         }
 
         public Vec3 Center
         {
-            get { return (min + max) * 0.5f; }
+            get { return (Min + Max) * 0.5f; }
         }
 
-        public Vec3 Min
-        {
-            get { return min; }
-        }
-
-        public Vec3 Max
-        {
-            get { return max; }
-        }
-
-        public bool IsEmpty
-        {
-            get { return is_empty; }
-        }
+        public bool IsZero() { return Min.IsZero() && Max.IsZero(); }
 
         public override bool Equals(Object obj)
         {
-            if (obj == null)
-                return false;
-
-            AABB aabb = obj as AABB;
-
-            return Equals(aabb);
+            return obj is AABB && Equals((AABB)obj);
         }
 
         public bool Equals(AABB aabb)
         {
-            if (aabb == null)
-                return false;
+            return this == aabb;
+        }
 
-            return min.Equals(aabb.min) && max.Equals(aabb.max);
+        public static bool operator ==(AABB aabb1, AABB aabb2)
+        {
+            return aabb1.Min == aabb2.Min && aabb1.Max == aabb2.Max;
+        }
+        public static bool operator !=(AABB x, AABB y)
+        {
+            return !(x == y);
         }
 
         public override int GetHashCode()
         {
-            return min.GetHashCode() + max.GetHashCode();
+            return Min.GetHashCode() + Max.GetHashCode();
         }
 
         public float Distance2D(Vec3 p)
         {
-            float dx = Math.Max(0, Math.Max(min.X - p.X, p.X - max.X));
-            float dy = Math.Max(0, Math.Max(min.Y - p.Y, p.Y - max.Y));
+            float dx = Math.Max(0, Math.Max(Min.X - p.X, p.X - Max.X));
+            float dy = Math.Max(0, Math.Max(Min.Y - p.Y, p.Y - Max.Y));
             return (float)Math.Sqrt(dx * dx + dy * dy);
         }
 
         public float Distance(Vec3 p)
         {
-            float dx = Math.Max(0, Math.Max(min.X - p.X, p.X - max.X));
-            float dy = Math.Max(0, Math.Max(min.Y - p.Y, p.Y - max.Y));
-            float dz = Math.Max(0, Math.Max(min.Z - p.Z, p.Z - max.Z));
+            float dx = Math.Max(0, Math.Max(Min.X - p.X, p.X - Max.X));
+            float dy = Math.Max(0, Math.Max(Min.Y - p.Y, p.Y - Max.Y));
+            float dz = Math.Max(0, Math.Max(Min.Z - p.Z, p.Z - Max.Z));
             return (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
         }
 
         public bool Contains(Vec3 p, float z_tolerance = 0)
         {
-            return p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y && (p.Z + z_tolerance) >= min.Z && (p.Z - z_tolerance) <= max.Z;
+            return p.X >= Min.X && p.X <= Max.X && p.Y >= Min.Y && p.Y <= Max.Y && (p.Z + z_tolerance) >= Min.Z && (p.Z - z_tolerance) <= Max.Z;
         }
 
         public bool Contains2D(Vec3 p)
         {
-            return p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y;
+            return p.X >= Min.X && p.X <= Max.X && p.Y >= Min.Y && p.Y <= Max.Y;
         }
 
         public bool Overlaps(Vec3 circle_center, float radius, bool tangential_ok = false)
@@ -146,24 +129,24 @@ namespace Nav
 
         public bool Overlaps2D(AABB aabb, bool tangential_ok = false)
         {
-            return (tangential_ok && max.X >= aabb.min.X && min.X <= aabb.max.X && max.Y >= aabb.min.Y && min.Y <= aabb.max.Y) ||
-                   (max.X > aabb.min.X && min.X < aabb.max.X && max.Y > aabb.min.Y && min.Y < aabb.max.Y);
+            return (tangential_ok && Max.X >= aabb.Min.X && Min.X <= aabb.Max.X && Max.Y >= aabb.Min.Y && Min.Y <= aabb.Max.Y) ||
+                   (Max.X > aabb.Min.X && Min.X < aabb.Max.X && Max.Y > aabb.Min.Y && Min.Y < aabb.Max.Y);
         }
 
         public AABB Intersect2D(AABB aabb, bool tangential_ok = false)
         {
             if (!Overlaps2D(aabb, tangential_ok))
-                return null;
+                return ZERO;
 
-            return new AABB(Vec3.Max2D(min, aabb.min), Vec3.Min2D(max, aabb.max));
+            return new AABB(Vec3.Max2D(Min, aabb.Min), Vec3.Min2D(Max, aabb.Max));
         }
 
         public AABB Intersect(AABB aabb, bool tangential_ok = false)
         {
             if (!Overlaps2D(aabb, tangential_ok))
-                return null;
+                return ZERO;
 
-            return new AABB(Vec3.Max(min, aabb.min), Vec3.Min(max, aabb.max));
+            return new AABB(Vec3.Max(Min, aabb.Min), Vec3.Min(Max, aabb.Max));
         }
 
         public AABB[] Extract2D(AABB aabb)
@@ -195,26 +178,25 @@ namespace Nav
 
         public void Extend(AABB aabb)
         {
-            if (is_empty)
+            if (IsZero())
             {
-                min = new Vec3(aabb.min);
-                max = new Vec3(aabb.max);
-                is_empty = aabb.is_empty;
+                Min = new Vec3(aabb.Min);
+                Max = new Vec3(aabb.Max);
                 return;
             }
 
-            min = Vec3.Min(min, aabb.min);
-            max = Vec3.Max(max, aabb.max);
+            Min = Vec3.Min(Min, aabb.Min);
+            Max = Vec3.Max(Max, aabb.Max);
         }
 
         public static AABB Maximum(AABB aabb1, AABB aabb2)
         {
-            return new AABB(Vec3.Min(aabb1.min, aabb2.min), Vec3.Max(aabb1.max, aabb2.max));
+            return new AABB(Vec3.Min(aabb1.Min, aabb2.Min), Vec3.Max(aabb1.Max, aabb2.Max));
         }
 
         public static AABB Mininum(AABB aabb1, AABB aabb2)
         {
-            return new AABB(Vec3.Max(aabb1.min, aabb2.min), Vec3.Min(aabb1.max, aabb2.max));
+            return new AABB(Vec3.Max(aabb1.Min, aabb2.Min), Vec3.Min(aabb1.Max, aabb2.Max));
         }
 
         public Vec3 Align(Vec3 p)
@@ -224,43 +206,41 @@ namespace Nav
 
         public void Translate(Vec3 v)
         {
-            min += v;
-            max += v;
+            Min += v;
+            Max += v;
         }
 
         public void Serialize(BinaryWriter w)
         {
-            min.Serialize(w);
-            max.Serialize(w);
-            w.Write(is_empty);
+            Min.Serialize(w);
+            Max.Serialize(w);
         }
 
         public void Deserialize(BinaryReader r)
         {
-            min = new Vec3(r);
-            max = new Vec3(r);
-            is_empty = r.ReadBoolean();
+            Min = new Vec3(r);
+            Max = new Vec3(r);
         }
 
         public bool Inside(Vec3 circle_center, float radius)
         {
-            return min.Distance(circle_center) < radius &&
-                   max.Distance(circle_center) < radius &&
-                   new Vec3(min.X, max.Y, max.Z).Distance(circle_center) < radius &&
-                   new Vec3(min.X, max.Y, min.Z).Distance(circle_center) < radius &&
-                   new Vec3(max.X, min.Y, max.Z).Distance(circle_center) < radius &&
-                   new Vec3(max.X, min.Y, min.Z).Distance(circle_center) < radius &&
-                   new Vec3(min.X, min.Y, max.Z).Distance(circle_center) < radius &&
-                   new Vec3(max.X, max.Y, min.Z).Distance(circle_center) < radius;
+            return Min.Distance(circle_center) < radius &&
+                   Max.Distance(circle_center) < radius &&
+                   new Vec3(Min.X, Max.Y, Max.Z).Distance(circle_center) < radius &&
+                   new Vec3(Min.X, Max.Y, Min.Z).Distance(circle_center) < radius &&
+                   new Vec3(Max.X, Min.Y, Max.Z).Distance(circle_center) < radius &&
+                   new Vec3(Max.X, Min.Y, Min.Z).Distance(circle_center) < radius &&
+                   new Vec3(Min.X, Min.Y, Max.Z).Distance(circle_center) < radius &&
+                   new Vec3(Max.X, Max.Y, Min.Z).Distance(circle_center) < radius;
         }
 
         // method assumes that pos is inside AABB
         public Vec3 GetBounceDir2D(Vec3 pos)
         {
-            float dist_1 = pos.X - min.X;
-            float dist_2 = max.X - pos.X;
-            float dist_3 = pos.Y - min.Y;
-            float dist_4 = max.Y - pos.Y;
+            float dist_1 = pos.X - Min.X;
+            float dist_2 = Max.X - pos.X;
+            float dist_3 = pos.Y - Min.Y;
+            float dist_4 = Max.Y - pos.Y;
 
             float[] dists = new float[] { dist_1, dist_2, dist_3, dist_4 };
 
@@ -279,7 +259,7 @@ namespace Nav
         public Vec3 GetRandomPos()
         {
             Random rng = new Random();
-            return min + new Vec3((float)rng.NextDouble() * (max.X - min.X), (float)rng.NextDouble() * (max.Y - min.Y), (float)rng.NextDouble() * (max.Z - min.Z));
+            return Min + new Vec3((float)rng.NextDouble() * (Max.X - Min.X), (float)rng.NextDouble() * (Max.Y - Min.Y), (float)rng.NextDouble() * (Max.Z - Min.Z));
         }
 
         public bool RayTest(Vec3 ray_origin, Vec3 ray_dir, out Vec3 result)
@@ -295,7 +275,7 @@ namespace Nav
         private bool InternalRayTest(Vec3 ray_origin, Vec3 ray_dir, out Vec3 result, int num_dim)
         {
             // implementation is brutal port from http://tog.acm.org/resources/GraphicsGems/gems/RayBox.c
-            result = Vec3.Empty;
+            result = Vec3.ZERO;
 
             const int RIGHT = 0;
             const int LEFT = 1;
@@ -304,8 +284,8 @@ namespace Nav
 	        bool inside = true;
 
             float[] origin = new float[3]{ray_origin.X, ray_origin.Y, ray_origin.Z};
-            float[] minB = new float[3]{min.X, min.Y, min.Z};
-            float[] maxB = new float[3]{max.X, max.Y, max.Z};
+            float[] minB = new float[3]{Min.X, Min.Y, Min.Z};
+            float[] maxB = new float[3]{Max.X, Max.Y, Max.Z};
             float[] dir = new float[3]{ray_dir.X, ray_dir.Y, ray_dir.Z};
             float[] coord = new float[3]{0,0,0};
 
@@ -386,8 +366,7 @@ namespace Nav
 
         public static readonly AABB Empty = new AABB();
         
-        protected Vec3 min = null;
-        protected Vec3 max = null;
-        private bool is_empty = false;
+        public Vec3 Min;
+        public Vec3 Max;
     }
 }

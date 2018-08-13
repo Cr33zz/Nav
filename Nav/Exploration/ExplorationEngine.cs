@@ -54,7 +54,7 @@ namespace Nav
                 ExploreCell.LastExploreCellGlobalId = 0;
                 m_LastExploreCellId = 0;
 
-                m_HintPos = Vec3.Empty;
+                m_HintPos = Vec3.ZERO;
             }
         }
 
@@ -410,7 +410,7 @@ namespace Nav
         {
             Vec3 current_pos = m_Navigator.CurrentPos;
 
-            if (current_pos.IsEmpty)
+            if (current_pos.IsZero())
                 return;
 
             if (!IsDataAvailable)
@@ -517,7 +517,7 @@ namespace Nav
                         intersections_aabb.Extend(intersection);
                     }
 
-                    Vec3 nearest_intersection_center = Vec3.Empty;
+                    Vec3 nearest_intersection_center = Vec3.ZERO;
                     float nearest_intersection_dist = float.MaxValue;
 
                     foreach (AABB inter_aabb in intersections)
@@ -566,7 +566,7 @@ namespace Nav
 
         public Vec3 GetDestinationCellPosition()
         {
-            return m_DestCell != null ? m_DestCell.Position : null;
+            return m_DestCell != null ? m_DestCell.Position : Vec3.ZERO;
         }
 
         private bool m_Enabled = true;
@@ -585,6 +585,6 @@ namespace Nav
         protected ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         protected ExploreCell m_DestCell;
-        private Vec3 m_HintPos = Vec3.Empty; //@ InputLock
+        private Vec3 m_HintPos = Vec3.ZERO; //@ InputLock
     }
 }
