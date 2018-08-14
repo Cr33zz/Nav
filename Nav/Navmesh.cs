@@ -755,6 +755,8 @@ namespace Nav
 
                 Vec3 ray_origin = new Vec3(from);
 
+                bool any_neighbour_accepted = false;
+
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
@@ -775,15 +777,27 @@ namespace Nav
                                                      from_cell.AABB.Intersect(neighbour_cell.AABB, true);
 
                         // ray intersects on connection plane
-                        if (shared_aabb != null)
+                        if (!shared_aabb.IsZero())
                         {
                             bool accepted = test_2d ? shared_aabb.Contains2D(intersection) :
                                                       shared_aabb.Contains(intersection);
+
+                            any_neighbour_accepted |= accepted;
 
                             if (accepted && RayCast(intersection, neighbour_cell, to, flags, ref intersection, test_2d, ignore_movement_cost, ref ignored_cells))
                                 return true;
                         }
                     }
+                }
+
+                // ray cast doesn't hit any neighbour we need to figure out where is intersects this aabb, but since origin is on the edge and we want to find "exit" point
+                // we need to offset origin a tiny bit
+                if (!any_neighbour_accepted)
+                {
+                    if (test_2d)
+                        from_cell.AABB.RayTest2D(ray_origin + ray_dir * 0.1f, ray_dir, ref intersection);
+                    else
+                        from_cell.AABB.RayTest(ray_origin + ray_dir * 0.1f, ray_dir, ref intersection);
                 }
 
                 return false;
