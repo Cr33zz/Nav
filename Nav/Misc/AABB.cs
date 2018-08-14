@@ -115,16 +115,18 @@ namespace Nav
 
         public bool Overlaps(Vec3 circle_center, float radius, bool tangential_ok = false)
         {
+            float radius_sqr = radius * radius;
             Vec3 center_aligned = Align(circle_center);
-            float dist = circle_center.Distance(center_aligned);
-            return tangential_ok ? dist < radius : dist <= radius;
+            float dist_sqr = circle_center.DistanceSqr(center_aligned);
+            return tangential_ok ? dist_sqr < radius_sqr : dist_sqr <= radius_sqr;
         }
 
         public bool Overlaps2D(Vec3 circle_center, float radius, bool tangential_ok = false)
         {
+            float radius_sqr = radius * radius;
             Vec3 center_aligned = Align(circle_center);
-            float dist = circle_center.Distance2D(center_aligned);
-            return tangential_ok ? dist < radius : dist <= radius;
+            float dist_sqr = circle_center.Distance2DSqr(center_aligned);
+            return tangential_ok ? dist_sqr < radius_sqr : dist_sqr <= radius_sqr;
         }
 
         public bool Overlaps2D(AABB aabb, bool tangential_ok = false)
