@@ -247,7 +247,7 @@ namespace Nav
                 // find plane from all possible plane with smallest average distance of all connection points from it
                 var connect_points = Neighbours.Where(x => (x.connection_flags & MovementFlag.Walk) != 0).Select(x => x.border_point);
 
-                //this is Diablo related hack, as most certainly
+                //this is Diablo related hack, as most certainly won't work in general case :(
                 Plane[] possible_align_planes = null;
 
                 if (AABB.Dimensions.X > 30)
@@ -316,7 +316,7 @@ namespace Nav
 
             AABB intersection = AABB.Intersect(cell.AABB, true);
 
-            if (intersection != null)
+            if (!intersection.IsZero())
             {
                 if (Neighbours.Exists(x => x.cell.GlobalId == cell.GlobalId))
                     return false;
@@ -336,7 +336,7 @@ namespace Nav
         {
             AABB intersection = AABB.Intersect(aabb, true);
 
-            if (intersection != null)
+            if (!intersection.IsZero())
             {
                 // find widest vector inside intersection AABB along X or Y axis
                 Vec3 dimentions = intersection.Dimensions;
@@ -461,11 +461,7 @@ namespace Nav
             foreach (Neighbour neighbour in Neighbours)
             {
                 w.Write(neighbour.cell.GlobalId);
-
-                w.Write(neighbour.border_point != null);
-                if (neighbour.border_point != null)
-                    neighbour.border_point.Serialize(w);
-
+                neighbour.border_point.Serialize(w);
                 w.Write((int)neighbour.connection_flags);
             }
         }
@@ -487,10 +483,7 @@ namespace Nav
 
                 int neighbour_global_id = r.ReadInt32();
                 neighbour.cell = all_cells.FirstOrDefault(x => x.GlobalId == neighbour_global_id);
-                
-                if (r.ReadBoolean())
-                    neighbour.border_point = new Vec3(r);
-
+                neighbour.border_point = new Vec3(r);
                 neighbour.connection_flags = (MovementFlag)r.ReadInt32();
 
                 if (neighbour.cell != null)
