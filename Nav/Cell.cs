@@ -470,7 +470,7 @@ namespace Nav
         {
             GlobalId = r.ReadInt32();
             Id = r.ReadInt32();
-            AABB.Deserialize(r);
+            AABB = new AABB(r);
             Flags = (MovementFlag)r.ReadInt32();
             Replacement = r.ReadBoolean();
             Disabled = r.ReadBoolean();
