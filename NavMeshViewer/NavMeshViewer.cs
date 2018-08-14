@@ -21,6 +21,23 @@ namespace NavMeshViewer
         {
             InitializeComponent();
 
+
+            //AABB t = new AABB(-5, -5, 0, 5, 5, 0);
+            //Vec3 inter = default(Vec3);
+            //bool result = false;
+            //result = t.RayTest2D(new Vec3(-5, -10, 0), new Vec3(0, 1, 0), ref inter);
+            //result = t.RayTest2D(new Vec3(-5, 0, 0), new Vec3(0, 1, 0), ref inter);
+            //result = t.RayTest2D(new Vec3(-5, 10, 0), new Vec3(0, 1, 0), ref inter);
+
+            //result = t.RayTest2D(new Vec3(-10, -5, 0), new Vec3(1, 0, 0), ref inter);
+            //result = t.RayTest2D(new Vec3(0, -5, 0), new Vec3(1, 0, 0), ref inter);
+            //result = t.RayTest2D(new Vec3(10, -5, 0), new Vec3(1, 0, 0), ref inter);
+
+            //result = t.RayTest(new Vec3(-5, -5, 10), new Vec3(0, 0, -1), ref inter);
+
+
+
+
             BackColor = Color.LightGray;
 
             m_Params = new Params(args);

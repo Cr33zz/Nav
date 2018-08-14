@@ -275,26 +275,45 @@ namespace Nav
         private bool InternalRayTest(Vec3 ray_origin, Vec3 ray_dir, ref Vec3 result, int num_dim)
         {
             // implementation based upon https://www.gamedev.net/forums/topic/495636-raybox-collision-intersection-point/
-            Vec3 tmin = (Min - ray_origin) / ray_dir;
-            Vec3 tmax = (Max - ray_origin) / ray_dir;
+            // + added custom support for rays tangent to sides of AABB
+            Vec3 ray_dir_inv = 1 / ray_dir;
+            Vec3 tmin = (Min - ray_origin) * ray_dir_inv;
+            Vec3 tmax = (Max - ray_origin) * ray_dir_inv;
 
             Vec3 real_min = Vec3.Min(tmin, tmax);
             Vec3 real_max = Vec3.Max(tmin, tmax);
 
-            float minmax = Math.Min(real_max.X, real_max.Y);
-            float maxmin = Math.Max(real_min.X, real_min.Y);
+            float minmax = real_max.X < real_max.Y ? real_max.X : real_max.Y;
+            float maxmin = real_min.X > real_min.Y ? real_min.X : real_min.Y;
+
+            bool tangent = false;
+
+            if (float.IsInfinity(maxmin))
+            {
+                tangent = true;
+                maxmin = float.IsInfinity(real_min.X) ? real_min.Y : real_min.X;
+            }
 
             if (num_dim > 2)
             {
-                minmax = Math.Min(minmax, real_max.Z);
-                maxmin = Math.Max(maxmin, real_min.Z);
+                minmax = minmax < real_max.Z ? minmax : real_max.Z;
+                maxmin = maxmin > real_min.Z ? maxmin : real_min.Z;
+                
+                float maxmin_tmp = maxmin > real_min.Z ? maxmin : real_min.Z;
+                if (float.IsInfinity(maxmin_tmp))
+                {
+                    tangent = true;
+                    maxmin = float.IsInfinity(maxmin) ? real_min.Z : maxmin;
+                }
             }
+
+            // for rays tangent to aabb, intersecting it and starting in the middle of a side we return origin since this the fisrt point of contact
 
             // when both values are negative origin is 'after' aabb when looking in ray direction
             if (minmax >= maxmin && minmax >= 0)
             {
                 // when maxmin is negative we are inside the aabb
-                result = new Vec3(ray_origin + ray_dir * (maxmin < 0 ? minmax : maxmin));
+                result = (tangent && maxmin < 0) ? ray_origin : (ray_origin + ray_dir * (maxmin < 0 ? minmax : maxmin));
                 return true;
             }
 

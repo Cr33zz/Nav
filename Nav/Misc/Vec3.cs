@@ -118,11 +118,14 @@ namespace Nav
                             v1.Z / v2);
         }
 
+        public static Vec3 operator /(float v1, Vec3 v2)
+        {
+            return new Vec3(v1 / v2.X, v1 / v2.Y, v1 / v2.Z);
+        }
+
         public static Vec3 operator /(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(v1.X / v2.X,
-                            v1.Y / v2.Y,
-                            v1.Z / v2.Z);
+            return new Vec3(v1.X / v2.X, v1.Y / v2.Y, v1.Z / v2.Z);
         }
 
         public static Vec3 Rotate(Vec3 v, float angle, Vec3 axis)
@@ -338,6 +341,6 @@ namespace Nav
             return proj_len;
         }
 
-        public override string ToString() { return "[" + X.ToString("0.00") + " " + Y.ToString("0.00") + " " + Z.ToString("0.00") + "]"; }
+        public override string ToString() { return "[" + X + " " + Y + " " + Z + "]"; }
     }
 }
