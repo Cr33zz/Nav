@@ -509,12 +509,15 @@ namespace Nav
                     List<AABB> intersections = new List<AABB>();
                     AABB intersections_aabb = new AABB();
 
+                    AABB intersection = default(AABB);
+
                     foreach (Cell c in visited)
                     {
-                        AABB intersection = cell_aabb.Intersect(c.AABB);
-
-                        intersections.Add(intersection);
-                        intersections_aabb.Extend(intersection);
+                        if (cell_aabb.Intersect(c.AABB, ref intersection))
+                        {
+                            intersections.Add(intersection);
+                            intersections_aabb.Extend(intersection);
+                        }
                     }
 
                     Vec3 nearest_intersection_center = Vec3.ZERO;

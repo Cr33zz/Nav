@@ -606,10 +606,10 @@ namespace NavMeshViewer
 
         private void dbg_MoveRegions()
         {
-            Random rng = new Random();
+            Random rng = new Random(0xF00D);
             HashSet<region_data> regions = new HashSet<region_data>();
 
-            for (int i = 0; i < 80; ++i)
+            for (int i = 0; i < 1200; ++i)
             {
                 Vec3 pos = m_Navmesh.GetRandomPos();
                 float size = 20 + (float)rng.NextDouble() * 10;

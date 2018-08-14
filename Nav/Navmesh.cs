@@ -773,11 +773,13 @@ namespace Nav
 
                     if (ray_test_result)
                     {
-                        AABB shared_aabb = test_2d ? from_cell.AABB.Intersect2D(neighbour_cell.AABB, true) :
-                                                     from_cell.AABB.Intersect(neighbour_cell.AABB, true);
+                        AABB shared_aabb = default(AABB);
+
+                        bool instersects = test_2d ? from_cell.AABB.Intersect2D(neighbour_cell.AABB, ref shared_aabb, true) :
+                                                     from_cell.AABB.Intersect(neighbour_cell.AABB, ref shared_aabb, true);
 
                         // ray intersects on connection plane
-                        if (!shared_aabb.IsZero())
+                        if (instersects)
                         {
                             bool accepted = test_2d ? shared_aabb.Contains2D(intersection) :
                                                       shared_aabb.Contains(intersection);

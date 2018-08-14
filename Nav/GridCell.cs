@@ -62,7 +62,7 @@ namespace Nav
         // properly when called multiple times for the same pair of grid cells!
         public void AddNeighbour(GridCell grid_cell)
         {
-            if (GlobalId == grid_cell.GlobalId || AABB.Intersect(grid_cell.AABB, true) == null)
+            if (GlobalId == grid_cell.GlobalId || !AABB.Overlaps2D(grid_cell.AABB, true))
                 return;
 
             // this is removed to properly handle merging

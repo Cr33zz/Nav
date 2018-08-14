@@ -135,27 +135,31 @@ namespace Nav
                    (Max.X > aabb.Min.X && Min.X < aabb.Max.X && Max.Y > aabb.Min.Y && Min.Y < aabb.Max.Y);
         }
 
-        public AABB Intersect2D(AABB aabb, bool tangential_ok = false)
+        public bool Intersect2D(AABB aabb, ref AABB output, bool tangential_ok = false)
         {
             if (!Overlaps2D(aabb, tangential_ok))
-                return ZERO;
+                return false;
 
-            return new AABB(Vec3.Max2D(Min, aabb.Min), Vec3.Min2D(Max, aabb.Max));
+            output.Min = Vec3.Max2D(Min, aabb.Min);
+            output.Max = Vec3.Min2D(Max, aabb.Max);
+            return true;
         }
 
-        public AABB Intersect(AABB aabb, bool tangential_ok = false)
+        public bool Intersect(AABB aabb, ref AABB output, bool tangential_ok = false)
         {
             if (!Overlaps2D(aabb, tangential_ok))
-                return ZERO;
+                return false;
 
-            return new AABB(Vec3.Max(Min, aabb.Min), Vec3.Min(Max, aabb.Max));
+            output.Min = Vec3.Max(Min, aabb.Min);
+            output.Max = Vec3.Min(Max, aabb.Max);
+            return true;
         }
 
         public AABB[] Extract2D(AABB aabb)
         {
-            AABB inter = Intersect2D(aabb);
+            AABB inter = default(AABB);
 
-            if (inter.IsZero())
+            if (!Intersect2D(aabb, ref inter))
                 return null;
 
             //float PRECISION = 0.01f;
@@ -321,8 +325,6 @@ namespace Nav
 
             return false;
         }
-
-        public static readonly AABB Empty = new AABB();
 
         public Vec3 Min;
         public Vec3 Max;

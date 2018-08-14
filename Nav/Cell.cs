@@ -83,10 +83,10 @@ namespace Nav
 
         public bool Equals(Cell cell)
         {
-            if (cell == null)
-                return false;
+            //if (cell == null)
+            //    return false;
 
-            return GlobalId.Equals(cell.GlobalId);
+            return GlobalId == cell.GlobalId;
         }
 
         public override int GetHashCode()
@@ -311,12 +311,12 @@ namespace Nav
         public bool AddNeighbour(Cell cell, ref Vec3 border_point)
         {
             // should not happen - removed due to performance impact - deep down it only checks global ID matching
-            //if (cell.Equals(this))
-            //    return false;
+            if (cell.Equals(this))
+                return false;
 
-            AABB intersection = AABB.Intersect(cell.AABB, true);
+            AABB intersection = default(AABB);
 
-            if (!intersection.IsZero())
+            if (AABB.Intersect(cell.AABB, ref intersection, true))
             {
                 if (Neighbours.Exists(x => x.cell.GlobalId == cell.GlobalId))
                     return false;
@@ -334,9 +334,9 @@ namespace Nav
 
         bool GetBorderSegmentWith(AABB aabb, ref Vec3 v1, ref Vec3 v2)
         {
-            AABB intersection = AABB.Intersect(aabb, true);
+            AABB intersection = default(AABB);
 
-            if (!intersection.IsZero())
+            if (AABB.Intersect(aabb, ref intersection, true))
             {
                 // find widest vector inside intersection AABB along X or Y axis
                 Vec3 dimentions = intersection.Dimensions;
