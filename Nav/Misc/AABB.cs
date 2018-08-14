@@ -153,7 +153,7 @@ namespace Nav
         {
             AABB inter = Intersect2D(aabb);
 
-            if (inter == null)
+            if (inter.IsZero())
                 return null;
 
             //float PRECISION = 0.01f;

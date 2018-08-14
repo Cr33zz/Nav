@@ -368,7 +368,7 @@ namespace Nav
             HashSet<region_data> regions_copy = Regions;
 
             using (new WriteLock(DataLock))
-            //using (new Profiler($"Updatind {m_Regions.Count} regions took %t"))
+            using (new Profiler($"Updatind {m_Regions.Count} regions took %t"))
             {
                 foreach (var data in m_CellsOverlappedByRegions)
                     data.Value.areas.Clear();
