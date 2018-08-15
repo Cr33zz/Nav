@@ -627,7 +627,7 @@ namespace Nav
 
             using (new ReadLock(InputLock, true))
             {
-                if ((m_Destination.Equals(pos) && m_DestinationType == type) || (m_Destination.IsZero() && m_DestinationType > type))
+                if ((m_Destination.Equals(pos) && m_DestinationType == type) || (!m_Destination.IsZero() && m_DestinationType > type))
                     return;
 
                 using (new WriteLock(InputLock))
