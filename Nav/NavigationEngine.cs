@@ -798,9 +798,9 @@ namespace Nav
             {
                 using (m_Navmesh.AcquireReadDataLock())
                 {
-                    GridCell current_grid = m_Navmesh.m_GridCells.FirstOrDefault(g => g.Contains2D(CurrentPos));
+                    GridCell current_grid = m_Navmesh.m_GridCells.FirstOrDefault(x => x.Contains2D(CurrentPos));
 
-                    GridCell destination_grid = m_Navmesh.m_GridCells.FirstOrDefault(g => destination_grids_id.Contains(g.Id) && Algorihms.AreConnected(current_grid, ref g, MovementFlag.None));
+                    GridCell destination_grid = m_Navmesh.m_GridCells.FirstOrDefault(x => destination_grids_id.Contains(x.Id) && Algorihms.AreConnected(current_grid, ref x, MovementFlag.None));
 
                     if (destination_grid != null)
                     {

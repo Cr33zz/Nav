@@ -438,10 +438,10 @@ namespace NavMeshViewer
                     //Thread t = new Thread(dbg_ContiniousSerialize);
                     //t.Start();
 
-                    Thread t = new Thread(dbg_MoveRegions);
-                    t.Start();
+                    //Thread t = new Thread(dbg_MoveRegions);
+                    //t.Start();
 
-                    //m_Navmesh.dbg_GenerateRandomAvoidAreas();
+                    m_Navmesh.dbg_GenerateRandomAvoidAreas(2);
 
                     e.Handled = true;
                 }
