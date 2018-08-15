@@ -35,6 +35,13 @@ namespace NavMeshViewer
                 LoadData(file);
             }
 
+            if (m_Params.HasParam("load_waypoints"))
+            {
+                string file;
+                m_Params.GetParam("load_waypoints", out file);
+                LoadWaypoints(file);
+            }
+
             if (m_Params.HasParam("deserialize"))
             {
                 string file;
