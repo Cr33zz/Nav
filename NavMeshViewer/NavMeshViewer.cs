@@ -123,13 +123,13 @@ namespace NavMeshViewer
 
                             foreach (Nav.GridCell grid_cell in grid_cells)
                             {
-                                foreach (Nav.Cell cell in grid_cell.Cells)
+                                foreach (Nav.Cell cell in grid_cell.GetCells())
                                 {
                                     RenderHelper.Render(cell, m_RenderCenter, e, m_RenderConnections, m_RenderIds, m_LastMaxMoveCostMult);
                                     max_move_cost_mult = Math.Max(max_move_cost_mult, cell.MovementCostMult);
                                 }
 
-                                cells_count += grid_cell.Cells.Count;
+                                cells_count += grid_cell.GetCellsCount();
                             }
 
                             m_LastMaxMoveCostMult = max_move_cost_mult;

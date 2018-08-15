@@ -490,7 +490,7 @@ namespace Nav
 
                     tmp_overlapping_grid_cells.Add(grid_cell.Id);
 
-                    cells.AddRange(grid_cell.Cells.Where(x => !x.Replacement && x.HasFlags(movement_flags) && cell_aabb.Overlaps2D(x.AABB)));
+                    cells.AddRange(grid_cell.GetCells(x => x.HasFlags(movement_flags) && cell_aabb.Overlaps2D(x.AABB), false));
                 }
 
                 // for traversing purposes list will be faster

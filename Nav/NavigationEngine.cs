@@ -805,7 +805,7 @@ namespace Nav
                     if (destination_grid != null)
                     {
                         grid_dest_found = true;
-                        destination = m_Navmesh.GetNearestCell(destination_grid.Cells, destination_grid.Center).Center;
+                        destination = m_Navmesh.GetNearestCell(destination_grid.GetCells(), destination_grid.Center).Center;
                     }
                 }
             }

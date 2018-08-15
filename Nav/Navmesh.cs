@@ -80,18 +80,20 @@ namespace Nav
 
         public bool Add(GridCell g_cell, bool trigger_nav_data_change)
         {
-            if (g_cell == null || g_cell.Cells.Count == 0)
+            if (g_cell == null || g_cell.GetCellsCount() == 0)
                 return false;
 
             using (new WriteLock(DataLock))
             {
+                var incoming_cells = g_cell.GetCells(false);
+
                 // check if same grid is not already defined (merge then)
                 GridCell base_grid_cell = m_GridCells.FirstOrDefault(x => x.AABB.Equals(g_cell.AABB));
 
                 if (base_grid_cell != null)
                 {
-                    base_grid_cell.Add(g_cell.Cells);
-                    Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.Cells.Count + " cell(s) merged with grid cell (" + base_grid_cell.Id + " " + base_grid_cell.Min + ")");
+                    base_grid_cell.Add(incoming_cells);
+                    Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.GetCellsCount() + " cell(s) merged with grid cell (" + base_grid_cell.Id + " " + base_grid_cell.Min + ")");
 
                     foreach (GridCell grid_cell in m_GridCells)
                         grid_cell.AddNeighbour(base_grid_cell);
@@ -102,11 +104,11 @@ namespace Nav
                         grid_cell.AddNeighbour(g_cell);
 
                     m_GridCells.Add(g_cell);
-                    Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.Cells.Count + " cell(s) added");
+                    Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.GetCellsCount() + " cell(s) added");
                 }
 
-                m_AllCells.UnionWith(g_cell.Cells);
-                UpdateCellsPatches(g_cell.Cells);
+                m_AllCells.UnionWith(incoming_cells);
+                UpdateCellsPatches(incoming_cells);
 
                 NotifyOnGridCellAdded(g_cell);
             }
@@ -116,7 +118,7 @@ namespace Nav
             return true;
         }
 
-        private void UpdateCellsPatches(LinkedList<Cell> cells)
+        private void UpdateCellsPatches(IEnumerable<Cell> cells)
         {
             //using (new Profiler("[Nav] Cells patches refreshed [%t]"))
             {
@@ -176,7 +178,7 @@ namespace Nav
 
                 foreach (GridCell grid_cell in m_GridCells)
                 {
-                    var cells = grid_cell.Cells.Where(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags));
+                    var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags));
 
                     if (grid_cell.Contains2D(p))
                     {
@@ -286,7 +288,7 @@ namespace Nav
         private class overlapped_cell_data
         {
             public overlapped_cell_data(Cell replaced_cell, GridCell parent_grid_cell) { this.replaced_cell = replaced_cell; this.parent_grid_cell = parent_grid_cell; }
-            public overlapped_cell_data(HashSet<Cell> all_cells, BinaryReader r) { Deserialize(all_cells, r); }
+            public overlapped_cell_data(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, BinaryReader r) { Deserialize(all_grid_cells, all_cells, r); }
 
             public GridCell parent_grid_cell;
             public Cell replaced_cell;
@@ -296,6 +298,8 @@ namespace Nav
 
             public void Serialize(BinaryWriter w)
             {
+                w.Write(parent_grid_cell.GlobalId);
+
                 w.Write(replaced_cell.GlobalId);
 
                 w.Write(replacement_cells.Count);
@@ -311,8 +315,11 @@ namespace Nav
                     region.Serialize(w);
             }
 
-            public void Deserialize(HashSet<Cell> all_cells, BinaryReader r)
+            public void Deserialize(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, BinaryReader r)
             {
+                int parent_grid_cell_global_id = r.ReadInt32();
+                parent_grid_cell = all_grid_cells.First(x => x.GlobalId == parent_grid_cell_global_id);
+
                 int replaced_cell_global_id = r.ReadInt32();
                 replaced_cell = all_cells.First(x => x.GlobalId == replaced_cell_global_id);
 
@@ -384,7 +391,8 @@ namespace Nav
                         // do not ignore disabled cells on purpose so we don't have to iterate separately over
                         foreach (GridCell g_cell in g_cells)
                         {
-                            var overlapped_cells = g_cell.Cells.Where(x => !x.Replacement && x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(region.area));
+                            // we only care about overlapping 'original' cells (ignore replacements)
+                            var overlapped_cells = g_cell.GetCells(x => x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(region.area), false);
 
                             foreach (Cell cell in overlapped_cells)
                             {
@@ -430,7 +438,7 @@ namespace Nav
                         // remove previous replacement cells
                         foreach (Cell replacement_cell in cell_data.replacement_cells)
                         {
-                            parent_grid_cell.Remove(replacement_cell);
+                            parent_grid_cell.RemoveReplacementCell(replacement_cell);
                             m_AllCells.Remove(replacement_cell);
                         }
 
@@ -486,7 +494,7 @@ namespace Nav
                                 }
                             }
 
-                            // try to connect new replacement cells with potential neighbors
+                            // try to manually (without using GridCell methods) connect new replacement cells with potential neighbors
                             foreach (Cell replacement_cell in cell_data.replacement_cells)
                             {
                                 Vec3 border_point = default(Vec3);
@@ -494,7 +502,7 @@ namespace Nav
                                 foreach (Cell potential_neighbor in potential_neighbors)
                                     replacement_cell.AddNeighbour(potential_neighbor, ref border_point);
 
-                                parent_grid_cell.Cells.AddFirst(replacement_cell);
+                                parent_grid_cell.AddReplacementCell(replacement_cell);
                                 m_AllCells.Add(replacement_cell);
 
                                 // this cell is now potential neighbor as well, because can be interconnected with other replacement cells!
@@ -653,7 +661,7 @@ namespace Nav
             {
                 rng = rng ?? Rng;
                 GridCell g_cell = m_GridCells.ElementAt(rng.Next(m_GridCells.Count));
-                var enabled_cells = g_cell.Cells.Where(x => !x.Disabled).ToArray();
+                var enabled_cells = g_cell.GetCells(x => !x.Disabled).ToArray();
                 return enabled_cells[rng.Next(enabled_cells.Count())].AABB.GetRandomPos(rng);
             }
         }
@@ -682,7 +690,7 @@ namespace Nav
 
                 // do not ignore disabled cells on purpose so we don't have to iterate separately over
                 foreach (GridCell g_cell in g_cells)
-                    cells.AddRange(g_cell.Cells.Where(x => !x.Replacement && x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(area)));
+                    cells.AddRange(g_cell.GetCells(x => x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(area), false));
 
                 foreach (var cell in cells)
                     result.Add(cell.CreateSimplifiedClone());
@@ -876,7 +884,7 @@ namespace Nav
 
             List<Cell> cells = new List<Cell>();
             foreach (GridCell grid_cell in potential_grid_cells)
-                cells.AddRange(grid_cell.Cells.Where(x => x.Overlaps(ring_center, max_radius) && !x.AABB.Inside(ring_center, min_radius)));
+                cells.AddRange(grid_cell.GetCells(x => x.Overlaps(ring_center, max_radius) && !x.AABB.Inside(ring_center, min_radius)));
 
             Cell random_cell = cells[Rng.Next(cells.Count)];
             Vec3 random_pos = random_cell.AABB.GetRandomPos();
@@ -906,7 +914,7 @@ namespace Nav
                 {
                     file.WriteLine("g {0} {1} {2} {3} {4} {5} {6}", grid_cell.Min.X, grid_cell.Min.Y, grid_cell.Min.Z, grid_cell.Max.X, grid_cell.Max.Y, grid_cell.Max.Z, grid_cell.Id);
 
-                    foreach (Cell cell in grid_cell.Cells)
+                    foreach (Cell cell in grid_cell.GetCells(false))
                         file.WriteLine("n {0} {1} {2} {3} {4} {5} {6}", cell.Min.X, cell.Min.Y, cell.Min.Z, cell.Max.X, cell.Max.Y, cell.Max.Z, (int)cell.Flags);
                 }
 
@@ -1065,7 +1073,7 @@ namespace Nav
                     for (int i = 0; i < cells_overlapped_by_regions_count; ++i)
                     {
                         int key = r.ReadInt32();
-                        m_CellsOverlappedByRegions.Add(key, new overlapped_cell_data(m_AllCells, r));
+                        m_CellsOverlappedByRegions.Add(key, new overlapped_cell_data(m_GridCells, m_AllCells, r));
                     }
                 }
             }
@@ -1088,7 +1096,7 @@ namespace Nav
             }
         }
 
-        internal T GetNearestCell<T>(LinkedList<T> cells, Vec3 p) where T : Cell
+        internal T GetNearestCell<T>(IEnumerable<T> cells, Vec3 p) where T : Cell
         {
             float min_dist = float.MaxValue;
             T nearest_cell = null;
@@ -1171,6 +1179,7 @@ namespace Nav
         public ReadLock AcquireReadDataLock() { return new ReadLock(DataLock); }
 
         internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
+        // cell patches are interconnected groups of cells allowing ultra fast connection checks
         private HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
         private HashSet<region_data> m_Regions = new HashSet<region_data>(); //@ InputLock

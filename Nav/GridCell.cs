@@ -27,12 +27,12 @@ namespace Nav
         private void InitGridCell(int area_id)
         {
             AreaId = area_id;
-            Cells = new LinkedList<Cell>();
             GlobalId = LastGridCellGlobalId++;
         }
 
         public float MIN_CELL_AREA_TO_CONSIDER = 0;
 
+        // add this cell to grid and try to connect it with already existing cells
         public bool Add(Cell cell)
         {
             if (cell.AABB.Area < MIN_CELL_AREA_TO_CONSIDER)
@@ -48,12 +48,12 @@ namespace Nav
             return true;
         }
 
-        public bool Add(LinkedList<Cell> cells)
+        public bool Add(IEnumerable<Cell> cells)
         {
             bool anything_added = false;
 
             foreach (Cell n_cell in cells)
-                anything_added = anything_added || Add(n_cell);
+                anything_added |= Add(n_cell);
             
             return anything_added;
         }
@@ -111,13 +111,6 @@ namespace Nav
             }
         }
 
-        // Only replacement cells should be removed
-        internal void Remove(Cell cell)
-        {
-            cell.Detach();
-            Cells.Remove(cell);
-        }
-
         internal override void Serialize(BinaryWriter w)
         {
             base.Serialize(w);
@@ -125,11 +118,15 @@ namespace Nav
             w.Write(Cells.Count);
             foreach(Cell cell in Cells)
                 w.Write(cell.GlobalId);
+
+            w.Write(ReplacementCells.Count);
+            foreach (Cell cell in ReplacementCells)
+                w.Write(cell.GlobalId);
         }
 
-        internal void Deserialize(HashSet<GridCell> grid_cells, HashSet<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, BinaryReader r)
         {
-            base.Deserialize(grid_cells, r);
+            base.Deserialize(all_grid_cells, r);
 
             int cells_count = r.ReadInt32();
             for (int i = 0; i < cells_count; ++i)
@@ -137,9 +134,53 @@ namespace Nav
                 int cell_global_id = r.ReadInt32();
                 Cells.AddFirst(all_cells.First(x => x.GlobalId == cell_global_id));
             }
+
+            int replacement_cells_count = r.ReadInt32();
+            for (int i = 0; i < replacement_cells_count; ++i)
+            {
+                int cell_global_id = r.ReadInt32();
+                ReplacementCells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
+            }
         }
 
-        public LinkedList<Cell> Cells { get; private set; }
+        public IEnumerable<Cell> GetCells(Func<Cell, bool> predicate, bool allow_replacement_cells = true)
+        {
+            var result = Cells.Where(predicate);
+                
+            if (allow_replacement_cells)
+                result = result.Concat(ReplacementCells.Where(predicate));
+
+            return result;
+        }
+
+        public IEnumerable<Cell> GetCells(bool allow_replacement_cells = true)
+        {
+            IEnumerable<Cell> result = Cells;
+
+            if (allow_replacement_cells)
+                result = result.Concat(ReplacementCells);
+
+            return result;
+        }
+
+        public Int32 GetCellsCount(bool count_replacement_cells = true)
+        {
+            return Cells.Count + (count_replacement_cells ? ReplacementCells.Count : 0);
+        }
+
+        internal void AddReplacementCell(Cell cell)
+        {
+            ReplacementCells.Add(cell);
+        }
+
+        internal void RemoveReplacementCell(Cell cell)
+        {
+            cell.Detach();
+            ReplacementCells.Remove(cell);
+        }
+
+        private LinkedList<Cell> Cells = new LinkedList<Cell>();
+        private List<Cell> ReplacementCells  = new List<Cell>();
         public int AreaId { get; private set; }
 
         internal static int LastGridCellGlobalId = 0;
