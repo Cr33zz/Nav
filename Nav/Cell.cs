@@ -73,9 +73,6 @@ namespace Nav
 
         public override bool Equals(Object obj)
         {
-            if (obj == null)
-                return false;
-
             Cell cell = obj as Cell;
 
             return Equals(cell);
@@ -83,9 +80,6 @@ namespace Nav
 
         public bool Equals(Cell cell)
         {
-            //if (cell == null)
-            //    return false;
-
             return GlobalId == cell.GlobalId;
         }
 

@@ -27,7 +27,7 @@ namespace Nav
         private void InitGridCell(int area_id)
         {
             AreaId = area_id;
-            Cells = new List<Cell>();
+            Cells = new LinkedList<Cell>();
             GlobalId = LastGridCellGlobalId++;
         }
 
@@ -43,12 +43,12 @@ namespace Nav
             foreach (Cell our_cell in Cells)
                 our_cell.AddNeighbour(cell, ref border_point);
 
-            Cells.Add(cell);
+            Cells.AddFirst(cell);
 
             return true;
         }
 
-        public bool Add(List<Cell> cells)
+        public bool Add(LinkedList<Cell> cells)
         {
             bool anything_added = false;
 
@@ -115,7 +115,7 @@ namespace Nav
         internal void Remove(Cell cell)
         {
             cell.Detach();
-            Cells.RemoveAll(x => x.GlobalId == cell.GlobalId);
+            Cells.Remove(cell);
         }
 
         internal override void Serialize(BinaryWriter w)
@@ -135,11 +135,11 @@ namespace Nav
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
+                Cells.AddFirst(all_cells.First(x => x.GlobalId == cell_global_id));
             }
         }
 
-        public List<Cell> Cells { get; private set; }
+        public LinkedList<Cell> Cells { get; private set; }
         public int AreaId { get; private set; }
 
         internal static int LastGridCellGlobalId = 0;

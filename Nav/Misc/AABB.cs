@@ -162,9 +162,6 @@ namespace Nav
             if (!Intersect2D(aabb, ref inter))
                 return null;
 
-            //float PRECISION = 0.01f;
-            //Vec3 EXTENTS_INCREASE_VEC = new Vec3(PRECISION, PRECISION, PRECISION);
-
             inter.Min.Z = Min.Z;
             inter.Max.Z = Max.Z;
 
@@ -175,9 +172,6 @@ namespace Nav
                                                    new AABB(new Vec3(Min.X, inter.Max.Y, Min.Z), Max) };
 
             result.RemoveAll(x => x.Max.X - x.Min.X == 0 || x.Max.Y - x.Min.Y == 0);
-
-            //foreach (AABB r in result)
-            //    r.Extend(new AABB(r.Min - EXTENTS_INCREASE_VEC, r.Max + EXTENTS_INCREASE_VEC));
 
             return result.ToArray();
         }
