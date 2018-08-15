@@ -1064,6 +1064,9 @@ namespace Nav
         {
             Vec3 pos = CurrentPos;
 
+            if (pos.IsZero())
+                return;
+
             using (new ReadLock(InputLock, true))
             {
                 if (m_Waypoints.Count == 0)

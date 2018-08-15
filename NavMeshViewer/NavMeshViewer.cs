@@ -229,19 +229,10 @@ namespace NavMeshViewer
                     }
                 }
 
-                if (m_WaypointsPaths.Count > 0)
+                var waypoints = m_Navigator.Waypoints;
+                if (waypoints.Count > 0)
                 {
-                    int waypoint_id = 1;
-                    foreach (List<Vec3> p in m_WaypointsPaths)
-                    {
-                        if (p.Count > 0)
-                        {
-                            RenderHelper.DrawCircle(e.Graphics, Pens.Black, m_RenderCenter, p[0], 3);
-                            RenderHelper.DrawString(e.Graphics, Brushes.Black, m_RenderCenter, p[0], waypoint_id.ToString(), 10);
-                        }
-                        RenderHelper.DrawLines(e.Graphics, Pens.Red, m_RenderCenter, p, 1);
-                        ++waypoint_id;
-                    }
+                    RenderHelper.DrawLines(e.Graphics, Pens.Red, m_RenderCenter, waypoints, 1);
                 }
 
                 if (m_Bot != null)
@@ -552,7 +543,7 @@ namespace NavMeshViewer
         private void LoadWaypoints(string filename)
         {
             m_LastWaypointsFile = filename;
-            m_WaypointsPaths.Clear();
+            m_Waypoints.Clear();
 
             if (!File.Exists(filename))
                 return;
@@ -562,29 +553,18 @@ namespace NavMeshViewer
             using (var reader = File.OpenText(filename))
             {
                 string line;
-                Vec3 last_wp = Vec3.ZERO;
-                bool last_wp_set = false;
 
                 while ((line = reader.ReadLine()) != null)
                 {
                     String[] coords = line.Split(';');
 
                     if (coords.Length >= 3)
-                    {
-                        Vec3 wp = new Vec3(float.Parse(coords[0]), float.Parse(coords[1]), float.Parse(coords[2]));
-                        
-                        if (last_wp_set)
-                        {
-                            List<Vec3> path = new List<Vec3>();
-                            m_Navigator.FindPath(last_wp, wp, MovementFlag.Walk, ref path, -1, true, true);
-                            m_WaypointsPaths.Add(path);
-                        }
-
-                        last_wp = wp;
-                        last_wp_set = true;
-                    }
+                        m_Waypoints.Add(new Vec3(float.Parse(coords[0]), float.Parse(coords[1]), float.Parse(coords[2])));
                 }
             }
+
+            m_Navigator.Waypoints = m_Waypoints;
+
         }
 
         private void LoadData(string filename, bool clear = true)
@@ -704,7 +684,7 @@ namespace NavMeshViewer
         private TestBot m_Bot = null;
         private string m_LastWaypointsFile;
         private string m_LastDataFile;
-        private List<List<Vec3>> m_WaypointsPaths = new List<List<Vec3>>();
+        private List<Vec3> m_Waypoints = new List<Vec3>();
         private List<Vec3> m_LastPath = new List<Vec3>();
         private List<Vec3> m_LastBacktrackPath = new List<Vec3>();
         private List<Vec3> m_LastPositionsHistory = new List<Vec3>();

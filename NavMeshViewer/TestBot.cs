@@ -13,11 +13,11 @@ namespace NavMeshViewer
         {
             m_Navmesh = navmesh;
             //m_Navigator = new NavigationEngine(navmesh);
-            //m_Navigator.AddObserver(this);
             m_Navigator = navigator;
+            m_Navigator.AddObserver(this);
             m_Navigator.CurrentPos = pos;
             m_Navigator.Precision = 2;
-            m_Navigator.EnableAntiStuck = true;
+            m_Navigator.EnableAntiStuck = false;
             m_Navigator.DestinationGridsId = dest_grid_id != -1 ? new List<int>(new int[] { dest_grid_id }) : null;
             if (waypoints != null)
                 m_Navigator.Waypoints = waypoints;  
