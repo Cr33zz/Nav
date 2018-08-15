@@ -611,7 +611,7 @@ namespace NavMeshViewer
 
             for (int i = 0; i < 1200; ++i)
             {
-                Vec3 pos = m_Navmesh.GetRandomPos();
+                Vec3 pos = m_Navmesh.GetRandomPos(rng);
                 float size = 20 + (float)rng.NextDouble() * 10;
                 regions.Add(new region_data(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2));
             }

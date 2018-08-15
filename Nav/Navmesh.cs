@@ -647,13 +647,14 @@ namespace Nav
             }
         }
 
-        public Vec3 GetRandomPos()
+        public Vec3 GetRandomPos(Random rng = null)
         {
             using (new ReadLock(DataLock))
             {
-                GridCell g_cell = m_GridCells.ElementAt(Rng.Next(m_GridCells.Count));
+                rng = rng ?? Rng;
+                GridCell g_cell = m_GridCells.ElementAt(rng.Next(m_GridCells.Count));
                 var enabled_cells = g_cell.Cells.Where(x => !x.Disabled).ToArray();
-                return enabled_cells[Rng.Next(enabled_cells.Count())].AABB.GetRandomPos();
+                return enabled_cells[rng.Next(enabled_cells.Count())].AABB.GetRandomPos(rng);
             }
         }
 

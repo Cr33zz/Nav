@@ -256,9 +256,9 @@ namespace Nav
                 return new Vec3(0, -1, 0);
         }
 
-        public Vec3 GetRandomPos()
+        public Vec3 GetRandomPos(Random rng = null)
         {
-            Random rng = new Random();
+            rng = rng ?? new Random();
             return Min + new Vec3((float)rng.NextDouble() * (Max.X - Min.X), (float)rng.NextDouble() * (Max.Y - Min.Y), (float)rng.NextDouble() * (Max.Z - Min.Z));
         }
 
