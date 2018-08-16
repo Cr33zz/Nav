@@ -99,7 +99,7 @@ namespace NavMeshViewer
         }
 
         protected virtual void ModifyRenderMatrix(ref Matrix m)
-        {            
+        {
         }
 
         // Everything inside this method is rendered with transformation resulting from ModifyRenderMatrix.
@@ -514,7 +514,7 @@ namespace NavMeshViewer
             legend.Add(new LegendEntry("0: Toggle render back track path", true, m_RenderBacktrackPath));
             legend.Add(new LegendEntry("S: Set current pos", false));
             legend.Add(new LegendEntry("E: Set destination pos", false));
-            legend.Add(new LegendEntry("B: Run bot", false));            
+            legend.Add(new LegendEntry("B: Run bot", false));
             legend.Add(new LegendEntry("F7: Reload debug.ini", false));
             legend.Add(new LegendEntry("Ctrl+1: Toggle render path", true, m_RenderPath));
             legend.Add(new LegendEntry("Ctrl+2: Toggle regions", true, m_Navmesh.RegionsEnabled));
@@ -593,7 +593,7 @@ namespace NavMeshViewer
 
         private void dbg_MoveRegions()
         {
-            Random rng = new Random(0xF00D);
+            Random rng = new Random(0x600DF00D);
             HashSet<region_data> regions = new HashSet<region_data>();
 
             for (int i = 0; i < 1200; ++i)
@@ -612,7 +612,7 @@ namespace NavMeshViewer
                 {
                     Vec3 dir = new Vec3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, 0);
 
-                    region.area.Translate(dir * 30 * ((float)dt / 1000));
+                    region.area.Translate(dir * 10 * ((float)dt / 1000));
                 }
 
                 m_Navmesh.Regions = regions;
@@ -656,7 +656,7 @@ namespace NavMeshViewer
 
         private void NavMeshViewer_KeyPress(object sender, KeyEventArgs e)
         {
-            OnKey(e);            
+            OnKey(e);
         }
 
         protected Params m_Params;
@@ -728,7 +728,7 @@ namespace NavMeshViewer
             }
 
             FillRectangle(e.Graphics, cell.Flags == MovementFlag.Fly ? Brushes.Gray : new SolidBrush(cell_color), trans, cell.Min, cell.Max);
-            
+
             if (draw_connections)
             {
                 foreach (Nav.Cell.Neighbour neighbour in cell.Neighbours)
@@ -756,7 +756,7 @@ namespace NavMeshViewer
             DrawRectangle(e.Graphics, Pens.Magenta, trans, cell.Min, cell.Max);
 
             //DrawString(e.Graphics, Brushes.Black, trans, cell.Position, Math.Round(cell.CellsArea()).ToString(), 14);
-            
+
             if (cell.Explored)
             {
                 //DrawLine(e.Graphics, explored_pen, trans, cell.Min, cell.Max);
