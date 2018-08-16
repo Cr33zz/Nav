@@ -56,6 +56,9 @@ namespace Nav
     {
         public Navmesh(bool verbose = false)
         {
+            // quick tests
+            //test_RayTrace();
+
             Log("[Nav] Creating navmesh...");
 
             Verbose = verbose;
@@ -851,6 +854,53 @@ namespace Nav
         public HashSet<GridCell> dbg_GetGridCells()
         {
             return m_GridCells;
+        }
+
+        private bool test_RayTrace()
+        {
+            AABB a = new AABB(-5, -5, -5, 5, 5, 5);
+            Vec3 result = default(Vec3);
+
+            // tangent along Y
+            if (!a.RayTest(new Vec3(-5, -100, 0), new Vec3(0, 1, 0), ref result) || !result.Equals(new Vec3(-5, -5, 0)))
+                return false;
+            if (!a.RayTest(new Vec3(-5, 0, 0), new Vec3(0, 1, 0), ref result) || !result.Equals(new Vec3(-5, 0, 0)))
+                return false;
+            if (a.RayTest(new Vec3(-5, 100, 0), new Vec3(0, 1, 0), ref result))
+                return false;
+
+            if (a.RayTest(new Vec3(-5, -100, 0), new Vec3(0, -1, 0), ref result))
+                return false;
+            if (!a.RayTest(new Vec3(-5, 0, 0), new Vec3(0, -1, 0), ref result) || !result.Equals(new Vec3(-5, 0, 0)))
+                return false;
+            if (!a.RayTest(new Vec3(-5, 100, 0), new Vec3(0, -1, 0), ref result) || !result.Equals(new Vec3(-5, 5, 0)))
+                return false;
+
+            // tangent along X
+            if (!a.RayTest(new Vec3(-100, 5, 0), new Vec3(1, 0, 0), ref result) || !result.Equals(new Vec3(-5, 5, 0)))
+                return false;
+            if (!a.RayTest(new Vec3(0, 5, 0), new Vec3(1, 0, 0), ref result) || !result.Equals(new Vec3(0, 5, 0)))
+                return false;
+            if (a.RayTest(new Vec3(100, 5, 0), new Vec3(1, 0, 0), ref result))
+                return false;
+
+            // tangent along Z
+            if (!a.RayTest(new Vec3(0, 5, 100), new Vec3(0, 0, -1), ref result) || !result.Equals(new Vec3(0, 5, 5)))
+                return false;
+            if (!a.RayTest(new Vec3(0, 5, 0), new Vec3(0, 0, -1), ref result) || !result.Equals(new Vec3(0, 5, 0)))
+                return false;
+            if (a.RayTest(new Vec3(0, 5, -100), new Vec3(0, 0, -1), ref result))
+                return false;
+
+            // touching corners
+            if (!a.RayTest(new Vec3(-5, -5, 0), new Vec3(1, 0, 0), ref result) || !result.Equals(new Vec3(-5, -5, 0)))
+                return false;
+            if (!a.RayTest(new Vec3(-5, -5, 0), new Vec3(0, 1, 0), ref result) || !result.Equals(new Vec3(-5, -5, 0)))
+                return false;
+            if (!a.RayTest(new Vec3(-5, -5, 0), new Vec3(0, 0, 1), ref result) || !result.Equals(new Vec3(-5, -5, 0)))
+                return false;
+
+            return true;
         }
 
         public void dbg_GenerateRandomAvoidAreas(float move_cost_mult)

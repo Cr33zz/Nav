@@ -272,48 +272,60 @@ namespace Nav
             return InternalRayTest(ray_origin, ray_dir, ref result, 2);
         }
 
+        private Vec3 Bounds(int i)
+        {
+            return i == 0 ? Min : Max;
+        }
+
         private bool InternalRayTest(Vec3 ray_origin, Vec3 ray_dir, ref Vec3 result, int num_dim)
         {
-            // implementation based upon https://www.gamedev.net/forums/topic/495636-raybox-collision-intersection-point/
+            // implementation based upon https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
             // + added custom support for rays tangent to sides of AABB
             Vec3 ray_dir_inv = 1 / ray_dir;
-            Vec3 tmin = (Min - ray_origin) * ray_dir_inv;
-            Vec3 tmax = (Max - ray_origin) * ray_dir_inv;
+            int[] sign = new int[] { ray_dir_inv.X < 0 ? 1 : 0, ray_dir_inv.Y < 0 ? 1 : 0, ray_dir_inv.Z < 0 ? 1 : 0 };
 
-            Vec3 real_min = Vec3.Min(tmin, tmax);
-            Vec3 real_max = Vec3.Max(tmin, tmax);
+            float tmin, tmax, tymin, tymax, tzmin, tzmax;
 
-            float minmax = real_max.X < real_max.Y ? real_max.X : real_max.Y;
-            float maxmin = real_min.X > real_min.Y ? real_min.X : real_min.Y;
+            tmin = (Bounds(sign[0]).X - ray_origin.X) * ray_dir_inv.X;
+            tmax = (Bounds(1 - sign[0]).X - ray_origin.X) * ray_dir_inv.X;
+            tymin = (Bounds(sign[1]).Y - ray_origin.Y) * ray_dir_inv.Y;
+            tymax = (Bounds(1 - sign[1]).Y - ray_origin.Y) * ray_dir_inv.Y;
 
-            bool tangent = false;
+            if ((tmin > tymax) || (tymin > tmax))
+                return false;
 
-            if (float.IsInfinity(maxmin))
-            {
-                tangent = true;
-                maxmin = float.IsInfinity(real_min.X) ? real_min.Y : real_min.X;
-            }
+            bool tangent_x = float.IsNaN(tmin) || float.IsNaN(tmax);
+            bool tangent_y = float.IsNaN(tymin) || float.IsNaN(tymax);
+
+            if (tymin > tmin || tangent_x)
+                tmin = tymin;
+            if (tymax < tmax && !tangent_y)
+                tmax = tymax;
+
+            bool tangent_z = false;
 
             if (num_dim > 2)
             {
-                minmax = minmax < real_max.Z ? minmax : real_max.Z;
-                maxmin = maxmin > real_min.Z ? maxmin : real_min.Z;
-                
-                float maxmin_tmp = maxmin > real_min.Z ? maxmin : real_min.Z;
-                if (float.IsInfinity(maxmin_tmp))
-                {
-                    tangent = true;
-                    maxmin = float.IsInfinity(maxmin) ? real_min.Z : maxmin;
-                }
+                tzmin = (Bounds(sign[2]).Z - ray_origin.Z) * ray_dir_inv.Z;
+                tzmax = (Bounds(1 - sign[2]).Z - ray_origin.Z) * ray_dir_inv.Z;
+
+                tangent_z = float.IsNaN(tzmin) || float.IsNaN(tzmax);
+
+                if ((tmin > tzmax) || (tzmin > tmax))
+                    return false;
+
+                if (tzmin > tmin || float.IsNaN(tmin))
+                    tmin = tzmin;
+                if (tzmax < tmax && !float.IsNaN(tmax))
+                    tmax = tzmax;
             }
 
-            // for rays tangent to aabb, intersecting it and starting in the middle of a side we return origin since this the fisrt point of contact
-
-            // when both values are negative origin is 'after' aabb when looking in ray direction
-            if (minmax >= maxmin && minmax >= 0)
+            if (tmax >= 0)
             {
-                // when maxmin is negative we are inside the aabb
-                result = (tangent && maxmin < 0) ? ray_origin : (ray_origin + ray_dir * (maxmin < 0 ? minmax : maxmin));
+                if (tmin < 0 && (tangent_x || tangent_y || tangent_z))
+                    result = ray_origin;
+                else
+                    result = ray_origin + ray_dir * (tmin < 0 ? tmax : tmin);
                 return true;
             }
 
