@@ -635,7 +635,7 @@ namespace Nav
                             }
                             else if (data[0] == "r")
                             {
-                                avoid_areas.Add(new Region(new AABB(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]), float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])), float.Parse(data[7])));
+                                avoid_areas.Add(new Region(new AABB(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]), float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])), float.Parse(data[7]), float.Parse(data[8])));
                             }
                         }
 
@@ -875,18 +875,18 @@ namespace Nav
             return m_GridCells;
         }
 
-        public void dbg_GenerateRandomAvoidAreas(float move_cost_mult)
+        public void dbg_GenerateRandomAvoidAreas(int areas_num, float move_cost_mult, float threat = 0)
         {
             Random rng = new Random();
             HashSet<Region> regions = new HashSet<Region>();
 
             using (new ReadLock(DataLock))
             {
-                for (int i = 0; i < 20; ++i)
+                for (int i = 0; i < areas_num; ++i)
                 {
                     Vec3 pos = GetRandomPos();
                     float size = 20 + (float)rng.NextDouble() * 10;
-                    regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), move_cost_mult));
+                    regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), move_cost_mult, threat));
                 }
             }
 

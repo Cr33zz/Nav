@@ -122,10 +122,10 @@ namespace Nav
         {
             using (m_Navmesh.AcquireReadDataLock())
             {
-                List<path_pos> tmp_path = new List<path_pos>();
-
                 if (from.IsZero() || to.IsZero())
                     return false;
+
+                List<path_pos> tmp_path = new List<path_pos>();
 
                 Cell start = null;
                 Cell end = null;
@@ -161,6 +161,39 @@ namespace Nav
                 PostProcessPath(ref path, merge_distance, shift_nodes_distance);
 
                 if (!include_from && start_on_nav_mesh)
+                    path.RemoveAt(0);
+
+                return true;
+            }
+        }
+
+        public bool FindAvoidancePath(Vec3 from, float max_allowed_threat, MovementFlag flags, ref List<Vec3> path, Vec3 hint_pos = default(Vec3), bool include_from = false, float shift_nodes_distance = 0, bool smoothen = true)
+        {
+            using (m_Navmesh.AcquireReadDataLock())
+            {
+                if (from.IsZero())
+                    return false;
+
+                Cell start = null;
+                
+                bool start_on_nav_mesh = m_Navmesh.GetCellContaining(from, out start, flags, false, false, -1, false, 2, null);
+
+                if (!start_on_nav_mesh)
+                    return false;
+
+                List<path_pos> tmp_path = new List<path_pos>();
+
+                if (!Algorihms.FindPath(start, from, new Algorihms.AvoidancePathFindStrategy<Cell>(max_allowed_threat, hint_pos), flags, ref tmp_path))
+                    return false;
+
+                if (smoothen)
+                    SmoothenPath(ref tmp_path, flags);
+
+                path = tmp_path.Select(x => x.pos).ToList();
+
+                PostProcessPath(ref path, -1, shift_nodes_distance);
+
+                if (!include_from)
                     path.RemoveAt(0);
 
                 return true;

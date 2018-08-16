@@ -280,7 +280,7 @@ namespace Nav
         {
             for (int i = 0; i < list.Count; ++i)
             {
-                if (list[i].cell == node && list[i].leading_point.Equals(leading_point))
+                if (list[i].cell == node /*&& list[i].leading_point.Equals(leading_point)*/)
                     return list[i];
             }
 
@@ -408,7 +408,7 @@ namespace Nav
                     if (cell_neighbour.Disabled || (neighbour.connection_flags & flags) != flags)
                         continue;
 
-                    Vec3 leading_point = !neighbour.border_point.IsZero() ? neighbour.border_point : cell_neighbour.Center;
+                    Vec3 leading_point = neighbour.cell.AABB.Align(info.leading_point);
 
                     NodeInfo info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
 
@@ -418,28 +418,22 @@ namespace Nav
 
                     float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
 
-                    float new_g = info.g + (info.leading_point.IsZero() ? info.cell.Distance(leading_point) : info.leading_point.Distance(leading_point)) * (1 + random_dist_mod) * info.cell.MovementCostMult;
-                    bool is_better = false;
+                    float new_g = info.g + info.leading_point.Distance(leading_point) * (1 + random_dist_mod) * info.cell.MovementCostMult;
+                    float new_h = strategy.GetMinDistance(leading_point) * (1 + random_dist_mod) * info.cell.MovementCostMult;
 
                     info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, open);
 
                     // if not in open list
                     if (info_neighbour == null)
                     {
-                        info_neighbour = new NodeInfo(cell_neighbour, leading_point, null, 0, strategy.GetMinDistance(leading_point) * (1 + random_dist_mod) * info.cell.MovementCostMult);
-                        is_better = true;
-
+                        info_neighbour = new NodeInfo(cell_neighbour, leading_point, null, new_g, new_h); // g and h will be set later on
                         open.Insert(0, info_neighbour);
                     }
-                    else if (new_g < info_neighbour.g)
-                    {
-                        is_better = true;
-                    }
-
-                    if (is_better)
+                    else if ((new_g + new_h) < info_neighbour.TotalCost)
                     {
                         info_neighbour.parent = info;
                         info_neighbour.g = new_g;
+                        info_neighbour.h = new_h;
                     }
                 }
             }

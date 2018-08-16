@@ -207,25 +207,34 @@ namespace NavMeshViewer
                 if (!m_Navigator.Destination.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, m_Navigator.Destination);
 
+                Vec3 curr = m_Navigator.CurrentPos;
+                Vec3 dest = m_Navigator.Destination;
+
+                if (!curr.IsZero() && !dest.IsZero())
                 {
-                    Vec3 curr = m_Navigator.CurrentPos;
-                    Vec3 dest = m_Navigator.Destination;
-
-                    if (!curr.IsZero() && !dest.IsZero())
+                    if (m_RenderOriginalPath)
                     {
-                        if (m_RenderOriginalPath)
-                        {
-                            List<Vec3> path = new List<Vec3>();
-                            m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, -1, false, false, 0, false, 0, false);
-                            path.Insert(0, curr);
-                            RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
-                        }
+                        List<Vec3> path = new List<Vec3>();
+                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, -1, false, false, 0, false, 0, false);
+                        path.Insert(0, curr);
+                        RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
+                    }
 
-                        if (m_RenderRayCast)
-                        {
-                            Vec3 intersection = default(Vec3);
-                            RenderHelper.DrawLine(e.Graphics, m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk, ref intersection) ? Pens.Green : Pens.Red, m_RenderCenter, curr, intersection);
-                        }
+                    if (m_RenderRayCast)
+                    {
+                        Vec3 intersection = default(Vec3);
+                        RenderHelper.DrawLine(e.Graphics, m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk, ref intersection) ? Pens.Green : Pens.Red, m_RenderCenter, curr, intersection);
+                    }
+                }
+
+                if (!curr.IsZero())
+                {
+                    if (m_RenderAvoidancePath)
+                    {
+                        List<Vec3> path = new List<Vec3>();
+                        m_Navigator.FindAvoidancePath(curr, 0, MovementFlag.Walk, ref path, Vec3.ZERO, false, 0, false);
+                        path.Insert(0, curr);
+                        RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
                     }
                 }
 
@@ -289,6 +298,11 @@ namespace NavMeshViewer
                 else if (e.KeyCode == System.Windows.Forms.Keys.D2)
                 {
                     m_Navmesh.RegionsEnabled = !m_Navmesh.RegionsEnabled;
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == System.Windows.Forms.Keys.D3)
+                {
+                    m_RenderAvoidancePath = !m_RenderAvoidancePath;
                     e.Handled = true;
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.D4)
@@ -439,7 +453,10 @@ namespace NavMeshViewer
                     //Thread t = new Thread(dbg_MoveRegions);
                     //t.Start();
 
-                    m_Navmesh.dbg_GenerateRandomAvoidAreas(2);
+                    //Thread t = new Thread(dbg_MoveThreatRegions);
+                    //t.Start();
+
+                    m_Navmesh.dbg_GenerateRandomAvoidAreas(100, 10, 10);
 
                     e.Handled = true;
                 }
@@ -518,6 +535,7 @@ namespace NavMeshViewer
             legend.Add(new LegendEntry("F7: Reload debug.ini", false));
             legend.Add(new LegendEntry("Ctrl+1: Toggle render path", true, m_RenderPath));
             legend.Add(new LegendEntry("Ctrl+2: Toggle regions update", true, m_Navmesh.RegionsEnabled));
+            legend.Add(new LegendEntry("Ctrl+3: Toggle render avoidance path", true, m_RenderAvoidancePath));
             legend.Add(new LegendEntry("Ctrl+4: Toggle render positions history", true, m_RenderPositionsHistory));
         }
 
@@ -621,6 +639,36 @@ namespace NavMeshViewer
             }
         }
 
+        private void dbg_MoveThreatRegions()
+        {
+            Random rng = new Random(0x8AAD);
+            HashSet<Nav.Region> regions = new HashSet<Nav.Region>();
+
+            for (int i = 0; i < 100; ++i)
+            {
+                Vec3 pos = m_Navmesh.GetRandomPos(rng);
+                float size = 20 + (float)rng.NextDouble() * 10;
+                regions.Add(new Nav.Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 10, 10));
+            }
+
+            const int dt = 100;
+
+            while (true)
+            {
+
+                foreach (var region in regions)
+                {
+                    Vec3 dir = new Vec3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, 0);
+
+                    region.Area.Translate(dir * 10 * ((float)dt / 1000));
+                }
+
+                m_Navmesh.Regions = regions;
+
+                Thread.Sleep(dt);
+            }
+        }
+
         private void refresh_timer_Tick(object sender, EventArgs e)
         {
             OnRefresh(refresh_timer.Interval);
@@ -668,7 +716,9 @@ namespace NavMeshViewer
         private bool m_RenderIds = false;
         protected bool m_RenderAxis = true;
         private bool m_RenderConnections = false;
-        private bool m_RenderOriginalPath = false;
+        private bool m_RenderPath = false;
+        private bool m_RenderOriginalPath = true;
+        private bool m_RenderAvoidancePath = false;
         private bool m_RenderBacktrackPath = false;
         private bool m_RenderPositionsHistory = false;
         private bool m_RenderRayCast = false;
@@ -678,7 +728,6 @@ namespace NavMeshViewer
         private bool m_RenderCells = true;
         private bool m_RenderLegend = true;
         private bool m_RenderGrids = false;
-        private bool m_RenderPath = true;
         private bool m_CenterOnBot = true;
         private PointF m_LastDragMousePos = PointF.Empty;
         private TestBot m_Bot = null;
