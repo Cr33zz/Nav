@@ -13,11 +13,11 @@ namespace NavMeshViewer
         {
             m_Navmesh = navmesh;
             //m_Navigator = new NavigationEngine(navmesh);
-            //m_Navigator.AddObserver(this);
             m_Navigator = navigator;
+            m_Navigator.AddObserver(this);
             m_Navigator.CurrentPos = pos;
             m_Navigator.Precision = 2;
-            m_Navigator.EnableAntiStuck = true;
+            m_Navigator.EnableAntiStuck = false;
             m_Navigator.DestinationGridsId = dest_grid_id != -1 ? new List<int>(new int[] { dest_grid_id }) : null;
             if (waypoints != null)
                 m_Navigator.Waypoints = waypoints;  
@@ -43,7 +43,7 @@ namespace NavMeshViewer
         public void OnDestinationReached(DestType type, Vec3 dest)
         {
             if (dest.Equals(m_Destination))
-                m_Destination = Vec3.Empty;
+                m_Destination = Vec3.ZERO;
         }
 
         public void OnDestinationReachFailed(DestType type, Vec3 dest)
@@ -62,13 +62,13 @@ namespace NavMeshViewer
                 m_GotoPosUpdateTimer.Restart();
             }
 
-            if (!m_Destination.IsEmpty)
+            if (!m_Destination.IsZero())
                 m_Navigator.Destination = m_Destination;
 
-            if (m_Explorer.IsExplored() || m_LastGotoPos.IsEmpty)
+            if (m_Explorer.IsExplored() || m_LastGotoPos.IsZero())
                 return;
 
-            Vec3 dir = Vec3.Empty;
+            Vec3 dir = Vec3.ZERO;
             float dist = 0;
 
             if (!Paused && !SimulateStuck && !m_LastGotoPos.Equals(m_Navigator.CurrentPos))
@@ -110,8 +110,8 @@ namespace NavMeshViewer
         private Nav.Navmesh m_Navmesh = null;
         private Nav.NavigationEngine m_Navigator = null;
         private Nav.ExplorationEngine m_Explorer = null;
-        private Vec3 m_LastGotoPos = Vec3.Empty;
-        private Vec3 m_Destination = Vec3.Empty;
+        private Vec3 m_LastGotoPos = Vec3.ZERO;
+        private Vec3 m_Destination = Vec3.ZERO;
         private Stopwatch m_GotoPosUpdateTimer = new Stopwatch();
         private const int GOTO_POS_UPDATE_INTERVAL = 25;
     }

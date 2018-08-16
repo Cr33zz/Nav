@@ -42,8 +42,8 @@ namespace Nav
                 {
                     if (cell.Equals(other_cell) || cell.Neighbours.Exists(x => x.cell.Equals(other_cell)))
                     {
-                        Neighbours.Add(new Neighbour(explore_cell, null, null, MovementFlag.None));
-                        explore_cell.Neighbours.Add(new Neighbour(this, null, null, MovementFlag.None));
+                        Neighbours.Add(new Neighbour(explore_cell, Vec3.ZERO, MovementFlag.None));
+                        explore_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, MovementFlag.None));
                         
                         return true;
                     }

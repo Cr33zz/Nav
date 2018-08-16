@@ -25,7 +25,7 @@ namespace Nav
             // If the new solution is better, accept it
             if (new_energy < energy)
                 return 1.0;
-                
+
             // If the new solution is worse, calculate an acceptance probability
             return Math.Exp((energy - new_energy) / temperature);
         }
@@ -214,7 +214,7 @@ namespace Nav
 
             List<ExploreCell> current_solution = best_solution;
             float current_energy = best_energy;
-        
+
             Random rng = new Random();
 
             double temp = 10000;
@@ -256,7 +256,7 @@ namespace Nav
                         best_energy = current_energy;
                     }
                 }
-            
+
                 // Cool system
                 temp *= alpha;
             }
@@ -273,7 +273,7 @@ namespace Nav
         public static bool AreConnected<T>(T start, ref T end, MovementFlag flags) where T : Cell
         {
             List<path_pos> path = null;
-            return FindPath(start, Vec3.Empty, new Algorihms.DestinationPathFindStrategy<T>(Vec3.Empty, end), flags, ref path);
+            return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end), flags, ref path);
         }
 
         private static NodeInfo GetNodeInfoFromList(Cell node, Vec3 leading_point, List<NodeInfo> list)
@@ -318,10 +318,10 @@ namespace Nav
             public Vec3 leading_point;
             public NodeInfo parent;
             public float g; //cost from start node
-            public float h; //heuristic cost to end node            
+            public float h; //heuristic cost to end node
         }
 
-        public abstract class PathFindStrategy<T> 
+        public abstract class PathFindStrategy<T>
             where T : Cell
         {
             public abstract bool IsValid();
@@ -331,7 +331,7 @@ namespace Nav
             public T FinalDestCell { get; set; }
         }
 
-        public class DestinationPathFindStrategy<T> : PathFindStrategy<T> 
+        public class DestinationPathFindStrategy<T> : PathFindStrategy<T>
             where T : Cell
         {
             public DestinationPathFindStrategy(Vec3 dest, T dest_cell) { Dest = dest; DestCell = dest_cell; FinalDestCell = dest_cell; }
@@ -345,7 +345,7 @@ namespace Nav
             private T DestCell;
         }
 
-        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false) 
+        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false)
             where T : Cell
             where S : PathFindStrategy<T>
         {
@@ -391,7 +391,7 @@ namespace Nav
                     if (cell_neighbour.Disabled || (neighbour.connection_flags & flags) != flags)
                         continue;
 
-                    Vec3 leading_point = neighbour.border_point != null ? neighbour.border_point : cell_neighbour.Center;
+                    Vec3 leading_point = !neighbour.border_point.IsZero() ? neighbour.border_point : cell_neighbour.Center;
 
                     NodeInfo info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
 
@@ -401,7 +401,7 @@ namespace Nav
 
                     float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
 
-                    float new_g = info.g + (info.leading_point.IsEmpty ? info.cell.Distance(leading_point) : info.leading_point.Distance(leading_point)) * (1 + random_dist_mod) * info.cell.MovementCostMult;
+                    float new_g = info.g + (info.leading_point.IsZero() ? info.cell.Distance(leading_point) : info.leading_point.Distance(leading_point)) * (1 + random_dist_mod) * info.cell.MovementCostMult;
                     bool is_better = false;
 
                     info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, open);
@@ -461,7 +461,7 @@ namespace Nav
 
                     if (i == 0)
                     {
-                        if (from.IsEmpty)
+                        if (from.IsZero())
                             path.Add(new path_pos(cell.Center, cell));
                         else
                             path.Add(new path_pos(cell.AABB.Align(from), cell));
@@ -473,7 +473,7 @@ namespace Nav
 
                     if (i == cells_list.Count - 1)
                     {
-                        if (to.IsEmpty)
+                        if (to.IsZero())
                             path.Add(new path_pos(cell.Center, cell));
                         else
                             path.Add(new path_pos(cell.AABB.Align(to), cell));
@@ -508,9 +508,9 @@ namespace Nav
             HashSet<T> visited = new HashSet<T>();
             List<visit_node<T>> to_visit = new List<visit_node<T>>();
             to_visit.Add(new visit_node<T>(cell, 0, 0));
-            
+
             while (to_visit.Count > 0)
-            {                
+            {
                 visit_node<T> cell_data = to_visit.First();
                 to_visit.RemoveAt(0);
                 visited.Add(cell_data.cell);
@@ -532,7 +532,7 @@ namespace Nav
                             neighbour_cell_data.distance = Math.Min(neighbour_cell_data.distance, distance);
                             continue;
                         }
-                        
+
                         if ((neighbour.connection_flags & flags) != flags ||
                             visited.Contains(neighbour_cell))
                         {
@@ -678,6 +678,6 @@ namespace Nav
         //    }
 
         //    return Vec3.Empty;
-        //}        
+        //}
     }
 }

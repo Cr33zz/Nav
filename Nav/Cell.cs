@@ -73,9 +73,6 @@ namespace Nav
 
         public override bool Equals(Object obj)
         {
-            if (obj == null)
-                return false;
-
             Cell cell = obj as Cell;
 
             return Equals(cell);
@@ -83,10 +80,7 @@ namespace Nav
 
         public bool Equals(Cell cell)
         {
-            if (cell == null)
-                return false;
-
-            return GlobalId.Equals(cell.GlobalId);
+            return GlobalId == cell.GlobalId;
         }
 
         public override int GetHashCode()
@@ -236,8 +230,8 @@ namespace Nav
             // special case for single neighbor
             else if (Neighbours.Count == 1)
             {
-                Vec3 v1 = null;
-                Vec3 v2 = null;
+                Vec3 v1 = default(Vec3);
+                Vec3 v2 = default(Vec3);
 
                 if (GetBorderSegmentWith(Neighbours[0].cell.AABB, ref v1, ref v2))
                     AlignPlane = new Plane(v1, v2, Center);
@@ -247,7 +241,7 @@ namespace Nav
                 // find plane from all possible plane with smallest average distance of all connection points from it
                 var connect_points = Neighbours.Where(x => (x.connection_flags & MovementFlag.Walk) != 0).Select(x => x.border_point);
 
-                //this is Diablo related hack, as most certainly
+                //this is Diablo related hack, as most certainly won't work in general case :(
                 Plane[] possible_align_planes = null;
 
                 if (AABB.Dimensions.X > 30)
@@ -301,9 +295,9 @@ namespace Nav
             return point;
         }
 
-        private void AddNeighbour(Cell cell, Vec3 border_point, Tuple<Vec3, Vec3> border_segment)
+        private void AddNeighbour(Cell cell, Vec3 border_point)
         {
-            Neighbours.Add(new Neighbour(cell, border_point, border_segment, Flags & cell.Flags));
+            Neighbours.Add(new Neighbour(cell, border_point, Flags & cell.Flags));
             AlignPlaneDirty = true;
         }
 
@@ -311,18 +305,18 @@ namespace Nav
         public bool AddNeighbour(Cell cell, ref Vec3 border_point)
         {
             // should not happen - removed due to performance impact - deep down it only checks global ID matching
-            //if (cell.Equals(this))
-            //    return false;
+            if (cell.Equals(this))
+                return false;
 
-            AABB intersection = AABB.Intersect(cell.AABB, true);
+            AABB intersection = default(AABB);
 
-            if (intersection != null)
+            if (AABB.Intersect(cell.AABB, ref intersection, true))
             {
                 if (Neighbours.Exists(x => x.cell.GlobalId == cell.GlobalId))
                     return false;
 
-                AddNeighbour(cell, intersection.Center, null);
-                cell.AddNeighbour(this, intersection.Center, null);
+                AddNeighbour(cell, intersection.Center);
+                cell.AddNeighbour(this, intersection.Center);
 
                 border_point = new Vec3(intersection.Center);
                 
@@ -334,9 +328,9 @@ namespace Nav
 
         bool GetBorderSegmentWith(AABB aabb, ref Vec3 v1, ref Vec3 v2)
         {
-            AABB intersection = AABB.Intersect(aabb, true);
+            AABB intersection = default(AABB);
 
-            if (intersection != null)
+            if (AABB.Intersect(aabb, ref intersection, true))
             {
                 // find widest vector inside intersection AABB along X or Y axis
                 Vec3 dimentions = intersection.Dimensions;
@@ -421,17 +415,15 @@ namespace Nav
 
         public class Neighbour
         {
-            public Neighbour(Cell cell, Vec3 border_point, Tuple<Vec3, Vec3> border_segment, MovementFlag connection_flags)
+            public Neighbour(Cell cell, Vec3 border_point, MovementFlag connection_flags)
             {
                 this.cell = cell;
                 this.border_point = border_point;
-                this.border_segment = border_segment;
                 this.connection_flags = connection_flags;
             }
 
             public Cell cell;
             public Vec3 border_point;
-            public Tuple<Vec3, Vec3> border_segment;
             public MovementFlag connection_flags;
         }
 
@@ -463,18 +455,7 @@ namespace Nav
             foreach (Neighbour neighbour in Neighbours)
             {
                 w.Write(neighbour.cell.GlobalId);
-
-                w.Write(neighbour.border_point != null);
-                if (neighbour.border_point != null)
-                    neighbour.border_point.Serialize(w);
-
-                w.Write(neighbour.border_segment != null);
-                if (neighbour.border_segment != null)
-                {
-                    neighbour.border_segment.Item1.Serialize(w);
-                    neighbour.border_segment.Item2.Serialize(w);
-                }
-
+                neighbour.border_point.Serialize(w);
                 w.Write((int)neighbour.connection_flags);
             }
         }
@@ -483,7 +464,7 @@ namespace Nav
         {
             GlobalId = r.ReadInt32();
             Id = r.ReadInt32();
-            AABB.Deserialize(r);
+            AABB = new AABB(r);
             Flags = (MovementFlag)r.ReadInt32();
             Replacement = r.ReadBoolean();
             Disabled = r.ReadBoolean();
@@ -492,17 +473,11 @@ namespace Nav
             int neighbours_num = r.ReadInt32();
             for (int i = 0; i < neighbours_num; ++i)
             {
-                Neighbour neighbour = new Neighbour(null, null, null, MovementFlag.None);
+                Neighbour neighbour = new Neighbour(null, Vec3.ZERO, MovementFlag.None);
 
                 int neighbour_global_id = r.ReadInt32();
                 neighbour.cell = all_cells.FirstOrDefault(x => x.GlobalId == neighbour_global_id);
-                
-                if (r.ReadBoolean())
-                    neighbour.border_point = new Vec3(r);
-
-                if (r.ReadBoolean())
-                    neighbour.border_segment = new Tuple<Vec3,Vec3>(new Vec3(r), new Vec3(r));
-
+                neighbour.border_point = new Vec3(r);
                 neighbour.connection_flags = (MovementFlag)r.ReadInt32();
 
                 if (neighbour.cell != null)

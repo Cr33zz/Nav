@@ -4,44 +4,36 @@ using System.Drawing.Drawing2D;
 
 namespace Nav
 {
-    public class Vec3 : IEquatable<Vec3>
+    public struct Vec3 : IEquatable<Vec3>
     {
         public float X, Y, Z;
 
-        public static readonly Vec3 Empty = new Vec3();
+        public static readonly Vec3 ZERO = default(Vec3);
 
-        public bool IsEmpty { get; private set; }
+        public bool IsZero() { return X == 0 && Y == 0 && Z == 0; }
 
         public Vec3(float x, float y, float z)
         {
-            this.X = x; 
-            this.Y = y; 
+            this.X = x;
+            this.Y = y;
             this.Z = z;
-            IsEmpty = false;
         }
 
         public Vec3(Vec3 v)
         {
-            X = v.X; 
-            Y = v.Y; 
+            X = v.X;
+            Y = v.Y;
             Z = v.Z;
-            IsEmpty = v.IsEmpty;
         }
 
-        private Vec3()
-        {
-            X = Y = Z = 0;
-            IsEmpty = true;
-        }
-
-        public Vec3(BinaryReader r)
+        public Vec3(BinaryReader r) : this()
         {
             Deserialize(r);
         }
 
         // http://en.wikipedia.org/wiki/File:3D_Spherical.svg
         // theta is the angle between the positive Z-axis and the vector in question (0 ≤ θ ≤ π)
-        // phi is the angle between the projection of the vector onto the X-Y-plane and the positive X-axis (0 ≤ φ < 2π)        
+        // phi is the angle between the projection of the vector onto the X-Y-plane and the positive X-axis (0 ≤ φ < 2π)
         public static Vec3 FromSpherical(float theta, float phi)
         {
             return new Vec3((float)(Math.Sin(theta) * Math.Cos(phi)), (float)(Math.Sin(theta) * Math.Sin(phi)), (float)Math.Cos(theta));
@@ -54,79 +46,85 @@ namespace Nav
 
         public override bool Equals(Object obj)
         {
-            if (obj == null)
-                return false;
-
-            Vec3 v = obj as Vec3;
-
-            return Equals(v);
+            return obj is Vec3 && Equals((Vec3)obj);
         }
-
         public bool Equals(Vec3 v)
         {
-            return X.Equals(v.X) && Y.Equals(v.Y) && Z.Equals(v.Z);
+            return this == v;
+        }
+
+        public static bool operator ==(Vec3 v1, Vec3 v2)
+        {
+            //return v1.X == v2.X && v1.Y == v2.Y && v1.Z == v2.Z;
+            return v1.X.Equals(v2.X) && v1.Y.Equals(v2.Y) && v1.Z.Equals(v2.Z);
+        }
+        public static bool operator !=(Vec3 x, Vec3 y)
+        {
+            return !(x == y);
         }
 
         public bool Equals(Vec3 v, float epsilon)
         {
             return Math.Abs(X - v.X) < epsilon &&
-                   Math.Abs(Y - v.Y) < epsilon && 
+                   Math.Abs(Y - v.Y) < epsilon &&
                    Math.Abs(Z - v.Z) < epsilon;
         }
 
         public override int GetHashCode()
         {
-            // i know this is bullshit!
-            return X.GetHashCode() + Y.GetHashCode() + Z.GetHashCode();
+            return X.GetHashCode() ^ Y.GetHashCode() ^ Z.GetHashCode();
         }
 
-        public static Vec3 operator +(Vec3 LHS, Vec3 RHS)
+        public static Vec3 operator +(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(LHS.X + RHS.X,
-                            LHS.Y + RHS.Y,
-                            LHS.Z + RHS.Z);
+            return new Vec3(v1.X + v2.X,
+                            v1.Y + v2.Y,
+                            v1.Z + v2.Z);
         }
 
-        public static Vec3 operator -(Vec3 LHS, Vec3 RHS)
+        public static Vec3 operator -(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(LHS.X - RHS.X,
-                            LHS.Y - RHS.Y,
-                            LHS.Z - RHS.Z);
+            return new Vec3(v1.X - v2.X,
+                            v1.Y - v2.Y,
+                            v1.Z - v2.Z);
         }
 
-        public static Vec3 operator -(Vec3 RHS)
+        public static Vec3 operator -(Vec3 v2)
         {
-            return new Vec3(-RHS.X,
-                            -RHS.Y,
-                            -RHS.Z);
+            return new Vec3(-v2.X,
+                            -v2.Y,
+                            -v2.Z);
         }
 
-        public static Vec3 operator *(Vec3 LHS, float RHS)
+        public static Vec3 operator *(Vec3 v1, float v2)
         {
-            return new Vec3(LHS.X * RHS,
-                            LHS.Y * RHS,
-                            LHS.Z * RHS);
+            return new Vec3(v1.X * v2,
+                            v1.Y * v2,
+                            v1.Z * v2);
         }
 
-        public static Vec3 operator *(Vec3 LHS, Vec3 RHS)
+        public static Vec3 operator *(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(LHS.X * RHS.X,
-                            LHS.Y * RHS.Y,
-                            LHS.Z * RHS.Z);
+            return new Vec3(v1.X * v2.X,
+                            v1.Y * v2.Y,
+                            v1.Z * v2.Z);
         }
 
-        public static Vec3 operator /(Vec3 LHS, float RHS)
+        public static Vec3 operator /(Vec3 v1, float v2)
         {
-            return new Vec3(LHS.X / RHS,
-                            LHS.Y / RHS,
-                            LHS.Z / RHS);
+            return new Vec3(v1.X / v2,
+                            v1.Y / v2,
+                            v1.Z / v2);
         }
 
-        public static Vec3 operator /(Vec3 LHS, Vec3 RHS)
+        public static Vec3 operator /(float v1, Vec3 v2)
         {
-            return new Vec3(LHS.X / RHS.X,
-                            LHS.Y / RHS.Y,
-                            LHS.Z / RHS.Z);
+            return new Vec3(v1 / v2.X, v1 / v2.Y, v1 / v2.Z);
+        }
+
+        public static Vec3 operator /(Vec3 v1, Vec3 v2)
+        {
+            return new Vec3(v1.X / v2.X, v1.Y / v2.Y, v1.Z / v2.Z);
         }
 
         public static Vec3 Rotate(Vec3 v, float angle, Vec3 axis)
@@ -232,59 +230,59 @@ namespace Nav
             return new Vec3(X / len, Y / len, 0);
         }
 
-        public Vec3 Cross(Vec3 RHS)
+        public Vec3 Cross(Vec3 v2)
         {
-            return new Vec3(Y * RHS.Z - Z * RHS.Y,
-                            Z * RHS.X - X * RHS.Z,
-                            X * RHS.Y - Y * RHS.X);
+            return new Vec3(Y * v2.Z - Z * v2.Y,
+                            Z * v2.X - X * v2.Z,
+                            X * v2.Y - Y * v2.X);
         }
 
-        public float Dot(Vec3 RHS)
+        public float Dot(Vec3 v2)
         {
-            return (this.X * RHS.X + this.Y * RHS.Y + this.Z * RHS.Z);
+            return (this.X * v2.X + this.Y * v2.Y + this.Z * v2.Z);
         }
 
-        public float DotNorm(Vec3 RHS)
+        public float DotNorm(Vec3 v2)
         {
-            return (this.X * RHS.X + this.Y * RHS.Y + this.Z * RHS.Z) / (Length() * RHS.Length());
+            return (this.X * v2.X + this.Y * v2.Y + this.Z * v2.Z) / (Length() * v2.Length());
         }
 
-        public float Dot2D(Vec3 RHS)
+        public float Dot2D(Vec3 v2)
         {
-            return (this.X * RHS.X + this.Y * RHS.Y);
+            return (this.X * v2.X + this.Y * v2.Y);
         }
 
-        public float Dot2DNorm(Vec3 RHS)
+        public float Dot2DNorm(Vec3 v2)
         {
-            return (this.X * RHS.X + this.Y * RHS.Y) / (Length2D() * RHS.Length2D());
+            return (this.X * v2.X + this.Y * v2.Y) / (Length2D() * v2.Length2D());
         }
 
-        public Vec3 Blend(Vec3 RHS, float ratio)
+        public Vec3 Blend(Vec3 v2, float ratio)
         {
             float ratio2 = 1.0f - ratio;
-            return new Vec3(X * ratio2 + RHS.X * ratio,
-                            Y * ratio2 + RHS.Y * ratio,
-                            Z * ratio2 + RHS.Z * ratio);
+            return new Vec3(X * ratio2 + v2.X * ratio,
+                            Y * ratio2 + v2.Y * ratio,
+                            Z * ratio2 + v2.Z * ratio);
         }
 
-        public static Vec3 Max(Vec3 LHS, Vec3 RHS)
+        public static Vec3 Max(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Max(LHS.X, RHS.X), Math.Max(LHS.Y, RHS.Y), Math.Max(LHS.Z, RHS.Z));
+            return new Vec3(v1.X > v2.X ? v1.X : v2.X, v1.Y > v2.Y ? v1.Y : v2.Y, v1.Z > v2.Z ? v1.Z : v2.Z);
         }
 
-        public static Vec3 Max2D(Vec3 LHS, Vec3 RHS)
+        public static Vec3 Max2D(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Max(LHS.X, RHS.X), Math.Max(LHS.Y, RHS.Y), 0);
+            return new Vec3(v1.X > v2.X ? v1.X : v2.X, v1.Y > v2.Y ? v1.Y : v2.Y, 0);
         }
 
-        public static Vec3 Min(Vec3 LHS, Vec3 RHS)
+        public static Vec3 Min(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Min(LHS.X, RHS.X), Math.Min(LHS.Y, RHS.Y), Math.Min(LHS.Z, RHS.Z));
+            return new Vec3(v1.X < v2.X ? v1.X : v2.X, v1.Y < v2.Y ? v1.Y : v2.Y, v1.Z < v2.Z ? v1.Z : v2.Z);
         }
 
-        public static Vec3 Min2D(Vec3 LHS, Vec3 RHS)
+        public static Vec3 Min2D(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(Math.Min(LHS.X, RHS.X), Math.Min(LHS.Y, RHS.Y), 0);
+            return new Vec3(v1.X < v2.X ? v1.X : v2.X, v1.Y < v2.Y ? v1.Y : v2.Y, 0);
         }
 
         public void Serialize(BinaryWriter w)
@@ -292,7 +290,6 @@ namespace Nav
             w.Write(X);
             w.Write(Y);
             w.Write(Z);
-            w.Write(IsEmpty);
         }
 
         public void Deserialize(BinaryReader r)
@@ -300,7 +297,6 @@ namespace Nav
             X = r.ReadSingle();
             Y = r.ReadSingle();
             Z = r.ReadSingle();
-            IsEmpty = r.ReadBoolean();
         }
 
         public static float GetDistanceFromSegment(Vec3 start, Vec3 end, Vec3 point, bool check_2d = false)
@@ -344,6 +340,6 @@ namespace Nav
             return proj_len;
         }
 
-        public override string ToString() { return "[" + X.ToString("0.00") + " " + Y.ToString("0.00") + " " + Z.ToString("0.00") + "]"; }
+        public override string ToString() { return "[" + X + " " + Y + " " + Z + "]"; }
     }
 }

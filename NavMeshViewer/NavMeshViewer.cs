@@ -35,6 +35,13 @@ namespace NavMeshViewer
                 LoadData(file);
             }
 
+            if (m_Params.HasParam("load_waypoints"))
+            {
+                string file;
+                m_Params.GetParam("load_waypoints", out file);
+                LoadWaypoints(file);
+            }
+
             if (m_Params.HasParam("deserialize"))
             {
                 string file;
@@ -44,7 +51,7 @@ namespace NavMeshViewer
                 m_Explorer.Deserialize(file);
 
                 Vec3 initial_pos = m_Navigator.CurrentPos;
-                if (initial_pos.IsEmpty)
+                if (initial_pos.IsZero())
                     initial_pos = m_Navmesh.GetCenter();
                 m_RenderCenter.X = initial_pos.X;
                 m_RenderCenter.Y = initial_pos.Y;
@@ -92,7 +99,7 @@ namespace NavMeshViewer
         }
 
         protected virtual void ModifyRenderMatrix(ref Matrix m)
-        {            
+        {
         }
 
         // Everything inside this method is rendered with transformation resulting from ModifyRenderMatrix.
@@ -123,13 +130,13 @@ namespace NavMeshViewer
 
                             foreach (Nav.GridCell grid_cell in grid_cells)
                             {
-                                foreach (Nav.Cell cell in grid_cell.Cells)
+                                foreach (Nav.Cell cell in grid_cell.GetCells())
                                 {
                                     RenderHelper.Render(cell, m_RenderCenter, e, m_RenderConnections, m_RenderIds, m_LastMaxMoveCostMult);
                                     max_move_cost_mult = Math.Max(max_move_cost_mult, cell.MovementCostMult);
                                 }
 
-                                cells_count += grid_cell.Cells.Count;
+                                cells_count += grid_cell.GetCellsCount();
                             }
 
                             m_LastMaxMoveCostMult = max_move_cost_mult;
@@ -195,16 +202,16 @@ namespace NavMeshViewer
                     RenderHelper.DrawLines(e.Graphics, Pens.Green, m_RenderCenter, m_LastPositionsHistory, 1);
                 }
 
-                if (!m_Navigator.CurrentPos.IsEmpty)
+                if (!m_Navigator.CurrentPos.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.Blue, m_RenderCenter, m_Navigator.CurrentPos);
-                if (!m_Navigator.Destination.IsEmpty)
+                if (!m_Navigator.Destination.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, m_Navigator.Destination);
 
                 {
                     Vec3 curr = m_Navigator.CurrentPos;
                     Vec3 dest = m_Navigator.Destination;
 
-                    if (!curr.IsEmpty && !dest.IsEmpty)
+                    if (!curr.IsZero() && !dest.IsZero())
                     {
                         if (m_RenderOriginalPath)
                         {
@@ -216,25 +223,16 @@ namespace NavMeshViewer
 
                         if (m_RenderRayCast)
                         {
-                            Vec3 intersection = null;
+                            Vec3 intersection = default(Vec3);
                             RenderHelper.DrawLine(e.Graphics, m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk, ref intersection) ? Pens.Green : Pens.Red, m_RenderCenter, curr, intersection);
                         }
                     }
                 }
 
-                if (m_WaypointsPaths.Count > 0)
+                var waypoints = m_Navigator.Waypoints;
+                if (waypoints.Count > 0)
                 {
-                    int waypoint_id = 1;
-                    foreach (List<Vec3> p in m_WaypointsPaths)
-                    {
-                        if (p.Count > 0)
-                        {
-                            RenderHelper.DrawCircle(e.Graphics, Pens.Black, m_RenderCenter, p[0], 3);
-                            RenderHelper.DrawString(e.Graphics, Brushes.Black, m_RenderCenter, p[0], waypoint_id.ToString(), 10);
-                        }
-                        RenderHelper.DrawLines(e.Graphics, Pens.Red, m_RenderCenter, p, 1);
-                        ++waypoint_id;
-                    }
+                    RenderHelper.DrawLines(e.Graphics, Pens.Red, m_RenderCenter, waypoints, 1);
                 }
 
                 if (m_Bot != null)
@@ -303,28 +301,28 @@ namespace NavMeshViewer
             {
                 if (e.KeyCode == System.Windows.Forms.Keys.S)
                 {
-                    Vec3 result = null;
-                    m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
-                                       new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
-                                       MovementFlag.Walk,
-                                       out result);
-
-                    if (result.IsEmpty)
+                    Vec3 result = default(Vec3);
+                    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                                            MovementFlag.Walk,
+                                            ref result))
+                    {
                         result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
+                    }
 
                     m_Navigator.CurrentPos = result;
                     e.Handled = true;
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.E)
                 {
-                    Vec3 result = null;
-                    m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
-                                       new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
-                                       MovementFlag.Walk,
-                                       out result);
-
-                    if (result.IsEmpty)
+                    Vec3 result = default(Vec3);
+                    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                                            MovementFlag.Walk,
+                                            ref result))
+                    {
                         result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
+                    }
 
                     m_Navigator.Destination = result;
                     e.Handled = true;
@@ -422,7 +420,7 @@ namespace NavMeshViewer
                     m_Explorer.Deserialize("nav_save");
 
                     Vec3 initial_pos = m_Navigator.CurrentPos;
-                    if (initial_pos.IsEmpty)
+                    if (initial_pos.IsZero())
                         initial_pos = m_Navmesh.GetCenter();
                     m_RenderCenter.X = initial_pos.X;
                     m_RenderCenter.Y = initial_pos.Y;
@@ -438,20 +436,20 @@ namespace NavMeshViewer
                     //Thread t = new Thread(dbg_ContiniousSerialize);
                     //t.Start();
 
-                    Thread t = new Thread(dbg_MoveRegions);
-                    t.Start();
+                    //Thread t = new Thread(dbg_MoveRegions);
+                    //t.Start();
 
-                    //m_Navmesh.dbg_GenerateRandomAvoidAreas();
+                    m_Navmesh.dbg_GenerateRandomAvoidAreas(2);
 
                     e.Handled = true;
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.B)
                 {
-                    Vec3 result = null;
+                    Vec3 result = default(Vec3);
                     m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
                                        new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
                                        MovementFlag.Walk,
-                                       out result);
+                                       ref result);
 
                     if (m_Bot != null)
                         m_Bot.Dispose();
@@ -516,7 +514,7 @@ namespace NavMeshViewer
             legend.Add(new LegendEntry("0: Toggle render back track path", true, m_RenderBacktrackPath));
             legend.Add(new LegendEntry("S: Set current pos", false));
             legend.Add(new LegendEntry("E: Set destination pos", false));
-            legend.Add(new LegendEntry("B: Run bot", false));            
+            legend.Add(new LegendEntry("B: Run bot", false));
             legend.Add(new LegendEntry("F7: Reload debug.ini", false));
             legend.Add(new LegendEntry("Ctrl+1: Toggle render path", true, m_RenderPath));
             legend.Add(new LegendEntry("Ctrl+2: Toggle regions", true, m_Navmesh.RegionsEnabled));
@@ -545,7 +543,7 @@ namespace NavMeshViewer
         private void LoadWaypoints(string filename)
         {
             m_LastWaypointsFile = filename;
-            m_WaypointsPaths.Clear();
+            m_Waypoints.Clear();
 
             if (!File.Exists(filename))
                 return;
@@ -555,27 +553,18 @@ namespace NavMeshViewer
             using (var reader = File.OpenText(filename))
             {
                 string line;
-                Vec3 last_wp = Vec3.Empty;
 
                 while ((line = reader.ReadLine()) != null)
                 {
                     String[] coords = line.Split(';');
 
                     if (coords.Length >= 3)
-                    {
-                        Vec3 wp = new Vec3(float.Parse(coords[0]), float.Parse(coords[1]), float.Parse(coords[2]));
-                        
-                        if (!last_wp.IsEmpty)
-                        {
-                            List<Vec3> path = new List<Vec3>();
-                            m_Navigator.FindPath(last_wp, wp, MovementFlag.Walk, ref path, -1, true, true);
-                            m_WaypointsPaths.Add(path);
-                        }
-
-                        last_wp = wp;
-                    }
+                        m_Waypoints.Add(new Vec3(float.Parse(coords[0]), float.Parse(coords[1]), float.Parse(coords[2])));
                 }
             }
+
+            m_Navigator.Waypoints = m_Waypoints;
+
         }
 
         private void LoadData(string filename, bool clear = true)
@@ -585,7 +574,7 @@ namespace NavMeshViewer
             if (m_Navmesh.Load(filename, clear, true))
             {
                 Vec3 initial_pos = m_Navigator.CurrentPos;
-                if (initial_pos.IsEmpty)
+                if (initial_pos.IsZero())
                     initial_pos = m_Navmesh.GetCenter();
 
                 m_RenderCenter.X = initial_pos.X;
@@ -604,12 +593,12 @@ namespace NavMeshViewer
 
         private void dbg_MoveRegions()
         {
-            Random rng = new Random();
+            Random rng = new Random(0x600DF00D);
             HashSet<region_data> regions = new HashSet<region_data>();
 
-            for (int i = 0; i < 80; ++i)
+            for (int i = 0; i < 1200; ++i)
             {
-                Vec3 pos = m_Navmesh.GetRandomPos();
+                Vec3 pos = m_Navmesh.GetRandomPos(rng);
                 float size = 20 + (float)rng.NextDouble() * 10;
                 regions.Add(new region_data(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2));
             }
@@ -623,7 +612,7 @@ namespace NavMeshViewer
                 {
                     Vec3 dir = new Vec3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, 0);
 
-                    region.area.Translate(dir * 30 * ((float)dt / 1000));
+                    region.area.Translate(dir * 10 * ((float)dt / 1000));
                 }
 
                 m_Navmesh.Regions = regions;
@@ -667,7 +656,7 @@ namespace NavMeshViewer
 
         private void NavMeshViewer_KeyPress(object sender, KeyEventArgs e)
         {
-            OnKey(e);            
+            OnKey(e);
         }
 
         protected Params m_Params;
@@ -695,7 +684,7 @@ namespace NavMeshViewer
         private TestBot m_Bot = null;
         private string m_LastWaypointsFile;
         private string m_LastDataFile;
-        private List<List<Vec3>> m_WaypointsPaths = new List<List<Vec3>>();
+        private List<Vec3> m_Waypoints = new List<Vec3>();
         private List<Vec3> m_LastPath = new List<Vec3>();
         private List<Vec3> m_LastBacktrackPath = new List<Vec3>();
         private List<Vec3> m_LastPositionsHistory = new List<Vec3>();
@@ -739,7 +728,7 @@ namespace NavMeshViewer
             }
 
             FillRectangle(e.Graphics, cell.Flags == MovementFlag.Fly ? Brushes.Gray : new SolidBrush(cell_color), trans, cell.Min, cell.Max);
-            
+
             if (draw_connections)
             {
                 foreach (Nav.Cell.Neighbour neighbour in cell.Neighbours)
@@ -767,7 +756,7 @@ namespace NavMeshViewer
             DrawRectangle(e.Graphics, Pens.Magenta, trans, cell.Min, cell.Max);
 
             //DrawString(e.Graphics, Brushes.Black, trans, cell.Position, Math.Round(cell.CellsArea()).ToString(), 14);
-            
+
             if (cell.Explored)
             {
                 //DrawLine(e.Graphics, explored_pen, trans, cell.Min, cell.Max);

@@ -27,33 +27,33 @@ namespace Nav
         private void InitGridCell(int area_id)
         {
             AreaId = area_id;
-            Cells = new List<Cell>();
             GlobalId = LastGridCellGlobalId++;
         }
 
         public float MIN_CELL_AREA_TO_CONSIDER = 0;
 
+        // add this cell to grid and try to connect it with already existing cells
         public bool Add(Cell cell)
         {
             if (cell.AABB.Area < MIN_CELL_AREA_TO_CONSIDER)
                 return false;
 
-            Vec3 border_point = null;
+            Vec3 border_point = default(Vec3);
 
             foreach (Cell our_cell in Cells)
                 our_cell.AddNeighbour(cell, ref border_point);
 
-            Cells.Add(cell);
+            Cells.AddFirst(cell);
 
             return true;
         }
 
-        public bool Add(List<Cell> cells)
+        public bool Add(IEnumerable<Cell> cells)
         {
             bool anything_added = false;
 
             foreach (Cell n_cell in cells)
-                anything_added = anything_added || Add(n_cell);
+                anything_added |= Add(n_cell);
             
             return anything_added;
         }
@@ -62,7 +62,7 @@ namespace Nav
         // properly when called multiple times for the same pair of grid cells!
         public void AddNeighbour(GridCell grid_cell)
         {
-            if (GlobalId == grid_cell.GlobalId || AABB.Intersect(grid_cell.AABB, true) == null)
+            if (GlobalId == grid_cell.GlobalId || !AABB.Overlaps2D(grid_cell.AABB, true))
                 return;
 
             // this is removed to properly handle merging
@@ -76,7 +76,7 @@ namespace Nav
             {
                 foreach (Cell other_cell in grid_cell.Cells)
                 {
-                    Vec3 border_point = null;
+                    Vec3 border_point = default(Vec3);
                     bool cells_connected = our_cell.AddNeighbour(other_cell, ref border_point);
 
                     if (cells_connected)
@@ -97,8 +97,8 @@ namespace Nav
                 // if they were not connected before, simply connect them
                 if (n1 == null)
                 {
-                    Neighbours.Add(new Neighbour(grid_cell, null, null, connection_flags));
-                    grid_cell.Neighbours.Add(new Neighbour(this, null, null, connection_flags));
+                    Neighbours.Add(new Neighbour(grid_cell, Vec3.ZERO, connection_flags));
+                    grid_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, connection_flags));
                 }
                 // otherwise verify connection flags
                 else if (n1.connection_flags < connection_flags)
@@ -111,13 +111,6 @@ namespace Nav
             }
         }
 
-        // Only replacement cells should be removed
-        internal void Remove(Cell cell)
-        {
-            cell.Detach();
-            Cells.RemoveAll(x => x.GlobalId == cell.GlobalId);
-        }
-
         internal override void Serialize(BinaryWriter w)
         {
             base.Serialize(w);
@@ -125,21 +118,69 @@ namespace Nav
             w.Write(Cells.Count);
             foreach(Cell cell in Cells)
                 w.Write(cell.GlobalId);
+
+            w.Write(ReplacementCells.Count);
+            foreach (Cell cell in ReplacementCells)
+                w.Write(cell.GlobalId);
         }
 
-        internal void Deserialize(HashSet<GridCell> grid_cells, HashSet<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, BinaryReader r)
         {
-            base.Deserialize(grid_cells, r);
+            base.Deserialize(all_grid_cells, r);
 
             int cells_count = r.ReadInt32();
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
+                Cells.AddFirst(all_cells.First(x => x.GlobalId == cell_global_id));
+            }
+
+            int replacement_cells_count = r.ReadInt32();
+            for (int i = 0; i < replacement_cells_count; ++i)
+            {
+                int cell_global_id = r.ReadInt32();
+                ReplacementCells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
             }
         }
 
-        public List<Cell> Cells { get; private set; }
+        public IEnumerable<Cell> GetCells(Func<Cell, bool> predicate, bool allow_replacement_cells = true)
+        {
+            var result = Cells.Where(predicate);
+                
+            if (allow_replacement_cells)
+                result = result.Concat(ReplacementCells.Where(predicate));
+
+            return result;
+        }
+
+        public IEnumerable<Cell> GetCells(bool allow_replacement_cells = true)
+        {
+            IEnumerable<Cell> result = Cells;
+
+            if (allow_replacement_cells)
+                result = result.Concat(ReplacementCells);
+
+            return result;
+        }
+
+        public Int32 GetCellsCount(bool count_replacement_cells = true)
+        {
+            return Cells.Count + (count_replacement_cells ? ReplacementCells.Count : 0);
+        }
+
+        internal void AddReplacementCell(Cell cell)
+        {
+            ReplacementCells.Add(cell);
+        }
+
+        internal void RemoveReplacementCell(Cell cell)
+        {
+            cell.Detach();
+            ReplacementCells.Remove(cell);
+        }
+
+        private LinkedList<Cell> Cells = new LinkedList<Cell>();
+        private List<Cell> ReplacementCells  = new List<Cell>();
         public int AreaId { get; private set; }
 
         internal static int LastGridCellGlobalId = 0;

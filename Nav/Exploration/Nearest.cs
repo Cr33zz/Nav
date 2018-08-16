@@ -18,7 +18,7 @@ namespace Nav.ExploreEngine
         {
             public ExploreCellSelector(Vec3 hint_pos)
             {
-                if (hint_pos != null && !hint_pos.IsEmpty)
+                if (!hint_pos.IsZero())
                     this.hint_pos = hint_pos;
             }
 
@@ -38,7 +38,7 @@ namespace Nav.ExploreEngine
                 // decrease distance based on number of explored neighbors (do not leave small unexplored fragments)
                 float dist = distance;
 
-                if (!hint_pos.IsEmpty)
+                if (!hint_pos.IsZero())
                     dist += cell.Position.Distance(hint_pos);
 
                 dist -= DISTANCE_REDUCTION_EXPLORE_PCT * GetExploredNeighboursPct(cell, 1);
@@ -72,7 +72,7 @@ namespace Nav.ExploreEngine
 
             public ExploreCell dest_cell = null;
             private float dest_cell_distance = float.MaxValue;
-            private Vec3 hint_pos = Vec3.Empty;
+            private Vec3 hint_pos = Vec3.ZERO;
         }
 
         internal override ExploreCell GetDestinationCell()

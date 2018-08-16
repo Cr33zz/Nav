@@ -54,7 +54,7 @@ namespace Nav
                 ExploreCell.LastExploreCellGlobalId = 0;
                 m_LastExploreCellId = 0;
 
-                m_HintPos = Vec3.Empty;
+                m_HintPos = Vec3.ZERO;
             }
         }
 
@@ -410,7 +410,7 @@ namespace Nav
         {
             Vec3 current_pos = m_Navigator.CurrentPos;
 
-            if (current_pos.IsEmpty)
+            if (current_pos.IsZero())
                 return;
 
             if (!IsDataAvailable)
@@ -483,14 +483,11 @@ namespace Nav
                 HashSet<int> tmp_overlapping_grid_cells = new HashSet<int>();
 
                 // find all cells inside cell_aabb
-                foreach (GridCell grid_cell in m_Navmesh.m_GridCells)
+                foreach (GridCell grid_cell in m_Navmesh.m_GridCells.Where(x => x.AABB.Overlaps2D(cell_aabb)))
                 {
-                    if (!cell_aabb.Overlaps2D(grid_cell.AABB))
-                        continue;
-
                     tmp_overlapping_grid_cells.Add(grid_cell.Id);
 
-                    cells.AddRange(grid_cell.Cells.FindAll(x => !x.Replacement && x.HasFlags(movement_flags) && cell_aabb.Overlaps2D(x.AABB)));
+                    cells.AddRange(grid_cell.GetCells(x => x.HasFlags(movement_flags) && cell_aabb.Overlaps2D(x.AABB), false));
                 }
 
                 // for traversing purposes list will be faster
@@ -509,15 +506,18 @@ namespace Nav
                     List<AABB> intersections = new List<AABB>();
                     AABB intersections_aabb = new AABB();
 
+                    AABB intersection = default(AABB);
+
                     foreach (Cell c in visited)
                     {
-                        AABB intersection = cell_aabb.Intersect(c.AABB);
-
-                        intersections.Add(intersection);
-                        intersections_aabb.Extend(intersection);
+                        if (cell_aabb.Intersect(c.AABB, ref intersection))
+                        {
+                            intersections.Add(intersection);
+                            intersections_aabb.Extend(intersection);
+                        }
                     }
 
-                    Vec3 nearest_intersection_center = Vec3.Empty;
+                    Vec3 nearest_intersection_center = Vec3.ZERO;
                     float nearest_intersection_dist = float.MaxValue;
 
                     foreach (AABB inter_aabb in intersections)
@@ -566,7 +566,7 @@ namespace Nav
 
         public Vec3 GetDestinationCellPosition()
         {
-            return m_DestCell != null ? m_DestCell.Position : null;
+            return m_DestCell != null ? m_DestCell.Position : Vec3.ZERO;
         }
 
         private bool m_Enabled = true;
@@ -585,6 +585,6 @@ namespace Nav
         protected ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         protected ExploreCell m_DestCell;
-        private Vec3 m_HintPos = Vec3.Empty; //@ InputLock
+        private Vec3 m_HintPos = Vec3.ZERO; //@ InputLock
     }
 }
