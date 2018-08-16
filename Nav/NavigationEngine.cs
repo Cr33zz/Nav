@@ -84,6 +84,11 @@ namespace Nav
 
         public bool EnableAntiStuck { get; set; } = false;
 
+        // when avoidance is enabled and current position is on a cell with movement cost
+        public bool EnableAvoidance { get; set; } = false;
+
+        public float AvoidanceAllowedThreat { get; set; } = 0;
+
         // should be used when EnableAntiStuck is true to notify navigator that actor is not blocked by some obstacle but just standing
         public bool IsStandingOnPurpose { get; set; } = true;
 
@@ -109,7 +114,7 @@ namespace Nav
 
         public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible)
         {
-            using (new Profiler("[Nav-Profiler] FindPath updated [%t]", 500))
+            using (new Profiler("[Nav-Profiler] FindPath updated took %t ms", 10))
             return FindPath(from, to, MovementFlags, ref path, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
         }
 

@@ -10,45 +10,63 @@ using System.Globalization;
 
 namespace Nav
 {
-    public class region_data : IEquatable<region_data>
+    public struct Region : IEquatable<Region>
     {
-        public region_data(AABB area, float move_cost_mult) { this.area = area; this.move_cost_mult = move_cost_mult; }
-        public region_data(region_data region) { this.area = new AABB(region.area); this.move_cost_mult = region.move_cost_mult; }
-        public region_data(BinaryReader r) { Deserialize(r); }
-
-        public AABB area;
-        public float move_cost_mult;
-
-        public bool Equals(region_data region)
+        public Region(AABB area, float move_cost_mult, float threat = 0)
         {
-            return move_cost_mult == region.move_cost_mult && area.Equals(region.area);
+            Area = area;
+            MoveCostMult = move_cost_mult;
+            Threat = threat;
         }
+
+        public Region(Region region)
+        {
+            Area = new AABB(region.Area);
+            MoveCostMult = region.MoveCostMult;
+            Threat = region.Threat;
+        }
+
+        public Region(BinaryReader r) :  this()
+        {
+            Deserialize(r);
+        }
+
+        public AABB Area;
+        // movement cost multiplier is used by navigation part of the system
+        public float MoveCostMult;
+        // threat level is used by avoidance to find safe spot
+        public float Threat;
 
         public override bool Equals(Object obj)
         {
             if (obj == null)
                 return false;
 
-            region_data r = obj as region_data;
+            return (obj is Region) && Equals((Region)obj);
+        }
 
-            return Equals(r);
+        public bool Equals(Region region)
+        {
+            return MoveCostMult == region.MoveCostMult && Area.Equals(region.Area);
         }
 
         public override int GetHashCode()
         {
-            return area.GetHashCode();
+            return Area.GetHashCode();
         }
 
         public void Serialize(BinaryWriter w)
         {
-            area.Serialize(w);
-            w.Write(move_cost_mult);
+            Area.Serialize(w);
+            w.Write(MoveCostMult);
+            w.Write(Threat);
         }
 
         public void Deserialize(BinaryReader r)
         {
-            area = new AABB(r);
-            move_cost_mult = r.ReadSingle();
+            Area = new AABB(r);
+            MoveCostMult = r.ReadSingle();
+            Threat = r.ReadSingle();
         }
     }
 
@@ -249,12 +267,12 @@ namespace Nav
             return null;
         }
 
-        public HashSet<region_data> Regions
+        public HashSet<Region> Regions
         {
             get
             {
                 using (new ReadLock(InputLock))
-                    return new HashSet<region_data>(m_Regions);
+                    return new HashSet<Region>(m_Regions);
             }
 
             set
@@ -293,8 +311,8 @@ namespace Nav
             public GridCell parent_grid_cell;
             public Cell replaced_cell;
             public List<Cell> replacement_cells = new List<Cell>();
-            public HashSet<region_data> last_overlapping_regions = new HashSet<region_data>();
-            public HashSet<region_data> overlapping_regions = new HashSet<region_data>();
+            public HashSet<Region> last_overlapping_regions = new HashSet<Region>();
+            public HashSet<Region> overlapping_regions = new HashSet<Region>();
 
             public void Serialize(BinaryWriter w)
             {
@@ -307,11 +325,11 @@ namespace Nav
                     w.Write(cell.GlobalId);
 
                 w.Write(last_overlapping_regions.Count);
-                foreach (region_data region in last_overlapping_regions)
+                foreach (Region region in last_overlapping_regions)
                     region.Serialize(w);
 
                 w.Write(overlapping_regions.Count);
-                foreach (region_data region in overlapping_regions)
+                foreach (Region region in overlapping_regions)
                     region.Serialize(w);
             }
 
@@ -332,11 +350,11 @@ namespace Nav
 
                 int last_areas_count = r.ReadInt32();
                 for (int i = 0; i < last_areas_count; ++i)
-                    last_overlapping_regions.Add(new region_data(r));
+                    last_overlapping_regions.Add(new Region(r));
 
                 int areas_count = r.ReadInt32();
                 for (int i = 0; i < areas_count; ++i)
-                    overlapping_regions.Add(new region_data(r));
+                    overlapping_regions.Add(new Region(r));
             }
         }
 
@@ -373,7 +391,7 @@ namespace Nav
         private void UpdateRegions()
         {
             // copy current regions to avoid acquiring lock later
-            HashSet<region_data> regions_copy = Regions;
+            HashSet<Region> regions_copy = Regions;
 
             using (new WriteLock(DataLock))
             //using (new Profiler($"Updating {m_Regions.Count} regions took %t"))
@@ -384,15 +402,15 @@ namespace Nav
                 if (RegionsEnabled)
                 {
                     // update cells overlapped by avoid areas
-                    foreach (region_data region in regions_copy)
+                    foreach (Region region in regions_copy)
                     {
-                        var g_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(region.area));
+                        var g_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(region.Area));
                         
                         // do not ignore disabled cells on purpose so we don't have to iterate separately over
                         foreach (GridCell g_cell in g_cells)
                         {
                             // we only care about overlapping 'original' cells (ignore replacements)
-                            var overlapped_cells = g_cell.GetCells(x => x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(region.area), false);
+                            var overlapped_cells = g_cell.GetCells(x => x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(region.Area), false);
 
                             foreach (Cell cell in overlapped_cells)
                             {
@@ -400,7 +418,7 @@ namespace Nav
                                 if (!m_CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out data))
                                     m_CellsOverlappedByRegions[cell.GlobalId] = data = new overlapped_cell_data(cell, g_cell);
 
-                                data.overlapping_regions.Add(new region_data(region));
+                                data.overlapping_regions.Add(new Region(region));
                             }
                         }
                     }
@@ -450,13 +468,13 @@ namespace Nav
                             cell_data.replacement_cells.Add(cell_data.replaced_cell);
 
                             // apply every region to all current replacement cells
-                            foreach (region_data region in cell_data.overlapping_regions)
+                            foreach (Region region in cell_data.overlapping_regions)
                             {
                                 List<Cell> cells_to_check = new List<Cell>(cell_data.replacement_cells);
 
                                 foreach (Cell c in cells_to_check)
                                 {
-                                    AABB[] extracted = c.AABB.Extract2D(region.area);
+                                    AABB[] extracted = c.AABB.Extract2D(region.Area);
 
                                     if (extracted != null)
                                     {
@@ -465,29 +483,33 @@ namespace Nav
                                         for (int k = 0; k < extracted.Length; ++k)
                                         {
                                             // in case of negative movement cost treat this region as a dynamic obstacle (impassable area)
-                                            if (region.move_cost_mult < 0 && k == 0)
+                                            if (region.MoveCostMult < 0 && k == 0)
                                                 continue;
 
                                             float movement_cost_mult = c.MovementCostMult;
+                                            float threat = c.Threat;
 
                                             // first cell is always the one overlapped by region (because of how AABB.Extract2D is implemented)!
                                             if (k == 0)
                                             {
                                                 if (RegionsMoveCostMode == RegionsMode.Mult)
                                                 {
-                                                    movement_cost_mult *= region.move_cost_mult;
+                                                    movement_cost_mult *= region.MoveCostMult;
                                                 }
                                                 else if (RegionsMoveCostMode == RegionsMode.Max)
                                                 {
-                                                    if (movement_cost_mult < 1 && region.move_cost_mult < 1)
-                                                        movement_cost_mult = Math.Min(region.move_cost_mult, movement_cost_mult);
+                                                    if (movement_cost_mult < 1 && region.MoveCostMult < 1)
+                                                        movement_cost_mult = Math.Min(region.MoveCostMult, movement_cost_mult);
                                                     else
-                                                        movement_cost_mult = Math.Max(region.move_cost_mult, movement_cost_mult);
+                                                        movement_cost_mult = Math.Max(region.MoveCostMult, movement_cost_mult);
                                                 }
+
+                                                threat += region.Threat;
                                             }
 
                                             Cell r_cell = new Cell(extracted[k], cell_data.replaced_cell.Flags, movement_cost_mult);
                                             r_cell.Replacement = true;
+                                            r_cell.Threat = threat;
                                             cell_data.replacement_cells.Add(r_cell);
                                         }
                                     }
@@ -510,7 +532,7 @@ namespace Nav
                             }
                         }
 
-                        item.Value.last_overlapping_regions = new HashSet<region_data>(item.Value.overlapping_regions);
+                        item.Value.last_overlapping_regions = new HashSet<Region>(item.Value.overlapping_regions);
 
                         // enable original cell when no longer overlapped
                         if (cell_data.overlapping_regions.Count == 0)
@@ -586,7 +608,7 @@ namespace Nav
                         string line;
                         GridCell g_cell = null;
                         Vec3 cell_shrink_size = Vec3.ZERO;
-                        HashSet<region_data> avoid_areas = new HashSet<region_data>();
+                        HashSet<Region> avoid_areas = new HashSet<Region>();
 
                         while ((line = stream.ReadLine()) != null)
                         {
@@ -613,7 +635,7 @@ namespace Nav
                             }
                             else if (data[0] == "r")
                             {
-                                avoid_areas.Add(new region_data(new AABB(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]), float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])), float.Parse(data[7])));
+                                avoid_areas.Add(new Region(new AABB(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3]), float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])), float.Parse(data[7])));
                             }
                         }
 
@@ -856,7 +878,7 @@ namespace Nav
         public void dbg_GenerateRandomAvoidAreas(float move_cost_mult)
         {
             Random rng = new Random();
-            HashSet<region_data> regions = new HashSet<region_data>();
+            HashSet<Region> regions = new HashSet<Region>();
 
             using (new ReadLock(DataLock))
             {
@@ -864,7 +886,7 @@ namespace Nav
                 {
                     Vec3 pos = GetRandomPos();
                     float size = 20 + (float)rng.NextDouble() * 10;
-                    regions.Add(new region_data(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), move_cost_mult));
+                    regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), move_cost_mult));
                 }
             }
 
@@ -918,8 +940,8 @@ namespace Nav
                         file.WriteLine("n {0} {1} {2} {3} {4} {5} {6}", cell.Min.X, cell.Min.Y, cell.Min.Z, cell.Max.X, cell.Max.Y, cell.Max.Z, (int)cell.Flags);
                 }
 
-                foreach (region_data region in Regions)
-                    file.WriteLine("r {0} {1} {2} {3} {4} {5} {6}", region.area.Min.X, region.area.Min.Y, region.area.Min.Z, region.area.Max.X, region.area.Max.Y, region.area.Max.Z, region.move_cost_mult);
+                foreach (Region region in Regions)
+                    file.WriteLine("r {0} {1} {2} {3} {4} {5} {6}", region.Area.Min.X, region.Area.Min.Y, region.Area.Min.Z, region.Area.Max.X, region.Area.Max.Y, region.Area.Max.Z, region.MoveCostMult);
             }
 
             file.Close();
@@ -980,7 +1002,7 @@ namespace Nav
                 w.Write(CellsPatch.LastCellsPatchGlobalId);
 
                 w.Write(m_Regions.Count);
-                foreach (region_data region in m_Regions)
+                foreach (Region region in m_Regions)
                     region.Serialize(w);
 
                 w.Write(m_CellsOverlappedByRegions.Count);
@@ -1067,7 +1089,7 @@ namespace Nav
 
                     int regions_count = r.ReadInt32();
                     for (int i = 0; i < regions_count; ++i)
-                        m_Regions.Add(new region_data(r));
+                        m_Regions.Add(new Region(r));
 
                     int cells_overlapped_by_regions_count = r.ReadInt32();
                     for (int i = 0; i < cells_overlapped_by_regions_count; ++i)
@@ -1182,7 +1204,7 @@ namespace Nav
         // cell patches are interconnected groups of cells allowing ultra fast connection checks
         private HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
-        private HashSet<region_data> m_Regions = new HashSet<region_data>(); //@ InputLock
+        private HashSet<Region> m_Regions = new HashSet<Region>(); //@ InputLock
         private List<INavmeshObserver> m_Observers = new List<INavmeshObserver>(); //@ InputLock
     }
 }

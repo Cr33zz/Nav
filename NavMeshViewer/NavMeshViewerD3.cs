@@ -205,7 +205,6 @@ namespace NavMeshViewer
             {
                 if (e.KeyCode == System.Windows.Forms.Keys.D3)
                 {
-                    navmesh_d3.DangerRegionsEnabled = !navmesh_d3.DangerRegionsEnabled;
                     e.Handled = true;
                 }
             }
@@ -240,7 +239,6 @@ namespace NavMeshViewer
             Nav.D3.Navmesh navmesh_d3 = (m_Navmesh as Nav.D3.Navmesh);
 
             legend.Add(new LegendEntry("A: Toggle auto clear navmesh", true, m_AutoClearOnLocationChange));
-            legend.Add(new LegendEntry("Ctrl+3: Toggle danger regions", true, navmesh_d3.DangerRegionsEnabled));
         }
 
         private MemoryContext m_MemoryContext = null;

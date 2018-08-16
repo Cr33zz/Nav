@@ -165,7 +165,7 @@ namespace NavMeshViewer
                     var regions = m_Navmesh.Regions;
 
                     foreach (var region in regions)
-                        RenderHelper.DrawRectangle(e.Graphics, Pens.Black, m_RenderCenter, region.area.Min, region.area.Max);
+                        RenderHelper.DrawRectangle(e.Graphics, Pens.Black, m_RenderCenter, region.Area.Min, region.Area.Max);
 
                     //Vec3 safe_point = m_Navigator.GetNearestGridCellOutsideAvoidAreas();
 
@@ -517,7 +517,7 @@ namespace NavMeshViewer
             legend.Add(new LegendEntry("B: Run bot", false));
             legend.Add(new LegendEntry("F7: Reload debug.ini", false));
             legend.Add(new LegendEntry("Ctrl+1: Toggle render path", true, m_RenderPath));
-            legend.Add(new LegendEntry("Ctrl+2: Toggle regions", true, m_Navmesh.RegionsEnabled));
+            legend.Add(new LegendEntry("Ctrl+2: Toggle regions update", true, m_Navmesh.RegionsEnabled));
             legend.Add(new LegendEntry("Ctrl+4: Toggle render positions history", true, m_RenderPositionsHistory));
         }
 
@@ -594,13 +594,13 @@ namespace NavMeshViewer
         private void dbg_MoveRegions()
         {
             Random rng = new Random(0x600DF00D);
-            HashSet<region_data> regions = new HashSet<region_data>();
+            HashSet<Nav.Region> regions = new HashSet<Nav.Region>();
 
             for (int i = 0; i < 1200; ++i)
             {
                 Vec3 pos = m_Navmesh.GetRandomPos(rng);
                 float size = 20 + (float)rng.NextDouble() * 10;
-                regions.Add(new region_data(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2));
+                regions.Add(new Nav.Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2));
             }
 
             const int dt = 100;
@@ -612,7 +612,7 @@ namespace NavMeshViewer
                 {
                     Vec3 dir = new Vec3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, 0);
 
-                    region.area.Translate(dir * 10 * ((float)dt / 1000));
+                    region.Area.Translate(dir * 10 * ((float)dt / 1000));
                 }
 
                 m_Navmesh.Regions = regions;

@@ -68,7 +68,7 @@ namespace Nav
 
         public override string ToString()
         {
-            return "Id: " + Id + " MovementCostMult: " + MovementCostMult + " Replacement: " + Replacement + " Disabled: " + Disabled + " GlobalId: " + GlobalId;
+            return $"Id: {Id} MovementCostMult: {MovementCostMult} Threat: {Threat} Replacement: {Replacement} Disabled: {Disabled} GlobalId: {GlobalId}";
         }
 
         public override bool Equals(Object obj)
@@ -403,6 +403,7 @@ namespace Nav
         public bool Replacement { get; set; }
         public bool Disabled { get; set; }
         public float MovementCostMult { get; set; }
+        public float Threat { get; set; }
         public Int64 UserData { get; set; }
         public AABB AABB { get; protected set; }
         public Vec3 Center { get { return AABB.Center; } }
@@ -450,6 +451,7 @@ namespace Nav
             w.Write(Replacement);
             w.Write(Disabled);
             w.Write(MovementCostMult);
+            w.Write(Threat);
 
             w.Write(Neighbours.Count);
             foreach (Neighbour neighbour in Neighbours)
@@ -469,6 +471,7 @@ namespace Nav
             Replacement = r.ReadBoolean();
             Disabled = r.ReadBoolean();
             MovementCostMult = r.ReadSingle();
+            Threat = r.ReadSingle();
 
             int neighbours_num = r.ReadInt32();
             for (int i = 0; i < neighbours_num; ++i)

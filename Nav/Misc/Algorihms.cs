@@ -324,11 +324,11 @@ namespace Nav
         public abstract class PathFindStrategy<T>
             where T : Cell
         {
-            public abstract bool IsValid();
+            public virtual bool IsValid() { return true; }
             public abstract float GetMinDistance(Vec3 from);
-            public abstract Vec3 GetDestination();
+            public virtual Vec3 GetDestination() { return Vec3.ZERO;  } // center of cell
             public abstract bool IsDestCell(T cell);
-            public T FinalDestCell { get; set; }
+            public T FinalDestCell { get; set; } // for storing result
         }
 
         public class DestinationPathFindStrategy<T> : PathFindStrategy<T>
@@ -343,6 +343,22 @@ namespace Nav
 
             private Vec3 Dest;
             private T DestCell;
+        }
+
+        public class AvoidancePathFindStrategy<T> : PathFindStrategy<T>
+            where T : Cell
+        {
+            public AvoidancePathFindStrategy(float max_allowed_threat, Vec3 hint_pos = default(Vec3))
+            {
+                MaxAllowedThreat = max_allowed_threat;
+                HintPos = hint_pos;
+            }
+
+            public override float GetMinDistance(Vec3 from) { return HintPos.IsZero() ? 0 : from.Distance(HintPos); }
+            public override bool IsDestCell(T cell) { return cell.Threat <= MaxAllowedThreat; }
+
+            private float MaxAllowedThreat;
+            private Vec3 HintPos;
         }
 
         public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false)
@@ -378,6 +394,7 @@ namespace Nav
 
                 if (strategy.IsDestCell((T)info.cell))
                 {
+                    strategy.FinalDestCell = (T)info.cell;
                     BuildPath(start, info.cell, from, strategy.GetDestination(), info, ref path);
                     return true;
                 }
