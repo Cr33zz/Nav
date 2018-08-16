@@ -230,15 +230,28 @@ namespace Nav
                     path_pos intermediate_data = path[ray_start_index + 1];
                     path_pos ray_end_data = path[ray_start_index + 2];
 
-                    Vec3 dir = intermediate_data.pos - ray_start_data.pos;
+                    Vec3 dir = ray_end_data.pos - intermediate_data.pos;
                     float length = dir.Normalize();
                     int steps = (int)(length / PathSmoothingPrecision);
 
                     for (int i = 1; i < steps; ++i) // checking 0 is unnecessary since this is the current path
                     {
-                        if (m_Navmesh.RayCast2D(ray_start_data.pos + dir * (float)i * PathSmoothingPrecision, ray_end_data.pos, flags, ref intersection, false))
+                        if (!m_Navmesh.RayCast2D(ray_start_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, ref intersection, false))
                         {
-                            path[ray_start_index + 1] = new path_pos(ray_start_data.pos + dir * (float)i * PathSmoothingPrecision, intermediate_data.cell);
+                            intermediate_data = path[ray_start_index + 1] = new path_pos(intermediate_data.pos + dir * (float)(i-1) * PathSmoothingPrecision, intermediate_data.cell);
+                            break;
+                        }
+                    }
+
+                    dir = ray_start_data.pos - intermediate_data.pos;
+                    length = dir.Normalize();
+                    steps = (int)(length / PathSmoothingPrecision);
+
+                    for (int i = 1; i < steps; ++i) // checking 0 is unnecessary since this is the current path
+                    {
+                        if (!m_Navmesh.RayCast2D(ray_end_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, ref intersection, false))
+                        {
+                            path[ray_start_index + 1] = new path_pos(intermediate_data.pos + dir * (float)(i - 1) * PathSmoothingPrecision, intermediate_data.cell);
                             break;
                         }
                     }

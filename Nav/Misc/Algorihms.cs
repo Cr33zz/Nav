@@ -426,12 +426,13 @@ namespace Nav
                     // if not in open list
                     if (info_neighbour == null)
                     {
-                        info_neighbour = new NodeInfo(cell_neighbour, leading_point, null, new_g, new_h); // g and h will be set later on
+                        info_neighbour = new NodeInfo(cell_neighbour, leading_point, info, new_g, new_h); // g and h will be set later on
                         open.Insert(0, info_neighbour);
                     }
                     else if ((new_g + new_h) < info_neighbour.TotalCost)
                     {
                         info_neighbour.parent = info;
+                        info_neighbour.leading_point = leading_point;
                         info_neighbour.g = new_g;
                         info_neighbour.h = new_h;
                     }
@@ -454,46 +455,21 @@ namespace Nav
         private static void BuildPath<T>(T start, T end, Vec3 from, Vec3 to, NodeInfo info, ref List<path_pos> path) where T : Cell
         {
             // build result path
-            if (path != null)
+            if (path == null)
+                return;
+
+            List<Cell> cells_list = new List<Cell>();
+
+            if (info != null)
+                path.Add(new path_pos(to.IsZero() ? info.cell.Center : to, info.cell));
+
+            while (info != null)
             {
-                List<Cell> cells_list = new List<Cell>();
-
-                while (info != null)
-                {
-                    cells_list.Add(info.cell);
-                    info = info.parent;
-                }
-
-                cells_list.Reverse();
-
-                for (int i = 0; i < cells_list.Count; ++i)
-                {
-                    Cell cell = cells_list[i];
-
-                    if (i == 0)
-                    {
-                        if (from.IsZero())
-                            path.Add(new path_pos(cell.Center, cell));
-                        else
-                            path.Add(new path_pos(cell.AABB.Align(from), cell));
-                    }
-                    else
-                    {
-                        path.Add(new path_pos(cell.AABB.Align(path[path.Count - 1].pos), cell));
-                    }
-
-                    if (i == cells_list.Count - 1)
-                    {
-                        if (to.IsZero())
-                            path.Add(new path_pos(cell.Center, cell));
-                        else
-                            path.Add(new path_pos(cell.AABB.Align(to), cell));
-                    }
-                }
-
-                for (int k = path.Count - 2; k > 0; --k)
-                    path[k] = new path_pos(path[k - 1].cell.AABB.Align(path[k + 1].pos), path[k].cell);
+                path.Add(new path_pos(info.leading_point, info.cell));
+                info = info.parent;
             }
+
+            path.Reverse();
         }
 
         public interface IDistanceVisitor<T> where T : Cell
