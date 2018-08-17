@@ -751,33 +751,43 @@ namespace Nav
             }
         }
 
-        public bool RayCast(Vec3 from, Vec3 to, MovementFlag flags, ref Vec3 intersection, bool ignore_movement_cost = true)
+        public RayCastResult RayCast(Vec3 from, Vec3 to, MovementFlag flags, bool ignore_movement_cost = true)
         {
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
-            return RayCast(from, null, to, flags, ref intersection, false, ignore_movement_cost, ref ignored_cells);
+            return RayCast(from, null, to, flags, false, ignore_movement_cost, ref ignored_cells);
         }
 
-        public bool RayCast2D(Vec3 from, Vec3 to, MovementFlag flags, ref Vec3 intersection, bool ignore_movement_cost = true)
+        public RayCastResult RayCast2D(Vec3 from, Vec3 to, MovementFlag flags, bool ignore_movement_cost = true)
         {
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
-            return RayCast(from, null, to, flags, ref intersection, true, ignore_movement_cost, ref ignored_cells);
+            return RayCast(from, null, to, flags, true, ignore_movement_cost, ref ignored_cells);
+        }
+
+        public struct RayCastResult
+        {
+            public bool Successful;
+            public Vec3 End;
+            public Cell EndCell;
+
+            public static implicit operator bool(RayCastResult value)
+            {
+                return value.Successful;
+            }
         }
 
         // Aquires DataLock (read); returns true when there is no obstacle
-        private bool RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, ref Vec3 intersection, bool test_2d, bool ignore_movement_cost, ref HashSet<Cell> ignored_cells)
+        private RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, bool ignore_movement_cost, ref HashSet<Cell> ignored_cells)
         {
             using (new ReadLock(DataLock))
             {
                 if (from_cell == null && !GetCellContaining(from, out from_cell, flags, false, false, -1, test_2d, 2, ignored_cells))
                 {
-                    intersection = new Vec3(from);
-                    return false;
+                    return new RayCastResult { Successful = false, End = from, EndCell = null };
                 }
 
                 if (test_2d ? from_cell.Contains2D(to) : from_cell.Contains(to, 2))
                 {
-                    intersection = new Vec3(to);
-                    return true;
+                    return new RayCastResult { Successful = true, End = to, EndCell = from_cell };
                 }
 
                 ignored_cells.Add(from_cell);
@@ -792,6 +802,8 @@ namespace Nav
 
                 bool any_neighbour_accepted = false;
 
+                RayCastResult result = default(RayCastResult);
+
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
@@ -802,6 +814,8 @@ namespace Nav
 
                     if (ignored_cells.Contains(neighbour_cell))
                         continue;
+
+                    Vec3 intersection = default(Vec3);
 
                     bool ray_test_result = test_2d ? neighbour_cell.AABB.RayTest2D(ray_origin, ray_dir, ref intersection) :
                                                      neighbour_cell.AABB.RayTest(ray_origin, ray_dir, ref intersection);
@@ -821,8 +835,13 @@ namespace Nav
 
                             any_neighbour_accepted |= accepted;
 
-                            if (accepted && RayCast(intersection, neighbour_cell, to, flags, ref intersection, test_2d, ignore_movement_cost, ref ignored_cells))
-                                return true;
+                            if (accepted)
+                            {
+                                result = RayCast(intersection, neighbour_cell, to, flags, test_2d, ignore_movement_cost, ref ignored_cells);
+
+                                if (result.Successful)
+                                    return result;
+                            }
                         }
                     }
                 }
@@ -832,12 +851,14 @@ namespace Nav
                 if (!any_neighbour_accepted)
                 {
                     if (test_2d)
-                        from_cell.AABB.RayTest2D(ray_origin + ray_dir * 0.1f, ray_dir, ref intersection);
+                        from_cell.AABB.RayTest2D(ray_origin + ray_dir * 0.1f, ray_dir, ref result.End);
                     else
-                        from_cell.AABB.RayTest(ray_origin + ray_dir * 0.1f, ray_dir, ref intersection);
+                        from_cell.AABB.RayTest(ray_origin + ray_dir * 0.1f, ray_dir, ref result.End);
+
+                    result.EndCell = from_cell;
                 }
 
-                return false;
+                return result;
             }
         }
 
@@ -880,8 +901,9 @@ namespace Nav
 
         private bool test_RayTrace()
         {
-            AABB a = new AABB(-5, -5, -5, 5, 5, 5);
             Vec3 result = default(Vec3);
+
+            AABB a = new AABB(-5, -5, -5, 5, 5, 5);
 
             // tangent along Y
             if (!a.RayTest(new Vec3(-5, -100, 0), new Vec3(0, 1, 0), ref result) || !result.Equals(new Vec3(-5, -5, 0)))

@@ -327,6 +327,7 @@ namespace Nav
             public virtual bool IsValid() { return true; }
             public abstract float GetMinDistance(Vec3 from);
             public virtual Vec3 GetDestination() { return Vec3.ZERO;  } // center of cell
+            public virtual bool UseFinalCellEntranceAsDestination() { return false; }
             public abstract bool IsDestCell(T cell);
             public T FinalDestCell { get; set; } // for storing result
         }
@@ -356,6 +357,7 @@ namespace Nav
 
             public override float GetMinDistance(Vec3 from) { return HintPos.IsZero() ? 0 : from.Distance(HintPos); }
             public override bool IsDestCell(T cell) { return cell.Threat <= MaxAllowedThreat; }
+            public override bool UseFinalCellEntranceAsDestination() { return true; }
 
             private float MaxAllowedThreat;
             private Vec3 HintPos;
@@ -395,7 +397,7 @@ namespace Nav
                 if (strategy.IsDestCell((T)info.cell))
                 {
                     strategy.FinalDestCell = (T)info.cell;
-                    BuildPath(start, info.cell, from, strategy.GetDestination(), info, ref path);
+                    BuildPath(start, info.cell, from, strategy.UseFinalCellEntranceAsDestination() ? info.leading_point : strategy.GetDestination(), info, ref path);
                     return true;
                 }
 
@@ -445,7 +447,7 @@ namespace Nav
                 NodeInfo best = closed.Find(x => x.h.Equals(min_total_cost));
                 strategy.FinalDestCell = (T)best.cell;
 
-                BuildPath(start, best.cell, from, strategy.GetDestination() , best, ref path);
+                BuildPath(start, best.cell, from, strategy.UseFinalCellEntranceAsDestination() ? best.leading_point : strategy.GetDestination(), best, ref path);
                 return true;
             }
 

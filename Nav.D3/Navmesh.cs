@@ -107,6 +107,8 @@ namespace Nav.D3
             }            
         }
 
+        private bool GenerateRegionsEnabled { get; set; } = true;
+
         public static string SceneSnoCacheDir
         {
             get { return SCENE_SNO_CACHE_DIR; }
@@ -139,6 +141,12 @@ namespace Nav.D3
             {
                 FetchNavData();
                 m_LastFetchNavDataTime = time;
+            }
+
+            if (time - m_LastGenerateRegionsTime > 50)
+            {
+                GenerateRegions();
+                m_LastGenerateRegionsTime = time;
             }
 
             if (m_SnoCacheDirty && time - m_LastSnoCacheSaveTime > m_SnoCacheSaveInterval)
@@ -281,6 +289,31 @@ namespace Nav.D3
             }
         }
 
+        private void GenerateRegions(object source= null, ElapsedEventArgs e= null)
+        {
+            if (GenerateRegionsEnabled && IsPlayerReady())
+            {
+                try
+                {
+                    HashSet<Region> dangers = new HashSet<Region>();
+                    IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => x.ActorType == ActorType.Monster && x.TeamID == 10 && x.Hitpoints > 0);
+
+                    foreach (ACD obj in objects)
+                    {
+                        float radius = obj.CollisionRadius * 0.75f;
+                        Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
+                        AABB area = new AABB(pos - new Vec3(radius, radius, pos.Z - 100), pos + new Vec3(radius, radius, pos.Z + 100));
+                        dangers.Add(new Region(area, 10));
+                    }
+
+                    Regions = dangers;
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+
         public bool IsPlayerReady()
         {
             try
@@ -368,6 +401,7 @@ namespace Nav.D3
         private bool m_SnoCacheDirty = false;
         private Int64 m_LastFetchNavDataTime = 0;
         protected int m_FetchNavDataInterval = 250;
+        private Int64 m_LastGenerateRegionsTime = 0;
         private Int64 m_LastSnoCacheSaveTime = 0;
         protected int m_SnoCacheSaveInterval = 10000;
     }

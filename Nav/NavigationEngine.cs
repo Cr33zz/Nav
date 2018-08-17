@@ -203,8 +203,7 @@ namespace Nav
         private void SmoothenPath(ref List<path_pos> path, MovementFlag flags, int skip_first_count = 0)
         {
             int ray_start_index = skip_first_count;
-            Vec3 intersection = default(Vec3);
-
+            
             while (ray_start_index + 2 < path.Count)
             {
                 path_pos ray_start_data = path[ray_start_index];
@@ -212,7 +211,7 @@ namespace Nav
                 path_pos ray_end_data = path[ray_start_index + 2];
 
                 // try remove middle point completely
-                if (m_Navmesh.RayCast2D(ray_start_data.pos, ray_end_data.pos, flags, ref intersection, false))
+                if (m_Navmesh.RayCast2D(ray_start_data.pos, ray_end_data.pos, flags, false))
                     path.RemoveAt(ray_start_index + 1);
                 else
                     ++ray_start_index;
@@ -234,26 +233,24 @@ namespace Nav
                     float length = dir.Normalize();
                     int steps = (int)(length / PathSmoothingPrecision);
 
-                    for (int i = 1; i < steps; ++i) // checking 0 is unnecessary since this is the current path
+                    for (int i = 1; i <= steps; ++i) // checking 0 is unnecessary since this is the current path
                     {
-                        if (!m_Navmesh.RayCast2D(ray_start_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, ref intersection, false))
-                        {
-                            intermediate_data = path[ray_start_index + 1] = new path_pos(intermediate_data.pos + dir * (float)(i-1) * PathSmoothingPrecision, intermediate_data.cell);
+                        if (m_Navmesh.RayCast2D(ray_start_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, false))
+                            intermediate_data = path[ray_start_index + 1] = new path_pos(intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, intermediate_data.cell);
+                        else
                             break;
-                        }
                     }
 
                     dir = ray_start_data.pos - intermediate_data.pos;
                     length = dir.Normalize();
                     steps = (int)(length / PathSmoothingPrecision);
 
-                    for (int i = 1; i < steps; ++i) // checking 0 is unnecessary since this is the current path
+                    for (int i = 1; i <= steps; ++i) // checking 0 is unnecessary since this is the current path
                     {
-                        if (!m_Navmesh.RayCast2D(ray_end_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, ref intersection, false))
-                        {
+                        if (m_Navmesh.RayCast2D(ray_end_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, false))
                             path[ray_start_index + 1] = new path_pos(intermediate_data.pos + dir * (float)(i - 1) * PathSmoothingPrecision, intermediate_data.cell);
+                        else
                             break;
-                        }
                     }
 
                     ++ray_start_index;
@@ -605,13 +602,12 @@ namespace Nav
 
             Stopwatch timeout_watch = new Stopwatch();
             timeout_watch.Start();
-            Vec3 intersection = default(Vec3);
-
+            
             while (timeout_watch.ElapsedMilliseconds < timeout)
             {
                 CurrentPos = m_Navmesh.GetRandomPos();
                 Destination = m_Navmesh.GetRandomPos();
-                m_Navmesh.RayCast2D(m_Navmesh.GetRandomPos(), m_Navmesh.GetRandomPos(), MovementFlag.Fly, ref intersection);
+                m_Navmesh.RayCast2D(m_Navmesh.GetRandomPos(), m_Navmesh.GetRandomPos(), MovementFlag.Fly);
                 m_Navmesh.Log("[Nav] Ray cast done!");
             }
 

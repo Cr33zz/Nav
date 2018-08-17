@@ -222,8 +222,8 @@ namespace NavMeshViewer
 
                     if (m_RenderRayCast)
                     {
-                        Vec3 intersection = default(Vec3);
-                        RenderHelper.DrawLine(e.Graphics, m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk, ref intersection) ? Pens.Green : Pens.Red, m_RenderCenter, curr, intersection);
+                        var result = m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk);
+                        RenderHelper.DrawLine(e.Graphics, result ? Pens.Green : Pens.Red, m_RenderCenter, curr, result.End);
                     }
                 }
 
@@ -232,7 +232,7 @@ namespace NavMeshViewer
                     if (m_RenderAvoidancePath)
                     {
                         List<Vec3> path = new List<Vec3>();
-                        m_Navigator.FindAvoidancePath(curr, 0, MovementFlag.Walk, ref path, Vec3.ZERO, false, 0, false);
+                        m_Navigator.FindAvoidancePath(curr, 0, MovementFlag.Walk, ref path, Vec3.ZERO, false, 0, true);
                         path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
                     }
@@ -716,9 +716,9 @@ namespace NavMeshViewer
         private bool m_RenderIds = false;
         protected bool m_RenderAxis = true;
         private bool m_RenderConnections = false;
-        private bool m_RenderPath = false;
-        private bool m_RenderOriginalPath = true;
-        private bool m_RenderAvoidancePath = false;
+        private bool m_RenderPath = true;
+        private bool m_RenderOriginalPath = false;
+        private bool m_RenderAvoidancePath = true;
         private bool m_RenderBacktrackPath = false;
         private bool m_RenderPositionsHistory = false;
         private bool m_RenderRayCast = false;
