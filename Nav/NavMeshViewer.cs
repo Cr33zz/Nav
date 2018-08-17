@@ -17,7 +17,7 @@ namespace Nav
     // -deserialize <name-of-serialized-state> example: -deserialize nav_save_20151012
     public partial class NavMeshViewer : Form
     {
-        public NavMeshViewer(string[] args)
+        public NavMeshViewer(string[] args, Navmesh navmesh = null, NavigationEngine navigator = null, ExplorationEngine explorer = null)
         {
             InitializeComponents();
 
@@ -25,27 +25,28 @@ namespace Nav
 
             m_Params = new Params(args);
 
+            m_Navmesh = navmesh;
+            m_Navigator = navigator;
+            m_Explorer = explorer;
+
             CreateNavigation();
             LoadDebugConfig();
 
             if (m_Params.HasParam("load"))
             {
-                string file;
-                m_Params.GetParam("load", out file);
+                m_Params.GetParam("load", out string file);
                 LoadData(file);
             }
 
             if (m_Params.HasParam("load_waypoints"))
             {
-                string file;
-                m_Params.GetParam("load_waypoints", out file);
+                m_Params.GetParam("load_waypoints", out string file);
                 LoadWaypoints(file);
             }
 
             if (m_Params.HasParam("deserialize"))
             {
-                string file;
-                m_Params.GetParam("deserialize", out file);
+                m_Params.GetParam("deserialize", out string file);
                 m_Navmesh.Deserialize(file);
                 m_Navigator.Deserialize(file);
                 m_Explorer.Deserialize(file);
@@ -620,7 +621,7 @@ namespace Nav
         private void dbg_MoveRegions()
         {
             Random rng = new Random(0x600DF00D);
-            HashSet<Nav.Region> regions = new HashSet<Nav.Region>();
+            var regions = new List<Nav.Region>();
 
             for (int i = 0; i < 1200; ++i)
             {
@@ -650,7 +651,7 @@ namespace Nav
         private void dbg_MoveThreatRegions()
         {
             Random rng = new Random(0x8AAD);
-            HashSet<Nav.Region> regions = new HashSet<Nav.Region>();
+            var regions = new List<Nav.Region>();
 
             for (int i = 0; i < 100; ++i)
             {

@@ -86,10 +86,13 @@ namespace Nav
 
         public bool AntiStuckActive => m_AntiStuckPathingLevel > 0;
 
-        // when avoidance is enabled and current position is on a cell with movement cost
-        public bool EnableAvoidance { get; set; } = false;
+        // turn on/off danger detection and danger avoidance
+        public bool EnableThreatAvoidance { get; set; } = false;
 
-        public float AvoidanceAllowedThreat { get; set; } = 0;
+        // when avoidance is enabled and current position is on a cell with threat level higher than MaxAllowedThreat
+        public bool InThreat { get; private set; } = false;
+
+        public float MaxAllowedThreat { get; set; } = 0;
 
         // should be used when EnableAntiStuck is true to notify navigator that actor is not blocked by some obstacle but just standing
         public bool IsStandingOnPurpose { get; set; } = true;
@@ -419,7 +422,7 @@ namespace Nav
         {
             if (PathLock.TryEnterReadLock(0))
             {
-                p = new List<Vec3>(m_Path);
+                p = new List<Vec3>(Path);
                 p_dest_type = m_PathDestType;
                 PathLock.ExitReadLock();
                 return true;
@@ -434,8 +437,8 @@ namespace Nav
 
             if (PathLock.TryEnterReadLock(0))
             {
-                for (int i = 0; i < m_Path.Count - 1; ++i)
-                    length += m_Path[i].Distance2D(m_Path[i + 1]);
+                for (int i = 0; i < Path.Count - 1; ++i)
+                    length += Path[i].Distance2D(Path[i + 1]);
                 p_dest_type = m_PathDestType;
                 PathLock.ExitReadLock();
             }
@@ -471,7 +474,7 @@ namespace Nav
         public List<Vec3> GetPath()
         {
             using (new ReadLock(PathLock))
-                return new List<Vec3>(m_Path);
+                return new List<Vec3>(Path);
         }
 
         public DestType GetDestinationType()
@@ -484,7 +487,7 @@ namespace Nav
             get
             {
                 using (new ReadLock(PathLock))
-                    return m_Path.Count > 0 ? new Vec3(m_Path[0]) : Vec3.ZERO;
+                    return Path.Count > 0 ? new Vec3(Path[0]) : Vec3.ZERO;
             }
         }
 
@@ -525,7 +528,7 @@ namespace Nav
                 if (!huge_current_pos_change)
                 {
                     //using (new ReadLock(PathLock))
-                        path_empty = m_Path.Count == 0;
+                        path_empty = Path.Count == 0;
                 }
 
                 if (huge_current_pos_change || path_empty)
@@ -626,7 +629,7 @@ namespace Nav
 
         public void Dispose()
         {
-            m_ShouldStopUpdates = true;
+            ShouldStopUpdates = true;
             UpdatesThread.Join();
 
             m_Navmesh.RemoveObserver(this);
@@ -663,7 +666,7 @@ namespace Nav
                 m_DebugPositionsHistory.Clear();
                 m_HistoryDestId = -1;
                 m_DestinationGridsId.Clear();
-                m_Path.Clear();
+                Path.Clear();
                 m_PathDestination = Vec3.ZERO;
                 m_PathDestType = DestType.None;
             }
@@ -717,7 +720,7 @@ namespace Nav
 
                 destination = new Vec3(m_Destination);
 
-                return (m_CurrentPos.IsZero() || m_Destination.IsZero() || !m_Destination.Equals(m_PathDestination)) ? false : (m_Path.Count == 0);
+                return (m_CurrentPos.IsZero() || m_Destination.IsZero() || !m_Destination.Equals(m_PathDestination)) ? false : (Path.Count == 0);
             }
         }
 
@@ -732,7 +735,7 @@ namespace Nav
             Stopwatch timer = new Stopwatch();
             timer.Start();
 
-            while (!m_ShouldStopUpdates)
+            while (!ShouldStopUpdates)
             {
                 OnUpdate(timer.ElapsedMilliseconds);
             }
@@ -746,19 +749,14 @@ namespace Nav
 
             int update_path_interval = m_UpdatePathIntervalOverride > 0 ? m_UpdatePathIntervalOverride : UpdatePathInterval;
 
-            if (ForcePathUpdate || (update_path_interval > 0 && (time - m_LastPathUpdateTime) > update_path_interval))
+            if (ForcePathUpdate || (update_path_interval > 0 && (time - LastPathUpdateTime) > update_path_interval))
             {
                 ForcePathUpdate = false;
-                m_LastPathUpdateTime = time;
+                LastPathUpdateTime = time;
                 UpdatePath();
             }
 
-            bool path_empty = true;
-
-            //using (new ReadLock(PathLock))
-                path_empty = m_Path.Count == 0;
-
-            if (!path_empty)
+            if (Path.Count > 0)
             {
                 UpdateAntiStuck();
                 UpdateDestReachFailed();
@@ -767,18 +765,18 @@ namespace Nav
             Thread.Sleep(50);
         }
 
-        private Int64 m_LastPathUpdateTime = 0;
+        private Int64 LastPathUpdateTime = 0;
 
         // Controls updated thread execution
-        private volatile bool m_ShouldStopUpdates = false;
+        private volatile bool ShouldStopUpdates = false;
 
         private void UpdatePath()
         {
             if (!m_Navmesh.IsNavDataAvailable)
                 return;
 
-            Vec3 destination = Vec3.ZERO;
-            DestType dest_type = DestType.None;
+            Vec3 destination;
+            DestType dest_type;
 
             // make sure destination and its type are in sync
             using (new ReadLock(InputLock))
@@ -795,7 +793,10 @@ namespace Nav
 
             List<Vec3> new_path = new List<Vec3>();
 
-            FindPath(current_pos, destination, MovementFlags, ref new_path, PATH_NODES_MERGE_DISTANCE, true, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
+            if (InThreat)
+                FindAvoidancePath(current_pos, MaxAllowedThreat, MovementFlags, ref new_path, Vec3.ZERO, false, PathNodesShiftDist);
+            else
+                FindPath(current_pos, destination, MovementFlags, ref new_path, PATH_NODES_MERGE_DISTANCE, true, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
 
             // verify whenever some point of path was not already passed during its calculation (this may take place when path calculations took long time)
             // this is done by finding first path segment current position can be casted on and removing all points preceding this segment including segment origin
@@ -832,10 +833,10 @@ namespace Nav
             using (new WriteLock(PathLock))
             {
                 // reset override when first destination from path changed
-                if (m_Path.Count == 0 || (new_path.Count > 0 && !m_Path[0].Equals(new_path[0])))
+                if (Path.Count == 0 || (new_path.Count > 0 && !Path[0].Equals(new_path[0])))
                     ResetAntiStuckPrecition(current_pos);
 
-                m_Path = new_path;
+                Path = new_path;
                 m_PathDestination = destination;
                 m_PathDestType = dest_type;
             }
@@ -888,6 +889,22 @@ namespace Nav
                 SetDestination(destination, DestType.BackTrack, DefaultPrecision);
         }
 
+        private void UpdateAvoidance()
+        {
+            using (new ReadLock(InputLock))
+            {
+                if (EnableThreatAvoidance)
+                {
+                    bool was_in_danger = InThreat;
+                    m_Navmesh.GetCellAt(CurrentPos, out Cell curr_cell);
+                    InThreat = (curr_cell?.Threat ?? 0) > MaxAllowedThreat;
+
+                    if (InThreat && !was_in_danger)
+                        RequestPathUpdate();
+                }
+            }
+        }
+
         private void UpdateWaypointDestination()
         {
             Vec3 destination = Vec3.ZERO;
@@ -914,22 +931,22 @@ namespace Nav
             // check and removed reached nodes from path
             using (new ReadLock(PathLock, true))
             {
-                while (m_Path.Count > 0)
+                while (Path.Count > 0)
                 {
                     float precision = DefaultPrecision;
 
                     if (m_PrecisionOverride > 0)
                         precision = m_PrecisionOverride;
-                    else if (m_Path.Count == 1)
+                    else if (Path.Count == 1)
                         precision = Precision;
 
-                    if (current_pos.Distance2D(m_Path[0]) > precision)
+                    if (current_pos.Distance2D(Path[0]) > precision)
                         break;
 
-                    reached_pos = m_Path[0];
+                    reached_pos = Path[0];
 
                     using (new WriteLock(PathLock))
-                        m_Path.RemoveAt(0);
+                        Path.RemoveAt(0);
 
                     any_node_reached = true;
 
@@ -1218,8 +1235,8 @@ namespace Nav
                 foreach (Vec3 p in m_Waypoints)
                     p.Serialize(w);
 
-                w.Write(m_Path.Count);
-                foreach (Vec3 p in m_Path)
+                w.Write(Path.Count);
+                foreach (Vec3 p in Path)
                     p.Serialize(w);
                 m_PathDestination.Serialize(w);
                 w.Write((int)m_PathDestType);
@@ -1266,7 +1283,7 @@ namespace Nav
             {
                 m_Waypoints.Clear();
                 m_DestinationGridsId.Clear();
-                m_Path.Clear();
+                Path.Clear();
                 m_DestinationsHistory.Clear();
                 m_DebugPositionsHistory.Clear();
 
@@ -1276,7 +1293,7 @@ namespace Nav
 
                 int path_count = r.ReadInt32();
                 for (int i = 0; i < path_count; ++i)
-                    m_Path.Add(new Vec3(r));
+                    Path.Add(new Vec3(r));
                 m_PathDestination = new Vec3(r);
                 m_PathDestType = (DestType)r.ReadInt32();
 
@@ -1321,7 +1338,7 @@ namespace Nav
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private ReaderWriterLockSlim AntiStuckLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
-        private List<Vec3> m_Path = new List<Vec3>(); //@ PathLock
+        private List<Vec3> Path = new List<Vec3>(); //@ PathLock
         private Vec3 m_PathDestination = Vec3.ZERO; //@ PathLock
         private DestType m_PathDestType = DestType.None; //@ PathLock
         private List<Vec3> m_Waypoints = new List<Vec3>(); //@ InputLock

@@ -19,21 +19,19 @@ namespace Nav.D3
 {
     public class NavMeshViewerD3 : NavMeshViewer
     {
-        public NavMeshViewerD3(string[] args, MemoryContext memory_context = null, Nav.D3.Navmesh navmesh = null, NavigationEngine navigator = null, ExplorationEngine explorer = null)
-            : base(args)
+        public NavMeshViewerD3(string[] args, MemoryContext memory_context = null, Navmesh navmesh = null, NavigationEngine navigator = null, ExplorationEngine explorer = null)
+            : base(args, navmesh, navigator, explorer)
         {
-            m_MemoryContext = memory_context;
-            m_Navmesh = navmesh;
-            m_Navigator = navigator;
-            m_Explorer = explorer;
-
+            if (memory_context != null)
+                m_MemoryContext = memory_context;
+            
             m_AutoClearOnLocationChange = (navmesh == null);
         }
 
         private MemoryContext CreateMemoryContext()
         {
             var ctx = default(MemoryContext);
-            while (ctx == null)
+            while (true)
             {
                 var processes = Process.GetProcessesByName("Diablo III64");
                 if (processes.Any())
@@ -137,10 +135,10 @@ namespace Nav.D3
             {
                 int location = -1;
 
-                PlayerData localPlayerData = m_MemoryContext?.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
+                PlayerData local_player_data = m_MemoryContext?.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
 
-                if (localPlayerData != null)
-                    location = localPlayerData.LevelAreaSNO;
+                if (local_player_data != null)
+                    location = local_player_data.LevelAreaSNO;
                 
                 if (m_LastLocation != location)
                 {

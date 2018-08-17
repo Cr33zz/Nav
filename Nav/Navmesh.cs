@@ -280,20 +280,19 @@ namespace Nav
             return null;
         }
 
-        public HashSet<Region> Regions
+        public List<Region> Regions
         {
             get
             {
                 using (new ReadLock(InputLock))
-                    return new HashSet<Region>(m_Regions);
+                    return new List<Region>(m_Regions);
             }
 
             set
             {
                 using (new WriteLock(InputLock))
                 {
-                    if (!value.SetEquals(m_Regions))
-                        m_Regions = value;
+                    m_Regions = value;
                 }
             }
         }
@@ -372,14 +371,14 @@ namespace Nav
             }
         }
 
-        private Dictionary<int, overlapped_cell_data> m_CellsOverlappedByRegions = new Dictionary<int, overlapped_cell_data>(); // @ DataLock
+        private Dictionary<int, overlapped_cell_data> CellsOverlappedByRegions = new Dictionary<int, overlapped_cell_data>(); // @ DataLock
 
         private void Updates()
         {
             Stopwatch timer = new Stopwatch();
             timer.Start();
 
-            while (!m_ShouldStopUpdates)
+            while (!ShouldStopUpdates)
             {
                 OnUpdate(timer.ElapsedMilliseconds);
                 Thread.Sleep(15);
@@ -387,30 +386,30 @@ namespace Nav
         }
 
         // Controls updated thread execution
-        private volatile bool m_ShouldStopUpdates = false;
+        private volatile bool ShouldStopUpdates = false;
 
         protected virtual void OnUpdate(Int64 time)
         {
-            if (time - m_LastUpdateRegionsTime > UpdateRegionsInterval)
+            if (time - LastUpdateRegionsTime > UpdateRegionsInterval)
             {
                 UpdateRegions();
-                m_LastUpdateRegionsTime = time;
+                LastUpdateRegionsTime = time;
             }
         }
 
         public uint UpdateRegionsInterval { get; set; } = 100;
 
-        private Int64 m_LastUpdateRegionsTime = 0;
+        private Int64 LastUpdateRegionsTime = 0;
 
         private void UpdateRegions()
         {
             // copy current regions to avoid acquiring lock later
-            HashSet<Region> regions_copy = Regions;
+            var regions_copy = Regions;
 
             using (new WriteLock(DataLock))
-            using (new Profiler($"Updating {m_Regions.Count} regions took %t", (int)UpdateRegionsInterval))
+            using (new Profiler($"Updating {regions_copy.Count} regions took %t"/*, (int)UpdateRegionsInterval*/))
             {
-                foreach (var data in m_CellsOverlappedByRegions)
+                foreach (var data in CellsOverlappedByRegions)
                     data.Value.overlapping_regions.Clear();
 
                 if (RegionsEnabled)
@@ -418,18 +417,18 @@ namespace Nav
                     // update cells overlapped by avoid areas
                     foreach (Region region in regions_copy)
                     {
-                        var g_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(region.Area));
+                        var grid_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(region.Area));
 
                         // do not ignore disabled cells on purpose so we don't have to iterate separately over
-                        foreach (GridCell g_cell in g_cells)
+                        foreach (GridCell g_cell in grid_cells)
                         {
                             // we only care about overlapping 'original' cells (ignore replacements)
                             var overlapped_cells = g_cell.GetCells(x => x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(region.Area), false);
 
                             foreach (Cell cell in overlapped_cells)
                             {
-                                 if (!m_CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out overlapped_cell_data data))
-                                    m_CellsOverlappedByRegions[cell.GlobalId] = data = new overlapped_cell_data(cell, g_cell);
+                                 if (!CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out overlapped_cell_data data))
+                                    CellsOverlappedByRegions[cell.GlobalId] = data = new overlapped_cell_data(cell, g_cell);
 
                                 data.overlapping_regions.Add(new Region(region));
                             }
@@ -441,7 +440,7 @@ namespace Nav
                 bool nav_data_changed = false;
 
                 // we need to go over every 'original' cell that is overlapped by at least one region and perform its 'rectangulation'
-                foreach (var item in m_CellsOverlappedByRegions)
+                foreach (var item in CellsOverlappedByRegions)
                 {
                     // no longer overlapped
                     if (item.Value.overlapping_regions.Count == 0)
@@ -567,7 +566,7 @@ namespace Nav
 
                 // remove inactive data
                 foreach (int key in no_longer_overlapped_cells_ids)
-                    m_CellsOverlappedByRegions.Remove(key);
+                    CellsOverlappedByRegions.Remove(key);
             }
         }
 
@@ -589,7 +588,7 @@ namespace Nav
                 m_AllCells.Clear();
                 m_GridCells.Clear();
                 m_Regions.Clear();
-                m_CellsOverlappedByRegions.Clear();
+                CellsOverlappedByRegions.Clear();
                 m_CellsPatches.Clear();
                 CellsPatch.LastCellsPatchGlobalId = 0;
                 Cell.LastCellGlobalId = 0;
@@ -626,7 +625,7 @@ namespace Nav
                         string line;
                         GridCell g_cell = null;
                         Vec3 cell_shrink_size = Vec3.ZERO;
-                        HashSet<Region> avoid_areas = new HashSet<Region>();
+                        var avoid_areas = new List<Region>();
 
                         while ((line = stream.ReadLine()) != null)
                         {
@@ -965,7 +964,7 @@ namespace Nav
         public void dbg_GenerateRandomAvoidAreas(int areas_num, float move_cost_mult, float threat = 0)
         {
             Random rng = new Random();
-            HashSet<Region> regions = new HashSet<Region>();
+            List<Region> regions = new List<Region>();
 
             using (new ReadLock(DataLock))
             {
@@ -1092,8 +1091,8 @@ namespace Nav
                 foreach (Region region in m_Regions)
                     region.Serialize(w);
 
-                w.Write(m_CellsOverlappedByRegions.Count);
-                foreach (var entry in m_CellsOverlappedByRegions)
+                w.Write(CellsOverlappedByRegions.Count);
+                foreach (var entry in CellsOverlappedByRegions)
                 {
                     w.Write(entry.Key);
                     entry.Value.Serialize(w);
@@ -1122,7 +1121,7 @@ namespace Nav
                     m_AllCells.Clear();
                     m_GridCells.Clear();
                     m_Regions.Clear();
-                    m_CellsOverlappedByRegions.Clear();
+                    CellsOverlappedByRegions.Clear();
 
                     Cell.CompareByGlobalId comp_by_global_id = new Cell.CompareByGlobalId();
 
@@ -1182,7 +1181,7 @@ namespace Nav
                     for (int i = 0; i < cells_overlapped_by_regions_count; ++i)
                     {
                         int key = r.ReadInt32();
-                        m_CellsOverlappedByRegions.Add(key, new overlapped_cell_data(m_GridCells, m_AllCells, r));
+                        CellsOverlappedByRegions.Add(key, new overlapped_cell_data(m_GridCells, m_AllCells, r));
                     }
                 }
             }
@@ -1192,7 +1191,7 @@ namespace Nav
 
         public virtual void Dispose()
         {
-            m_ShouldStopUpdates = true;
+            ShouldStopUpdates = true;
             UpdatesThread.Join();
         }
 
@@ -1291,7 +1290,7 @@ namespace Nav
         // cell patches are interconnected groups of cells allowing ultra fast connection checks
         private HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
-        private HashSet<Region> m_Regions = new HashSet<Region>(); //@ InputLock
+        private List<Region> m_Regions = new List<Region>(); //@ InputLock
         private List<INavmeshObserver> m_Observers = new List<INavmeshObserver>(); //@ InputLock
     }
 }

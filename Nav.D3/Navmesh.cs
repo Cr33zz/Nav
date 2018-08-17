@@ -15,7 +15,7 @@ namespace Nav.D3
         public Navmesh(MemoryContext memCtx, bool verbose = false)
             : base(verbose)
         {
-            m_MemoryContext = memCtx;
+            MemContext = memCtx;
 
             Log(memCtx != null ? "[Nav.D3] Navmesh created!" : "[Nav.D3] Navmesh not properly created, engine is null!");
         }
@@ -102,7 +102,7 @@ namespace Nav.D3
             }            
         }
 
-        private bool GenerateRegionsEnabled { get; set; } = true;
+        private bool GenerateRegionsEnabled { get; set; } = false;
 
         public static string SceneSnoCacheDir => SCENE_SNO_CACHE_DIR;
         
@@ -174,7 +174,7 @@ namespace Nav.D3
 
             //using (new Profiler("[Nav.D3.Navigation] Scene sno data aquired [%t]", 70))
             {
-                var sno_scenes = m_MemoryContext.DataSegment.SNOGroupStorage[(int)SNOType.Scene].Cast<Enigma.D3.MemoryModel.Assets.SNOGroupStorage<Enigma.D3.Assets.Scene>>().
+                var sno_scenes = MemContext.DataSegment.SNOGroupStorage[(int)SNOType.Scene].Cast<Enigma.D3.MemoryModel.Assets.SNOGroupStorage<Enigma.D3.Assets.Scene>>().
                                                                                                  Dereference().
                                                                                                  Container.Where(o => o != null && o.ID != -1 && o.SNOType == SNOType.Scene && !o.PtrValue.IsInvalid).
                                                                                                  Select(o => o.PtrValue.Cast<Enigma.D3.Assets.Scene>().Dereference()).
@@ -214,7 +214,7 @@ namespace Nav.D3
             {
                 int scenes_available = 0;
 
-                foreach (var scene in m_MemoryContext.DataSegment.ObjectManager.Scenes)
+                foreach (var scene in MemContext.DataSegment.ObjectManager.Scenes)
                 {
                     if (scene == null || scene.ID == -1)
                         continue;
@@ -275,21 +275,30 @@ namespace Nav.D3
             }
         }
 
-        private void GenerateRegions(object source= null, ElapsedEventArgs e= null)
+        private void GenerateRegions(object source = null, ElapsedEventArgs e = null)
         {
             if (GenerateRegionsEnabled && IsPlayerReady())
             {
                 try
                 {
-                    HashSet<Region> dangers = new HashSet<Region>();
-                    IEnumerable<ACD> objects = m_MemoryContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => x.ActorType == ActorType.Monster && x.TeamID == 10 && x.Hitpoints > 0);
-
-                    foreach (ACD obj in objects)
+                    var dangers = new List<Region>();
+                    
+                    foreach (ACD obj in MemContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => x.ActorType == ActorType.Monster && x.TeamID == 10 && x.Hitpoints > 0))
                     {
                         float radius = obj.CollisionRadius * 0.75f;
                         Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
                         AABB area = new AABB(pos - new Vec3(radius, radius, pos.Z - 100), pos + new Vec3(radius, radius, pos.Z + 100));
-                        dangers.Add(new Region(area, 10));
+                        dangers.Add(new Region(area, 5));
+                    }
+
+                    foreach (ACD obj in MemContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => x.ActorType == ActorType.Gizmo && (x.GizmoType == GizmoType.BreakableChest || 
+                                                                                                                                                      x.GizmoType == GizmoType.DestroyableObject || 
+                                                                                                                                                      x.GizmoType == GizmoType.BreakableDoor)))
+                    {
+                        float radius = obj.CollisionRadius * 0.75f;
+                        Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
+                        AABB area = new AABB(pos - new Vec3(radius, radius, pos.Z - 100), pos + new Vec3(radius, radius, pos.Z + 100));
+                        dangers.Add(new Region(area, 5));
                     }
 
                     Regions = dangers;
@@ -304,10 +313,10 @@ namespace Nav.D3
         {
             try
             {
-                if (m_MemoryContext == null)
+                if (MemContext == null)
                     return false;
 
-                var playerData = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
+                var playerData = MemContext.DataSegment.ObjectManager.PlayerDataManager[MemContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
                 return playerData.ActorID != -1 && playerData.ACDID != -1;
             }
             catch (Exception)
@@ -383,7 +392,7 @@ namespace Nav.D3
         private HashSet<SceneData.UID> m_ProcessedSceneId = new HashSet<SceneData.UID>(); // @ProcessedScenesLock
         private List<int> m_AllowedAreasSnoId = new List<int>(); //@D3InputLock
         private List<int> m_AllowedGridCellsId = new List<int>(); //@D3InputLock
-        private MemoryContext m_MemoryContext;
+        private MemoryContext MemContext;
         private bool m_SnoCacheDirty = false;
         private Int64 m_LastFetchNavDataTime = 0;
         protected int m_FetchNavDataInterval = 250;
