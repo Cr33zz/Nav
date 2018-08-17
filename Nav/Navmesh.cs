@@ -774,9 +774,6 @@ namespace Nav
 
         public RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, float max_movement_cost_mult = float.MaxValue)
         {
-            if (from_cell != null && !from_cell.Contains(from))
-                throw new Exception("RayCast: Supplied cell doesn't contain from position!");
-
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
             return RayCast(from, from_cell, to, flags, false, max_movement_cost_mult, ref ignored_cells);
         }
@@ -789,9 +786,6 @@ namespace Nav
 
         public RayCastResult RayCast2D(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, float max_movement_cost_mult = float.MaxValue)
         {
-            if (from_cell != null && !from_cell.Contains2D(from))
-                throw new Exception("RayCast2D: Supplied cell doesn't contain from position!");
-
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
             return RayCast(from, from_cell, to, flags, true, max_movement_cost_mult, ref ignored_cells);
         }

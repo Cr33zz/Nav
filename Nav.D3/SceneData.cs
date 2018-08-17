@@ -67,7 +67,7 @@ namespace Nav.D3
         
         public Vec3 Min => min;
 
-        public Vec3 Max => Max;
+        public Vec3 Max => max;
         
         private int scene_sno_id;
         private int area_sno_id;
