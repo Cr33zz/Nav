@@ -746,6 +746,7 @@ namespace Nav
             UpdateWaypointDestination();
             UpdateGridDestination();
             UpdateBackTrackDestination();
+            //UpdateThreatAvoidance();
 
             int update_path_interval = m_UpdatePathIntervalOverride > 0 ? m_UpdatePathIntervalOverride : UpdatePathInterval;
 
@@ -793,7 +794,7 @@ namespace Nav
 
             List<Vec3> new_path = new List<Vec3>();
 
-            if (InThreat)
+            if (dest_type == DestType.RunAway)
                 FindAvoidancePath(current_pos, MaxAllowedThreat, MovementFlags, ref new_path, Vec3.ZERO, false, PathNodesShiftDist);
             else
                 FindPath(current_pos, destination, MovementFlags, ref new_path, PATH_NODES_MERGE_DISTANCE, true, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
@@ -889,7 +890,7 @@ namespace Nav
                 SetDestination(destination, DestType.BackTrack, DefaultPrecision);
         }
 
-        private void UpdateAvoidance()
+        private void UpdateThreatAvoidance()
         {
             using (new ReadLock(InputLock))
             {
@@ -900,7 +901,15 @@ namespace Nav
                     InThreat = (curr_cell?.Threat ?? 0) > MaxAllowedThreat;
 
                     if (InThreat && !was_in_danger)
+                    {
+                        SetDestination(new Vec3(6,6,6), DestType.RunAway, 10);
                         RequestPathUpdate();
+                    }
+                }
+                else
+                {
+                    InThreat = false;
+                    ClearDestination(DestType.RunAway);
                 }
             }
         }
