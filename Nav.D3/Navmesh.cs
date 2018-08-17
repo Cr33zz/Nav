@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Timers;
 using System.IO;
 using System.Linq;
@@ -8,7 +7,6 @@ using System.Threading;
 using Enigma.D3.MemoryModel;
 using Enigma.D3.Enums;
 using Enigma.D3.MemoryModel.Core;
-using System.Diagnostics;
 
 namespace Nav.D3
 {
@@ -19,10 +17,7 @@ namespace Nav.D3
         {
             m_MemoryContext = memCtx;
 
-            if (memCtx != null)
-                Log("[Nav.D3] Navmesh created!");
-            else
-                Log("[Nav.D3] Navmesh not properly created, engine is null!");
+            Log(memCtx != null ? "[Nav.D3] Navmesh created!" : "[Nav.D3] Navmesh not properly created, engine is null!");
         }
 
         protected override void Init()
@@ -65,7 +60,7 @@ namespace Nav.D3
                     w.Write(grid_cell_id);
 
                 w.Write(m_ProcessedSceneId.Count);
-                foreach (SceneData.uid scene_id in m_ProcessedSceneId)
+                foreach (SceneData.UID scene_id in m_ProcessedSceneId)
                     scene_id.Serialize(w);
 
                 base.OnSerialize(w);
@@ -101,7 +96,7 @@ namespace Nav.D3
                 int scene_id_count = r.ReadInt32();
 
                 for (int i = 0; i < scene_id_count; ++i)
-                    m_ProcessedSceneId.Add(new SceneData.uid(r));
+                    m_ProcessedSceneId.Add(new SceneData.UID(r));
 
                 base.OnDeserialize(r);
             }            
@@ -109,11 +104,8 @@ namespace Nav.D3
 
         private bool GenerateRegionsEnabled { get; set; } = true;
 
-        public static string SceneSnoCacheDir
-        {
-            get { return SCENE_SNO_CACHE_DIR; }
-        }
-
+        public static string SceneSnoCacheDir => SCENE_SNO_CACHE_DIR;
+        
         public List<int> AllowedAreasSnoId
         {
             get { using (new ReadLock(D3InputLock)) return new List<int>(m_AllowedAreasSnoId); }
@@ -247,12 +239,11 @@ namespace Nav.D3
 
                 foreach (SceneData scene_data in new_scene_data)
                 {
-                    SceneSnoNavData sno_nav_data = null;
-
-                    m_SnoCache.TryGetValue(scene_data.SceneSnoId, out sno_nav_data);
+                    m_SnoCache.TryGetValue(scene_data.SceneSnoId, out SceneSnoNavData sno_nav_data);
 
                     if (sno_nav_data == null)
                     {
+                        Log("[Nav.D3] Couldn't find SNO data for scene " + scene_data.SceneSnoId);
                         //wait for navigation data to be fetched before processing this scene
                         continue;
                     }
@@ -260,15 +251,10 @@ namespace Nav.D3
                     GridCell grid_cell = new GridCell(scene_data.Min, scene_data.Max, scene_data.SceneSnoId, scene_data.AreaSnoId);
                     grid_cell.UserData = scene_data.AreaSnoId;
 
-                    if (sno_nav_data != null)
-                    {
-                        int cell_id = 0;
+                    int cell_id = 0;
 
-                        foreach (Cell cell in sno_nav_data.Cells)
-                            grid_cell.Add(new Cell(cell.Min + scene_data.Min, cell.Max + scene_data.Min, cell.Flags, cell_id++));
-                    }
-                    else
-                        Log("[Nav.D3] Couldn't find SNO data for scene " + scene_data.SceneSnoId);
+                    foreach (Cell cell in sno_nav_data.Cells)
+                        grid_cell.Add(new Cell(cell.Min + scene_data.Min, cell.Max + scene_data.Min, cell.Flags, cell_id++));
 
                     if (Add(grid_cell, false))
                         ++grid_cells_added;
@@ -386,15 +372,15 @@ namespace Nav.D3
             m_SnoCacheDirty = false;
         }
 
-        private static string SCENE_SNO_CACHE_DIR = "sno_cache/";
-        private static string SCENE_SNO_CACHE_FILE = "scene_sno_cache";
-        private static bool USE_SNO_CACHE = true;
+        private static readonly string SCENE_SNO_CACHE_DIR = "sno_cache/";
+        private static readonly string SCENE_SNO_CACHE_FILE = "scene_sno_cache";
+        private static readonly bool USE_SNO_CACHE = true;
 
         private ReaderWriterLockSlim ProcessedScenesLock = new ReaderWriterLockSlim();
         private ReaderWriterLockSlim D3InputLock = new ReaderWriterLockSlim();
 
         private Dictionary<int, SceneSnoNavData> m_SnoCache = new Dictionary<int, SceneSnoNavData>();
-        private HashSet<SceneData.uid> m_ProcessedSceneId = new HashSet<SceneData.uid>(); // @ProcessedScenesLock
+        private HashSet<SceneData.UID> m_ProcessedSceneId = new HashSet<SceneData.UID>(); // @ProcessedScenesLock
         private List<int> m_AllowedAreasSnoId = new List<int>(); //@D3InputLock
         private List<int> m_AllowedGridCellsId = new List<int>(); //@D3InputLock
         private MemoryContext m_MemoryContext;

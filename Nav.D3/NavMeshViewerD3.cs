@@ -137,14 +137,10 @@ namespace Nav.D3
             {
                 int location = -1;
 
-                if (m_MemoryContext != null)
-                {
-                    PlayerData localPlayerData = m_MemoryContext.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
-                    if (localPlayerData != null)
-                        location = localPlayerData.LevelAreaSNO;
-                }
-                //else
-                //    m_RenderAxis = false;
+                PlayerData localPlayerData = m_MemoryContext?.DataSegment.ObjectManager.PlayerDataManager[m_MemoryContext.DataSegment.ObjectManager.Player.LocalPlayerIndex];
+
+                if (localPlayerData != null)
+                    location = localPlayerData.LevelAreaSNO;
                 
                 if (m_LastLocation != location)
                 {

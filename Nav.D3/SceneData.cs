@@ -15,15 +15,15 @@ namespace Nav.D3
             max = new Vec3(scene.MeshMax.X, scene.MeshMax.Y, scene.MeshMin.Z); //there is no max z, so consider all grid cells flat
         }
 
-        public class uid : IEquatable<uid>
+        public class UID : IEquatable<UID>
         {
-            public uid(Vec3 min, int sno_id) { this.min = min; this.sno_id = sno_id; }
-            public uid(BinaryReader r) { Deserialize(r); }
+            public UID(Vec3 min, int sno_id) { this.min = min; this.sno_id = sno_id; }
+            public UID(BinaryReader r) { Deserialize(r); }
 
             public Vec3 min;
             public int sno_id;
 
-            public bool Equals(uid s)
+            public bool Equals(UID s)
             {
                 if (s == null)
                     return false;
@@ -36,7 +36,7 @@ namespace Nav.D3
                 if (obj == null)
                     return false;
 
-                uid u = obj as uid;
+                UID u = obj as UID;
 
                 return Equals(u);
             }
@@ -59,31 +59,16 @@ namespace Nav.D3
             }
         }
 
-        public uid SceneUid
-        {
-            get { return new uid(min, scene_sno_id); }
-        }
+        public UID SceneUid => new UID(min, scene_sno_id);
+        
+        public int SceneSnoId => scene_sno_id;
 
-        public int SceneSnoId
-        {
-            get { return scene_sno_id; }
-        }
+        public int AreaSnoId => area_sno_id;
+        
+        public Vec3 Min => min;
 
-        public int AreaSnoId
-        {
-            get { return area_sno_id; }
-        }
-
-        public Vec3 Min
-        {
-            get { return min; }
-        }
-
-        public Vec3 Max
-        {
-            get { return max; }
-        }
-
+        public Vec3 Max => Max;
+        
         private int scene_sno_id;
         private int area_sno_id;
         private Vec3 min;
