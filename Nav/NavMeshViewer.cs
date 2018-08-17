@@ -194,7 +194,7 @@ namespace Nav
                     DestType last_path_dest_type = DestType.None;
                     if (m_Navigator.TryGetPath(ref m_LastPath, ref last_path_dest_type))
                         m_LastPath.Insert(0, m_Navigator.CurrentPos);
-                    RenderHelper.DrawLines(e.Graphics, RenderHelper.PATH_PEN, m_RenderCenter, m_LastPath, 1);
+                    RenderHelper.DrawLines(e.Graphics, RenderHelper.PATH_PEN, m_RenderCenter, m_LastPath, 1, true);
                 }
 
                 if (m_RenderBacktrackPath)
@@ -836,7 +836,7 @@ namespace Nav
             }
 
             if (draw_id)
-                DrawString(e.Graphics, Brushes.Black, trans, cell.Min, cell.Id.ToString(), 2);
+                DrawString(e.Graphics, Brushes.Black, trans, cell.Min, cell.Id < 0 ? cell.GlobalId + "(G)" : cell.Id.ToString(), 2);
         }
 
         public static void Render(Nav.GridCell cell, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id)
@@ -923,7 +923,7 @@ namespace Nav
             g.DrawEllipse(p, pos.X - trans.X - radius, pos.Y - trans.Y - radius, 2 * radius, 2 * radius);
         }
 
-        public static void DrawLines(Graphics g, Pen p, PointF trans, List<Vec3> points, float point_radius)
+        public static void DrawLines(Graphics g, Pen p, PointF trans, List<Vec3> points, float point_radius, bool draw_ids = false)
         {
             if (points.Count < 2)
                 return;
@@ -931,12 +931,18 @@ namespace Nav
             if (point_radius > 0)
                 DrawCircle(g, Pens.Black, trans, points[0], point_radius);
 
+            if (draw_ids)
+                DrawString(g, Brushes.Black, trans, points[0] + new Vec3(point_radius, 0,0), "0", 3);
+
             for (int i = 1; i < points.Count; ++i)
             {
                 DrawLine(g, p, trans, points[i - 1], points[i]);
 
                 if (point_radius > 0)
                     DrawCircle(g, Pens.Black, trans, points[i], point_radius);
+
+                if (draw_ids)
+                    DrawString(g, Brushes.Black, trans, points[i] + new Vec3(point_radius, 0, 0), i.ToString(), 3);
             }
         }
 

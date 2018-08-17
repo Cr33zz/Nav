@@ -153,6 +153,12 @@ namespace Nav
             return result;
         }
 
+        public IEnumerable<Cell> GetCellsAt(Vec3 pos, bool test_2d, float z_tolerance)
+        {
+            return Cells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance))).
+                   Concat(ReplacementCells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance))));
+        }
+
         public IEnumerable<Cell> GetCells(bool allow_replacement_cells = true)
         {
             IEnumerable<Cell> result = Cells;

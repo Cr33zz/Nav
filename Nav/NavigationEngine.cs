@@ -129,14 +129,14 @@ namespace Nav
 
                 List<path_pos> tmp_path = new List<path_pos>();
 
-                bool start_on_nav_mesh = m_Navmesh.GetCellContaining(from, out Cell start, flags, false, as_close_as_possible, -1, false, 2, null);
-                bool end_on_nav_mesh = m_Navmesh.GetCellContaining(to, out Cell end, flags, false, as_close_as_possible, -1, false, 2, null);
+                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, as_close_as_possible, -1, false, 2, null);
+                bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, as_close_as_possible, -1, false, 2, null);
 
                 if (bounce)
                 {
                     Vec3 bounce_dir = start.AABB.GetBounceDir2D(from);
                     Vec3 new_from = from + bounce_dir * 10;
-                    m_Navmesh.GetCellContaining(new_from, out start, flags, false, as_close_as_possible, -1, false, 2, null);
+                    m_Navmesh.GetCellAt(new_from, out start, flags, false, as_close_as_possible, -1, false, 2, null);
 
                     if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, true))
                         return false;
@@ -173,7 +173,7 @@ namespace Nav
                 if (from.IsZero())
                     return false;
 
-                bool start_on_nav_mesh = m_Navmesh.GetCellContaining(from, out Cell start, flags, false, false, -1, false, 2, null);
+                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, false, -1, false, 2, null);
 
                 if (!start_on_nav_mesh)
                     return false;
@@ -206,9 +206,10 @@ namespace Nav
                 path_pos ray_start_data = path[ray_start_index];
                 path_pos intermediate_data = path[ray_start_index + 1];
                 path_pos ray_end_data = path[ray_start_index + 2];
+                float max_move_cost_mult = Math.Min(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult);
 
                 // try remove middle point completely
-                if (m_Navmesh.RayCast2D(ray_start_data.pos, ray_end_data.pos, flags, Math.Max(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult)))
+                if (m_Navmesh.RayCast2D(ray_start_data.pos, ray_start_data.cell, ray_end_data.pos, flags, max_move_cost_mult))
                     path.RemoveAt(ray_start_index + 1);
                 else
                     ++ray_start_index;
@@ -229,30 +230,38 @@ namespace Nav
                     Vec3 dir = ray_end_data.pos - intermediate_data.pos;
                     float length = dir.Normalize();
                     int steps = (int)(length / PathSmoothingPrecision);
-                    float max_movement_cost_mult = Math.Max(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult);
+                    float max_movement_cost_mult = Math.Min(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult);
 
+                    RayCastResult last_unobstucted_result = default(RayCastResult);
                     for (int i = 1; i <= steps; ++i) // checking 0 is unnecessary since this is the current path
                     {
-                        var result = m_Navmesh.RayCast2D(ray_start_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, max_movement_cost_mult);
+                        var result = m_Navmesh.RayCast2D(ray_start_data.pos, ray_start_data.cell, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, max_movement_cost_mult);
                         if (result)
-                            intermediate_data = path[ray_start_index + 1] = new path_pos(intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, result.EndCell);
+                            last_unobstucted_result = result;
                         else
                             break;
                     }
+
+                    if (last_unobstucted_result)
+                        intermediate_data = path[ray_start_index + 1] = new path_pos(last_unobstucted_result.End, last_unobstucted_result.EndCell);
 
                     dir = ray_start_data.pos - intermediate_data.pos;
                     length = dir.Normalize();
                     steps = (int)(length / PathSmoothingPrecision);
-                    max_movement_cost_mult = Math.Max(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult);
+                    max_movement_cost_mult = Math.Min(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult);
 
+                    last_unobstucted_result = default(RayCastResult);
                     for (int i = 1; i <= steps; ++i) // checking 0 is unnecessary since this is the current path
                     {
-                        var result = m_Navmesh.RayCast2D(ray_end_data.pos, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, max_movement_cost_mult);
+                        var result = m_Navmesh.RayCast2D(ray_end_data.pos, ray_end_data.cell, intermediate_data.pos + dir * (float)i * PathSmoothingPrecision, flags, max_movement_cost_mult);
                         if (result)
-                            intermediate_data = path[ray_start_index + 1] = new path_pos(intermediate_data.pos + dir * (float)(i - 1) * PathSmoothingPrecision, result.EndCell);
+                            last_unobstucted_result = result;                        
                         else
                             break;
                     }
+
+                    if (last_unobstucted_result)
+                        intermediate_data = path[ray_start_index + 1] = new path_pos(last_unobstucted_result.End, last_unobstucted_result.EndCell);
 
                     ++ray_start_index;
                 }

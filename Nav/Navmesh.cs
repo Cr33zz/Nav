@@ -70,6 +70,18 @@ namespace Nav
         }
     }
 
+    public struct RayCastResult
+    {
+        public bool Successful;
+        public Vec3 End;
+        public Cell EndCell;
+
+        public static implicit operator bool(RayCastResult value)
+        {
+            return value.Successful;
+        }
+    }
+
     public class Navmesh : IDisposable
     {
         public Navmesh(bool verbose = false)
@@ -92,7 +104,7 @@ namespace Nav
 
         protected virtual void Init()
         {
-            RegionsMoveCostMode = RegionsMode.Mult;
+            RegionsMoveCostMode = RegionsMode.Add;
             RegionsEnabled = true;
         }
 
@@ -172,58 +184,56 @@ namespace Nav
         private static ReaderWriterLockSlim CellsCacheLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         internal static List<Cell> m_CellsCache = new List<Cell>();
 
-        // Returns true when position is on navmesh. Aquires DataLock (read)
-        internal bool GetCellContaining(Vec3 p, out Cell c, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool nearest = false, float nearest_tolerance = -1, bool test_2d = false, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
+        // Returns true when position is on navmesh. Acquires DataLock (read)
+        internal bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool nearest = false, float nearest_tolerance = -1, bool test_2d = false, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
         {
             using (new ReadLock(DataLock))
             {
-                c = null;
+                result_cell = null;
 
                 if (p.IsZero())
                     return false;
 
                 // check cache first
-                using (new ReadLock(CellsCacheLock))
-                {
-                    foreach (Cell cell in m_CellsCache.FindAll(x => x.HasFlags(flags)))
-                    {
-                        if ((allow_disabled || !cell.Disabled) && (exclude_cells == null || !exclude_cells.Contains(cell)) && (test_2d ? cell.Contains2D(p) : cell.Contains(p, z_tolerance)))
-                        {
-                            c = cell;
-                            return true;
-                        }
-                    }
-                }
+                //using (new ReadLock(CellsCacheLock))
+                //{
+                //    foreach (Cell cell in m_CellsCache.FindAll(x => x.HasFlags(flags)))
+                //    {
+                //        if ((allow_disabled || !cell.Disabled) && (exclude_cells == null || !exclude_cells.Contains(cell)) && (test_2d ? cell.Contains2D(p) : cell.Contains(p, z_tolerance)))
+                //        {
+                //            c = cell;
+                //            return true;
+                //        }
+                //    }
+                //}
 
                 float min_dist = float.MaxValue;
 
                 foreach (GridCell grid_cell in m_GridCells)
                 {
-                    var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags));
-
                     if (grid_cell.Contains2D(p))
                     {
-                        foreach (Cell cell in cells)
+                        var cells = grid_cell.GetCellsAt(p, test_2d, z_tolerance);
+                        foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (exclude_cells == null || !exclude_cells.Contains(x) && x.HasFlags(flags))))
                         {
-                            if ((exclude_cells == null || !exclude_cells.Contains(cell)) && (test_2d ? cell.Contains2D(p) : cell.Contains(p, z_tolerance)))
-                            {
-                                c = cell;
+                            result_cell = cell;
 
-                                using (new WriteLock(CellsCacheLock))
-                                {
-                                    m_CellsCache.Add(cell);
+                            //using (new WriteLock(CellsCacheLock))
+                            //{
+                            //    m_CellsCache.Add(cell);
 
-                                    if (m_CellsCache.Count > MAX_CELLS_CACHE_SIZE)
-                                        m_CellsCache.RemoveAt(0);
-                                }
+                            //    if (m_CellsCache.Count > MAX_CELLS_CACHE_SIZE)
+                            //        m_CellsCache.RemoveAt(0);
+                            //}
 
-                                return true;
-                            }
+                            return true;
                         }
                     }
 
                     if (nearest)
                     {
+                        var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags));
+
                         foreach (Cell cell in cells)
                         {
                             if (exclude_cells != null && exclude_cells.Contains(cell))
@@ -234,7 +244,7 @@ namespace Nav
                             if ((nearest_tolerance < 0 || dist <= nearest_tolerance) && dist < min_dist)
                             {
                                 min_dist = dist;
-                                c = cell;
+                                result_cell = cell;
                             }
                         }
                     }
@@ -296,6 +306,7 @@ namespace Nav
 
         public enum RegionsMode
         {
+            Add,
             Mult,
             Max,
         }
@@ -397,7 +408,7 @@ namespace Nav
             HashSet<Region> regions_copy = Regions;
 
             using (new WriteLock(DataLock))
-            //using (new Profiler($"Updating {m_Regions.Count} regions took %t"))
+            using (new Profiler($"Updating {m_Regions.Count} regions took %t", (int)UpdateRegionsInterval))
             {
                 foreach (var data in m_CellsOverlappedByRegions)
                     data.Value.overlapping_regions.Clear();
@@ -467,6 +478,7 @@ namespace Nav
                         // generate new replacement cells
                         if (cell_data.overlapping_regions.Count > 0)
                         {
+                            // full cell is first to be dissected and replaced (it will be removed as it is overlapped by region for sure)
                             cell_data.replacement_cells.Add(cell_data.replaced_cell);
 
                             // apply every region to all current replacement cells
@@ -494,7 +506,11 @@ namespace Nav
                                             // first cell is always the one overlapped by region (because of how AABB.Extract2D is implemented)!
                                             if (k == 0)
                                             {
-                                                if (RegionsMoveCostMode == RegionsMode.Mult)
+                                                if (RegionsMoveCostMode == RegionsMode.Add)
+                                                {
+                                                    movement_cost_mult += region.MoveCostMult;
+                                                }
+                                                else if (RegionsMoveCostMode == RegionsMode.Mult)
                                                 {
                                                     movement_cost_mult *= region.MoveCostMult;
                                                 }
@@ -756,22 +772,28 @@ namespace Nav
             return RayCast(from, null, to, flags, false, max_movement_cost_mult, ref ignored_cells);
         }
 
+        public RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, float max_movement_cost_mult = float.MaxValue)
+        {
+            if (from_cell != null && !from_cell.Contains(from))
+                throw new Exception("RayCast: Supplied cell doesn't contain from position!");
+
+            HashSet<Cell> ignored_cells = new HashSet<Cell>();
+            return RayCast(from, from_cell, to, flags, false, max_movement_cost_mult, ref ignored_cells);
+        }
+
         public RayCastResult RayCast2D(Vec3 from, Vec3 to, MovementFlag flags, float max_movement_cost_mult = float.MaxValue)
         {
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
             return RayCast(from, null, to, flags, true, max_movement_cost_mult, ref ignored_cells);
         }
 
-        public struct RayCastResult
+        public RayCastResult RayCast2D(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, float max_movement_cost_mult = float.MaxValue)
         {
-            public bool Successful;
-            public Vec3 End;
-            public Cell EndCell;
+            if (from_cell != null && !from_cell.Contains2D(from))
+                throw new Exception("RayCast2D: Supplied cell doesn't contain from position!");
 
-            public static implicit operator bool(RayCastResult value)
-            {
-                return value.Successful;
-            }
+            HashSet<Cell> ignored_cells = new HashSet<Cell>();
+            return RayCast(from, from_cell, to, flags, true, max_movement_cost_mult, ref ignored_cells);
         }
 
         // Aquires DataLock (read); returns true when there is no obstacle
@@ -779,7 +801,7 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                if (from_cell == null && !GetCellContaining(from, out from_cell, flags, false, false, -1, test_2d, 2, ignored_cells))
+                if (from_cell == null && !GetCellAt(from, out from_cell, flags, false, false, -1, test_2d, 2, ignored_cells))
                 {
                     return new RayCastResult { Successful = false, End = from, EndCell = null };
                 }
@@ -869,13 +891,13 @@ namespace Nav
                 Cell pos2_cell = null;
 
                 // do not ignore disabled as cells patches to not include replacement cells!
-                GetCellContaining(pos1, out pos1_cell, flags, true, true, nearest_tolerance, false, 2);
+                GetCellAt(pos1, out pos1_cell, flags, true, true, nearest_tolerance, false, 2);
 
                 if (pos1_cell == null)
                     return false;
 
                 // do not ignore disabled as cells patches to not include replacement cells!
-                GetCellContaining(pos2, out pos2_cell, flags, true, true, nearest_tolerance, false, 2);
+                GetCellAt(pos2, out pos2_cell, flags, true, true, nearest_tolerance, false, 2);
 
                 if (pos2_cell == null)
                     return false;
