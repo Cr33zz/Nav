@@ -227,7 +227,7 @@ namespace NavMeshViewer
                     }
                 }
 
-                if (!curr.IsZero())
+                if (!curr.IsZero() && dest.IsZero())
                 {
                     if (m_RenderAvoidancePath)
                     {

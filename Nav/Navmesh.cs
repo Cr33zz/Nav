@@ -751,16 +751,16 @@ namespace Nav
             }
         }
 
-        public RayCastResult RayCast(Vec3 from, Vec3 to, MovementFlag flags, bool ignore_movement_cost = true)
+        public RayCastResult RayCast(Vec3 from, Vec3 to, MovementFlag flags, float max_movement_cost_mult = float.MaxValue)
         {
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
-            return RayCast(from, null, to, flags, false, ignore_movement_cost, ref ignored_cells);
+            return RayCast(from, null, to, flags, false, max_movement_cost_mult, ref ignored_cells);
         }
 
-        public RayCastResult RayCast2D(Vec3 from, Vec3 to, MovementFlag flags, bool ignore_movement_cost = true)
+        public RayCastResult RayCast2D(Vec3 from, Vec3 to, MovementFlag flags, float max_movement_cost_mult = float.MaxValue)
         {
             HashSet<Cell> ignored_cells = new HashSet<Cell>();
-            return RayCast(from, null, to, flags, true, ignore_movement_cost, ref ignored_cells);
+            return RayCast(from, null, to, flags, true, max_movement_cost_mult, ref ignored_cells);
         }
 
         public struct RayCastResult
@@ -776,7 +776,7 @@ namespace Nav
         }
 
         // Aquires DataLock (read); returns true when there is no obstacle
-        private RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, bool ignore_movement_cost, ref HashSet<Cell> ignored_cells)
+        private RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, float max_movement_cost_mult, ref HashSet<Cell> ignored_cells)
         {
             using (new ReadLock(DataLock))
             {
@@ -807,7 +807,7 @@ namespace Nav
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
-                    if (neighbour.cell.Disabled || (neighbour.connection_flags & flags) != flags || (!ignore_movement_cost && neighbour.cell.MovementCostMult > from_cell.MovementCostMult))
+                    if (neighbour.cell.Disabled || (neighbour.connection_flags & flags) != flags || (neighbour.cell.MovementCostMult > max_movement_cost_mult))
                         continue;
 
                     Cell neighbour_cell = neighbour.cell;
@@ -837,7 +837,7 @@ namespace Nav
 
                             if (accepted)
                             {
-                                result = RayCast(intersection, neighbour_cell, to, flags, test_2d, ignore_movement_cost, ref ignored_cells);
+                                result = RayCast(intersection, neighbour_cell, to, flags, test_2d, max_movement_cost_mult, ref ignored_cells);
 
                                 if (result.Successful)
                                     return result;
