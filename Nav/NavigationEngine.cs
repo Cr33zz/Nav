@@ -84,6 +84,8 @@ namespace Nav
 
         public bool EnableAntiStuck { get; set; } = false;
 
+        public bool AntiStuckActive => m_AntiStuckPathingLevel > 0;
+
         // when avoidance is enabled and current position is on a cell with movement cost
         public bool EnableAvoidance { get; set; } = false;
 
@@ -127,11 +129,8 @@ namespace Nav
 
                 List<path_pos> tmp_path = new List<path_pos>();
 
-                Cell start = null;
-                Cell end = null;
-
-                bool start_on_nav_mesh = m_Navmesh.GetCellContaining(from, out start, flags, false, as_close_as_possible, -1, false, 2, null);
-                bool end_on_nav_mesh = m_Navmesh.GetCellContaining(to, out end, flags, false, as_close_as_possible, -1, false, 2, null);
+                bool start_on_nav_mesh = m_Navmesh.GetCellContaining(from, out Cell start, flags, false, as_close_as_possible, -1, false, 2, null);
+                bool end_on_nav_mesh = m_Navmesh.GetCellContaining(to, out Cell end, flags, false, as_close_as_possible, -1, false, 2, null);
 
                 if (bounce)
                 {
@@ -174,9 +173,7 @@ namespace Nav
                 if (from.IsZero())
                     return false;
 
-                Cell start = null;
-                
-                bool start_on_nav_mesh = m_Navmesh.GetCellContaining(from, out start, flags, false, false, -1, false, 2, null);
+                bool start_on_nav_mesh = m_Navmesh.GetCellContaining(from, out Cell start, flags, false, false, -1, false, 2, null);
 
                 if (!start_on_nav_mesh)
                     return false;
@@ -666,15 +663,14 @@ namespace Nav
             ResetAntiStuckPathing(Vec3.ZERO);
         }
 
-        // May enter InputLock (read -> write). Do not use ZERO pos to clear destination, use ClearDestination instead!
+        // May enter InputLock (read -> write).
         internal void SetDestination(Vec3 pos, DestType type, float precision)
         {
-            // refactor not longer clearing destination automatically since ZERO is valid position to go to
-            //if (pos == null || pos.IsEmpty)
-            //{
-            //    ClearDestination(type);
-            //    return;
-            //}
+            if (pos.IsZero())
+            {
+                ClearDestination(type);
+                return;
+            }
 
             using (new ReadLock(InputLock, true))
             {

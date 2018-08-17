@@ -16,7 +16,7 @@ namespace NavMeshViewer
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new NavMeshViewerD3(args));
+            Application.Run(new Nav.D3.NavMeshViewerD3(args));
         }
     }
 }

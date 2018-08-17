@@ -417,8 +417,7 @@ namespace Nav
 
                             foreach (Cell cell in overlapped_cells)
                             {
-                                overlapped_cell_data data = null;
-                                if (!m_CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out data))
+                                 if (!m_CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out overlapped_cell_data data))
                                     m_CellsOverlappedByRegions[cell.GlobalId] = data = new overlapped_cell_data(cell, g_cell);
 
                                 data.overlapping_regions.Add(new Region(region));

@@ -319,8 +319,7 @@ namespace Nav
         ///////////////////////////////////////////////////////////////////////////////////////////////////
         public static Vec3 ProjectPointOnLine(Vec3 origin, Vec3 dir, Vec3 point)
         {
-            Vec3 result;
-            ProjectPointOnLine(origin, dir, point, out result);
+            ProjectPointOnLine(origin, dir, point, out Vec3 result);
             return result;
         }
 
