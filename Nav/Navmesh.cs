@@ -407,7 +407,7 @@ namespace Nav
             var regions_copy = Regions;
 
             using (new WriteLock(DataLock))
-            using (new Profiler($"Updating {regions_copy.Count} regions took %t"/*, (int)UpdateRegionsInterval*/))
+            using (new Profiler($"Updating {regions_copy.Count} regions took %t", 50))
             {
                 foreach (var data in CellsOverlappedByRegions)
                     data.Value.overlapping_regions.Clear();

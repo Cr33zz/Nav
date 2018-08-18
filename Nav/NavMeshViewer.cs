@@ -135,20 +135,15 @@ namespace Nav
 
                         if (m_RenderCells)
                         {
-                            float max_move_cost_mult = 1;
-
                             foreach (Nav.GridCell grid_cell in grid_cells)
                             {
                                 foreach (Nav.Cell cell in grid_cell.GetCells())
                                 {
-                                    RenderHelper.Render(cell, m_RenderCenter, e, m_RenderConnections, m_RenderIds, m_LastMaxMoveCostMult);
-                                    max_move_cost_mult = Math.Max(max_move_cost_mult, cell.MovementCostMult);
+                                    RenderHelper.Render(cell, m_RenderCenter, e, m_RenderConnections, m_RenderIds, m_RenderRegionsMode == RegionsRenderMode.MoveCostMult, m_RenderRegionsMode == RegionsRenderMode.Threat);
                                 }
 
                                 cells_count += grid_cell.GetCellsCount();
                             }
-
-                            m_LastMaxMoveCostMult = max_move_cost_mult;
                         }
                     }
                 }
@@ -169,7 +164,7 @@ namespace Nav
                     }
                 }
 
-                if (m_RenderRegions)
+                if (m_RenderRegionsMode == RegionsRenderMode.Outline)
                 {
                     var regions = m_Navmesh.Regions;
 
@@ -291,8 +286,7 @@ namespace Nav
 
         protected virtual void OnRefresh(int interval)
         {
-            if (m_Bot != null)
-                m_Bot.Update(interval * 0.001f);
+            m_Bot?.Update(interval * 0.001f);
         }
 
         protected virtual void OnKey(KeyEventArgs e)
@@ -387,8 +381,7 @@ namespace Nav
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.D7)
                 {
-                    //render_explore_dist = !render_explore_dist;
-                    m_RenderRegions = !m_RenderRegions;
+                    m_RenderRegionsMode = (RegionsRenderMode)(((int)m_RenderRegionsMode + 1) % (int)RegionsRenderMode.Count);
                     e.Handled = true;
                 }
                 else if (e.KeyCode == System.Windows.Forms.Keys.D8)
@@ -534,7 +527,7 @@ namespace Nav
             legend.Add(new LegendEntry("4: Toggle render connections", true, m_RenderConnections));
             legend.Add(new LegendEntry("5: Toggle render IDs", true, m_RenderIds));
             legend.Add(new LegendEntry("6: Toggle render axis", true, m_RenderAxis));
-            legend.Add(new LegendEntry("7: Toggle render regions", true, m_RenderRegions));
+            legend.Add(new LegendEntry($"7: Toggle render regions mode ({m_RenderRegionsMode})", true, m_RenderRegionsMode != RegionsRenderMode.None));
             legend.Add(new LegendEntry("8: Toggle render original path", true, m_RenderOriginalPath));
             legend.Add(new LegendEntry("9: Toggle render ray cast", true, m_RenderRayCast));
             legend.Add(new LegendEntry("0: Toggle render back track path", true, m_RenderBacktrackPath));
@@ -756,6 +749,15 @@ namespace Nav
             ResumeLayout(false);
         }
 
+        private enum RegionsRenderMode
+        {
+            None,
+            MoveCostMult,
+            Threat,
+            Outline,
+            Count
+        }
+
         protected Params m_Params;
         protected Nav.Navmesh m_Navmesh = null;
         protected Nav.NavigationEngine m_Navigator = null;
@@ -772,7 +774,7 @@ namespace Nav
         private bool m_RenderPositionsHistory = false;
         private bool m_RenderRayCast = false;
         private bool m_RenderExploreCells = false;
-        private bool m_RenderRegions = false;
+        private RegionsRenderMode m_RenderRegionsMode = RegionsRenderMode.MoveCostMult;
         private bool m_RenderExploreArea = false;
         private bool m_RenderCells = true;
         private bool m_RenderLegend = true;
@@ -787,7 +789,6 @@ namespace Nav
         private List<Vec3> m_LastBacktrackPath = new List<Vec3>();
         private List<Vec3> m_LastPositionsHistory = new List<Vec3>();
         private List<Vec3> m_LastExplorePath = new List<Vec3>();
-        private float m_LastMaxMoveCostMult = 1;
 
         private readonly string DEBUG_CONFIG_FILE = "./debug.ini";
         private readonly string ICON_FILE = "navmeshviewer_icon.ico";
@@ -807,7 +808,7 @@ namespace Nav
             return new_min + (new_max - new_min) * value_progress;
         }
 
-        public static void Render(Nav.Cell cell, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id, float max_move_cost_mult)
+        public static void Render(Nav.Cell cell, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id, bool render_move_cost_mult, bool render_threat)
         {
             if (cell.Disabled)
                 return;
@@ -815,17 +816,21 @@ namespace Nav
             DrawRectangle(e.Graphics, cell.Replacement ? REPLACEMENT_CELL_BORDER_PEN : CELL_BORDER_PEN, trans, cell.Min, cell.Max);
 
             Color cell_color = Color.White;
-            int move_cost_level = 255;
 
-            if (cell.MovementCostMult > 1)
+            if (cell.MovementCostMult < 1)
             {
-                move_cost_level = 255 - (int)Math.Min(GetProportional(cell.MovementCostMult, 1, 100, 20, 255), 255);
-                cell_color = Color.FromArgb(255, 255, move_cost_level, move_cost_level);
-            }
-            else if (cell.MovementCostMult < 1)
-            {
-                move_cost_level = 255 - (int)Math.Min(GetProportional(cell.MovementCostMult, 0, 1, 20, 255), 255);
+                int move_cost_level = 255 - (int)Math.Min(GetProportional(cell.MovementCostMult, 0, 1, 20, 255), 255);
                 cell_color = Color.FromArgb(255, move_cost_level, 255, move_cost_level);
+            }
+            else if (cell.MovementCostMult > 1 && render_move_cost_mult)
+            {
+                int move_cost_level = 255 - (int) Math.Min(GetProportional(cell.MovementCostMult, 1, 100, 20, 255), 255);
+                cell_color = Color.FromArgb(255, move_cost_level, move_cost_level, move_cost_level);
+            }
+            else if (cell.Threat > 0 && render_threat)
+            {
+                int threat_level = 255 - (int)Math.Min(GetProportional(cell.MovementCostMult, 1, 100, 20, 255), 255);
+                cell_color = Color.FromArgb(255, 255, threat_level, threat_level);
             }
 
             FillRectangle(e.Graphics, cell.Flags == MovementFlag.Fly ? Brushes.Gray : new SolidBrush(cell_color), trans, cell.Min, cell.Max);

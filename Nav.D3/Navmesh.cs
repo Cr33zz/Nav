@@ -102,8 +102,6 @@ namespace Nav.D3
             }            
         }
 
-        private bool GenerateRegionsEnabled { get; set; } = false;
-
         public static string SceneSnoCacheDir => SCENE_SNO_CACHE_DIR;
         
         public List<int> AllowedAreasSnoId
@@ -275,6 +273,8 @@ namespace Nav.D3
             }
         }
 
+        private bool GenerateRegionsEnabled = false;
+
         private void GenerateRegions(object source = null, ElapsedEventArgs e = null)
         {
             if (GenerateRegionsEnabled && IsPlayerReady())
@@ -288,7 +288,7 @@ namespace Nav.D3
                         float radius = obj.CollisionRadius * 0.75f;
                         Vec3 pos = new Vec3(obj.Position.X, obj.Position.Y, obj.Position.Z);
                         AABB area = new AABB(pos - new Vec3(radius, radius, pos.Z - 100), pos + new Vec3(radius, radius, pos.Z + 100));
-                        dangers.Add(new Region(area, 5));
+                        dangers.Add(new Region(area, 5, 5));
                     }
 
                     foreach (ACD obj in MemContext.DataSegment.ObjectManager.ACDManager.ActorCommonData.Where(x => x.ActorType == ActorType.Gizmo && (x.GizmoType == GizmoType.BreakableChest || 

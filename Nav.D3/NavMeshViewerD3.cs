@@ -24,8 +24,23 @@ namespace Nav.D3
         {
             if (memory_context != null)
                 m_MemoryContext = memory_context;
-            
-            m_AutoClearOnLocationChange = (navmesh == null);
+        }
+
+        protected override void CreateNavigation()
+        {
+            m_MemoryContext = m_MemoryContext ?? CreateMemoryContext();
+
+            if (m_Navmesh == null)
+            {
+                m_Navmesh = Nav.D3.Navmesh.Create(m_MemoryContext, true);
+                m_Navigator = new Nav.NavigationEngine(m_Navmesh);
+                m_Navigator.UpdatePathInterval = 100;
+                m_Navigator.EnableThreatAvoidance = true;
+                m_Navmesh.RegionsMoveCostMode = Nav.Navmesh.RegionsMode.Mult;
+                m_Explorer = new Nav.ExploreEngine.Nearest(m_Navmesh, m_Navigator);
+                m_Explorer.Enabled = false;
+                m_AutoClearOnLocationChange = true;
+            }
         }
 
         private MemoryContext CreateMemoryContext()
@@ -69,20 +84,6 @@ namespace Nav.D3
                     Trace.WriteLine($"Could not update symbol table, optimized for patch {SymbolPatcher64.VerifiedBuild}, running {ctx.MainModuleVersion.Revision}: " + exception.Message);
                     Thread.Sleep(5000);
                 }
-            }
-        }
-
-        protected override void CreateNavigation()
-        {
-            m_MemoryContext = m_MemoryContext ?? CreateMemoryContext();
-
-            if (m_Navmesh == null)
-            {
-                m_Navmesh = Nav.D3.Navmesh.Create(m_MemoryContext, true);
-                m_Navigator = new Nav.NavigationEngine(m_Navmesh);
-                m_Navmesh.RegionsMoveCostMode = Nav.Navmesh.RegionsMode.Mult;
-                m_Explorer = new Nav.ExploreEngine.Nearest(m_Navmesh, m_Navigator);
-                m_Explorer.Enabled = false;
             }
         }
 
