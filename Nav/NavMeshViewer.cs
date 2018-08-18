@@ -15,10 +15,14 @@ namespace Nav
     // Accepted parameters:
     // -load <text-data-file> example: -load nav_new_tristram.txt
     // -deserialize <name-of-serialized-state> example: -deserialize nav_save_20151012
+    // -start X Y Z example: -start 5 23 3.5
+    // -end X Y Z example: -end 5 23 3.5
     public partial class NavMeshViewer : Form
     {
         public NavMeshViewer(string[] args, Navmesh navmesh = null, NavigationEngine navigator = null, ExplorationEngine explorer = null)
         {
+            Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+
             InitializeComponents();
 
             BackColor = Color.LightGray;
@@ -36,6 +40,18 @@ namespace Nav
             {
                 m_Params.GetParam("load", out string file);
                 LoadData(file);
+            }
+
+            if (m_Params.HasParam("start"))
+            {
+                m_Params.GetParam("start", out string str);
+                m_Navigator.CurrentPos = new Vec3(str);
+            }
+
+            if (m_Params.HasParam("end"))
+            {
+                m_Params.GetParam("end", out string str);
+                m_Navigator.Destination = new Vec3(str);
             }
 
             if (m_Params.HasParam("load_waypoints"))
@@ -61,10 +77,9 @@ namespace Nav
 
         protected virtual void CreateNavigation()
         {
-            m_Navmesh = new Nav.Navmesh(false);
-            m_Navigator = new Nav.NavigationEngine(m_Navmesh);
-            m_Navmesh.RegionsMoveCostMode = Nav.Navmesh.RegionsMode.Mult;
-            m_Explorer = new Nav.ExploreEngine.Nearest(m_Navmesh, m_Navigator);
+            m_Navmesh = new Navmesh();
+            m_Navigator = new NavigationEngine(m_Navmesh);
+            m_Explorer = new ExploreEngine.Nearest(m_Navmesh, m_Navigator);
             m_Explorer.Enabled = false;
         }
 
@@ -229,6 +244,13 @@ namespace Nav
                         var result = m_Navmesh.RayCast2D(curr, dest, MovementFlag.Walk);
                         RenderHelper.DrawLine(e.Graphics, result ? Pens.Green : Pens.Red, m_RenderCenter, curr, result.End);
                     }
+
+                    if (m_RenderConnected)
+                    {
+                        bool connected = m_Navmesh.AreConnected(curr, dest, MovementFlag.Walk, 40);
+                        RenderHelper.DrawLine(e.Graphics, connected ? Pens.Green : Pens.Red, m_RenderCenter, curr, dest);
+                        RenderHelper.DrawString(e.Graphics, connected ? Brushes.Green : Brushes.Red, m_RenderCenter, dest, connected ? "connected" : "not connected", 4);
+                    }
                 }
 
                 if (!curr.IsZero() && dest.IsZero())
@@ -293,22 +315,27 @@ namespace Nav
         {
             if (e.Control)
             {
-                if (e.KeyCode == System.Windows.Forms.Keys.D1)
+                if (e.KeyCode == Keys.D0)
+                {
+                    m_RenderAxis = !m_RenderAxis;
+                    e.Handled = true;
+                }
+                if (e.KeyCode == Keys.D1)
                 {
                     m_RenderPath = !m_RenderPath;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D2)
+                else if (e.KeyCode == Keys.D2)
                 {
                     m_Navmesh.RegionsEnabled = !m_Navmesh.RegionsEnabled;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D3)
+                else if (e.KeyCode == Keys.D3)
                 {
                     m_RenderAvoidancePath = !m_RenderAvoidancePath;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D4)
+                else if (e.KeyCode == Keys.D4)
                 {
                     m_RenderPositionsHistory = !m_RenderPositionsHistory;
                     e.Handled = true;
@@ -316,7 +343,7 @@ namespace Nav
             }
             else
             {
-                if (e.KeyCode == System.Windows.Forms.Keys.S)
+                if (e.KeyCode == Keys.S)
                 {
                     Vec3 result = default(Vec3);
                     if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
@@ -330,7 +357,7 @@ namespace Nav
                     m_Navigator.CurrentPos = result;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.E)
+                else if (e.KeyCode == Keys.E)
                 {
                     Vec3 result = default(Vec3);
                     if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
@@ -344,77 +371,77 @@ namespace Nav
                     m_Navigator.Destination = result;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.L)
+                else if (e.KeyCode == Keys.L)
                 {
                     m_RenderLegend = !m_RenderLegend;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D1)
+                else if (e.KeyCode == Keys.D1)
                 {
                     m_RenderGrids = !m_RenderGrids;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D2)
+                else if (e.KeyCode == Keys.D2)
                 {
                     m_RenderCells = !m_RenderCells;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D3)
+                else if (e.KeyCode == Keys.D3)
                 {
                     m_RenderExploreCells = !m_RenderExploreCells;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D4)
+                else if (e.KeyCode == Keys.D4)
                 {
                     m_RenderConnections = !m_RenderConnections;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D5)
+                else if (e.KeyCode == Keys.D5)
                 {
                     m_RenderIds = !m_RenderIds;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D6)
+                else if (e.KeyCode == Keys.D6)
                 {
-                    m_RenderAxis = !m_RenderAxis;
+                    m_RenderConnected = !m_RenderConnected;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D7)
+                else if (e.KeyCode == Keys.D7)
                 {
                     m_RenderRegionsMode = (RegionsRenderMode)(((int)m_RenderRegionsMode + 1) % (int)RegionsRenderMode.Count);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D8)
+                else if (e.KeyCode == Keys.D8)
                 {
                     m_RenderOriginalPath = !m_RenderOriginalPath;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D9)
+                else if (e.KeyCode == Keys.D9)
                 {
                     m_RenderRayCast = !m_RenderRayCast;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D0)
+                else if (e.KeyCode == Keys.D0)
                 {
                     m_RenderBacktrackPath = !m_RenderBacktrackPath;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F1)
+                else if (e.KeyCode == Keys.F1)
                 {
                     LoadWaypoints(m_LastWaypointsFile);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F2)
+                else if (e.KeyCode == Keys.F2)
                 {
                     LoadData(m_LastDataFile);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F3)
+                else if (e.KeyCode == Keys.F3)
                 {
                     m_Navmesh.Dump("nav_dump.txt");
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F4)
+                else if (e.KeyCode == Keys.F4)
                 {
                     m_Navmesh.Clear();
                     m_Navigator.Clear();
@@ -422,14 +449,14 @@ namespace Nav
                     LoadDebugConfig();
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F5)
+                else if (e.KeyCode == Keys.F5)
                 {
                     m_Navmesh.Serialize("nav_save");
                     m_Navigator.Serialize("nav_save");
                     m_Explorer.Serialize("nav_save");
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F6)
+                else if (e.KeyCode == Keys.F6)
                 {
                     m_Navmesh.Deserialize("nav_save");
                     m_Navigator.Deserialize("nav_save");
@@ -442,12 +469,12 @@ namespace Nav
                     m_RenderCenter.Y = initial_pos.Y;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F7)
+                else if (e.KeyCode == Keys.F7)
                 {
                     LoadDebugConfig();
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.F10)
+                else if (e.KeyCode == Keys.F10)
                 {
                     //Thread t = new Thread(dbg_ContiniousSerialize);
                     //t.Start();
@@ -462,7 +489,7 @@ namespace Nav
 
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.B)
+                else if (e.KeyCode == Keys.B)
                 {
                     Vec3 result = default(Vec3);
                     m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
@@ -475,35 +502,35 @@ namespace Nav
                     m_Bot = new TestBot(m_Navmesh, m_Navigator, m_Explorer, result, m_Navigator.Destination, true, false);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.C)
+                else if (e.KeyCode == Keys.C)
                 {
                     m_CenterOnBot = !m_CenterOnBot;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.D)
+                else if (e.KeyCode == Keys.D)
                 {
                     if (m_Bot != null)
                         m_Bot.Destination = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.H)
+                else if (e.KeyCode == Keys.H)
                 {
                     if (m_Explorer != null)
                         m_Explorer.HintPos = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.X)
+                else if (e.KeyCode == Keys.X)
                 {
                     m_Navigator.CurrentPos = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.Space)
+                else if (e.KeyCode == Keys.Space)
                 {
                     if (m_Bot != null)
                         m_Bot.Paused = !m_Bot.Paused;
                     e.Handled = true;
                 }
-                else if (e.KeyCode == System.Windows.Forms.Keys.V)
+                else if (e.KeyCode == Keys.V)
                 {
                     if (m_Bot != null)
                         m_Bot.BackTrace = !m_Bot.BackTrace;
@@ -526,7 +553,7 @@ namespace Nav
             legend.Add(new LegendEntry("3: Toggle render explore cells", true, m_RenderExploreCells));
             legend.Add(new LegendEntry("4: Toggle render connections", true, m_RenderConnections));
             legend.Add(new LegendEntry("5: Toggle render IDs", true, m_RenderIds));
-            legend.Add(new LegendEntry("6: Toggle render axis", true, m_RenderAxis));
+            legend.Add(new LegendEntry("6: Toggle render connected", true, m_RenderConnected));
             legend.Add(new LegendEntry($"7: Toggle render regions mode ({m_RenderRegionsMode})", true, m_RenderRegionsMode != RegionsRenderMode.None));
             legend.Add(new LegendEntry("8: Toggle render original path", true, m_RenderOriginalPath));
             legend.Add(new LegendEntry("9: Toggle render ray cast", true, m_RenderRayCast));
@@ -535,6 +562,7 @@ namespace Nav
             legend.Add(new LegendEntry("E: Set destination pos", false));
             legend.Add(new LegendEntry("B: Run bot", false));
             legend.Add(new LegendEntry("F7: Reload debug.ini", false));
+            legend.Add(new LegendEntry("Ctrl+0: Toggle render axis", true, m_RenderAxis));
             legend.Add(new LegendEntry("Ctrl+1: Toggle render path", true, m_RenderPath));
             legend.Add(new LegendEntry("Ctrl+2: Toggle regions update", true, m_Navmesh.RegionsEnabled));
             legend.Add(new LegendEntry("Ctrl+3: Toggle render avoidance path", true, m_RenderAvoidancePath));
@@ -567,8 +595,6 @@ namespace Nav
 
             if (!File.Exists(filename))
                 return;
-
-            Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
 
             using (var reader = File.OpenText(filename))
             {
@@ -769,9 +795,10 @@ namespace Nav
         private bool m_RenderConnections = false;
         private bool m_RenderPath = true;
         private bool m_RenderOriginalPath = false;
-        private bool m_RenderAvoidancePath = true;
+        private bool m_RenderAvoidancePath = false;
         private bool m_RenderBacktrackPath = false;
         private bool m_RenderPositionsHistory = false;
+        private bool m_RenderConnected = false;
         private bool m_RenderRayCast = false;
         private bool m_RenderExploreCells = false;
         private RegionsRenderMode m_RenderRegionsMode = RegionsRenderMode.MoveCostMult;

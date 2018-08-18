@@ -162,7 +162,7 @@ namespace Nav
 
                     HashSet<Cell> merged_cells = new HashSet<Cell>{c};
 
-                    // find all patches, this cell neighbours belongs to
+                    // find all patches, this cell neighbors belongs to
                     foreach (var neighbour in c.Neighbours)
                     {
                         CellsPatch connected_patch = m_CellsPatches.FirstOrDefault(x => x.Cells.Contains(neighbour.cell));
@@ -214,7 +214,7 @@ namespace Nav
                     if (grid_cell.Contains2D(p))
                     {
                         var cells = grid_cell.GetCellsAt(p, test_2d, z_tolerance);
-                        foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (exclude_cells == null || !exclude_cells.Contains(x) && x.HasFlags(flags))))
+                        foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (exclude_cells == null || !exclude_cells.Contains(x)) && x.HasFlags(flags)))
                         {
                             result_cell = cell;
 
@@ -258,9 +258,7 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                GridCell grid_cell = GetGridCell(pos);
-
-                return grid_cell != null ? grid_cell.Id : -1;
+                return GetGridCell(pos)?.Id ?? -1;
             }
         }
 
@@ -880,17 +878,14 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                Cell pos1_cell = null;
-                Cell pos2_cell = null;
-
-                // do not ignore disabled as cells patches to not include replacement cells!
-                GetCellAt(pos1, out pos1_cell, flags, true, true, nearest_tolerance, false, 2);
+                // do not ignore disabled since cells patches do not include replacement cells!
+                GetCellAt(pos1, out Cell pos1_cell, flags, true, true, nearest_tolerance, false, 2);
 
                 if (pos1_cell == null)
                     return false;
 
-                // do not ignore disabled as cells patches to not include replacement cells!
-                GetCellAt(pos2, out pos2_cell, flags, true, true, nearest_tolerance, false, 2);
+                // do not ignore disabled since cells patches do not include replacement cells!
+                GetCellAt(pos2, out Cell pos2_cell, flags, true, true, nearest_tolerance, false, 2);
 
                 if (pos2_cell == null)
                     return false;

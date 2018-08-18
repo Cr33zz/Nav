@@ -26,6 +26,15 @@ namespace Nav
             Z = v.Z;
         }
 
+        // string has to be in following format: "x,y,z"
+        public Vec3(string str)
+        {
+            var tmp = str.Split(',');
+            X = float.Parse(tmp[0]);
+            Y = float.Parse(tmp[1]);
+            Z = float.Parse(tmp[2]);
+        }
+
         public Vec3(BinaryReader r) : this()
         {
             Deserialize(r);

@@ -135,6 +135,10 @@ namespace Nav
                 bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, as_close_as_possible, -1, false, 2, null);
                 bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, as_close_as_possible, -1, false, 2, null);
 
+                // align to position to closest cell
+                if (!end_on_nav_mesh)
+                    to = end.AABB.Align(to);
+
                 if (bounce)
                 {
                     Vec3 bounce_dir = start.AABB.GetBounceDir2D(from);
