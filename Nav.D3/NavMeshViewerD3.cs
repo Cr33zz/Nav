@@ -35,8 +35,7 @@ namespace Nav.D3
                 m_Navmesh = Nav.D3.Navmesh.Create(m_MemoryContext, true);
                 m_Navigator = new Nav.NavigationEngine(m_Navmesh);
                 m_Navigator.UpdatePathInterval = 100;
-                m_Navigator.EnableThreatAvoidance = true;
-                m_Navmesh.RegionsMoveCostMode = Nav.Navmesh.RegionsMode.Mult;
+                m_Navigator.EnableThreatAvoidance = false;
                 m_Explorer = new Nav.ExploreEngine.Nearest(m_Navmesh, m_Navigator);
                 m_Explorer.Enabled = false;
                 m_AutoClearOnLocationChange = true;
