@@ -908,6 +908,10 @@ namespace Nav
             return m_GridCells;
         }
 
+        public int GridCellsCount => m_GridCells.Count;
+
+        public int CellsCount => m_AllCells.Count;
+
         private bool test_RayTrace()
         {
             Vec3 result = default(Vec3);

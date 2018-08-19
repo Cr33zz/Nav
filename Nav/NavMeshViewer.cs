@@ -303,6 +303,9 @@ namespace Nav
                         e.Graphics.DrawString(legend[i].Text, LEGEND_FONT, Brushes.Black, 10, Y);
                 }
             }
+
+            e.Graphics.DrawString($"Grid cells: {m_Navmesh.GridCellsCount}", STATS_FONT, Brushes.Black, 10, Height - 75);
+            e.Graphics.DrawString($"Cells: {m_Navmesh.CellsCount}", STATS_FONT, Brushes.Black, 10, Height - 85);
         }
 
         protected virtual void OnRenderPos(PaintEventArgs e)
