@@ -81,7 +81,7 @@ namespace Nav
 
         public void Render(Graphics g, PointF trans)
         {
-            RenderHelper.DrawCircle(g, m_Navigator.InThreat ? Pens.DarkRed : Pens.Blue, trans, m_Navigator.CurrentPos, 4);
+            RenderHelper.DrawCircle(g, m_Navigator.IsInThreat ? Pens.DarkRed : Pens.Blue, trans, m_Navigator.CurrentPos, 4);
             if (m_Navigator.IsThreatAhead)
                 RenderHelper.DrawCircle(g, Pens.IndianRed, trans, m_Navigator.CurrentPos, 3);
         }

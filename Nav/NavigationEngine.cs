@@ -92,7 +92,25 @@ namespace Nav
         public float MaxAllowedThreat { get; set; } = 0;
 
         // when avoidance is enabled and current position is on a cell with threat level higher than MaxAllowedThreat
-        public bool InThreat { get; private set; } = false;
+        public bool IsInThreat { get; private set; } = false;
+
+        public bool IsThreatAt(Vec3 pos)
+        {
+            return m_Navmesh.Regions.Any(x => x.Threat > MaxAllowedThreat && x.Area.Contains2D(pos));
+        }
+
+        public bool IsThreatBetween(Vec3 start, Vec3 end)
+        {
+            Vec3 threat_pos = default(Vec3);
+
+            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat > MaxAllowedThreat).ToList())
+            {
+                if (t.Area.SegmentTest2D(start, end, ref threat_pos))
+                    return true;
+            }
+
+            return false;
+        }
 
         public bool IsThreatAhead { get; private set; } = false;
 
@@ -101,6 +119,9 @@ namespace Nav
 
         // should be used when EnableAntiStuck is true to notify navigator that actor is not blocked by some obstacle but just standing
         public bool IsStandingOnPurpose { get; set; } = true;
+
+        // is current path for currently requested destination type (may be false when destination change has been requested but path is not updated yet)
+        public bool IsPathUpToDate => m_PathDestType == m_DestinationType;
 
         public List<int> DestinationGridsId
         {
@@ -929,10 +950,10 @@ namespace Nav
                 var threats = m_Navmesh.Regions.Where(x => x.Threat > MaxAllowedThreat).ToList();
                 var current_threats = threats.Where(x => x.Area.Contains2D(current_pos));
 
-                bool was_in_threat = InThreat;
-                InThreat = current_threats.Any();
+                bool was_in_threat = IsInThreat;
+                IsInThreat = current_threats.Any();
 
-                if (InThreat)
+                if (IsInThreat)
                 {
                     SetDestination(new Vec3(6,6,6), DestType.RunAway, Precision);
 
@@ -974,7 +995,7 @@ namespace Nav
             }
             else
             {
-                InThreat = false;
+                IsInThreat = false;
                 IsThreatAhead = false;
                 ClearDestination(DestType.RunAway);
             }
