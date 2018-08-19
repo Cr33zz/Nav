@@ -55,7 +55,7 @@ namespace Nav
 
         public override bool Equals(Object obj)
         {
-            return obj is Vec3 && Equals((Vec3)obj);
+            return obj is Vec3 v && Equals(v);
         }
         public bool Equals(Vec3 v)
         {
@@ -86,44 +86,42 @@ namespace Nav
 
         public static Vec3 operator +(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(v1.X + v2.X,
-                            v1.Y + v2.Y,
-                            v1.Z + v2.Z);
+            return new Vec3(v1.X + v2.X, v1.Y + v2.Y, v1.Z + v2.Z);
+        }
+
+        public static Vec3 operator +(Vec3 v1, float v2)
+        {
+            return new Vec3(v1.X + v2, v1.Y + v2, v1.Z + v2);
         }
 
         public static Vec3 operator -(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(v1.X - v2.X,
-                            v1.Y - v2.Y,
-                            v1.Z - v2.Z);
+            return new Vec3(v1.X - v2.X, v1.Y - v2.Y, v1.Z - v2.Z);
+        }
+
+        public static Vec3 operator -(Vec3 v1, float v2)
+        {
+            return new Vec3(v1.X - v2, v1.Y - v2, v1.Z - v2);
         }
 
         public static Vec3 operator -(Vec3 v2)
         {
-            return new Vec3(-v2.X,
-                            -v2.Y,
-                            -v2.Z);
+            return new Vec3(-v2.X, -v2.Y, -v2.Z);
         }
 
         public static Vec3 operator *(Vec3 v1, float v2)
         {
-            return new Vec3(v1.X * v2,
-                            v1.Y * v2,
-                            v1.Z * v2);
+            return new Vec3(v1.X * v2, v1.Y * v2, v1.Z * v2);
         }
 
         public static Vec3 operator *(Vec3 v1, Vec3 v2)
         {
-            return new Vec3(v1.X * v2.X,
-                            v1.Y * v2.Y,
-                            v1.Z * v2.Z);
+            return new Vec3(v1.X * v2.X, v1.Y * v2.Y, v1.Z * v2.Z);
         }
 
         public static Vec3 operator /(Vec3 v1, float v2)
         {
-            return new Vec3(v1.X / v2,
-                            v1.Y / v2,
-                            v1.Z / v2);
+            return new Vec3(v1.X / v2, v1.Y / v2, v1.Z / v2);
         }
 
         public static Vec3 operator /(float v1, Vec3 v2)
@@ -241,14 +239,12 @@ namespace Nav
 
         public Vec3 Cross(Vec3 v2)
         {
-            return new Vec3(Y * v2.Z - Z * v2.Y,
-                            Z * v2.X - X * v2.Z,
-                            X * v2.Y - Y * v2.X);
+            return new Vec3(Y * v2.Z - Z * v2.Y, Z * v2.X - X * v2.Z, X * v2.Y - Y * v2.X);
         }
 
         public float Dot(Vec3 v2)
         {
-            return (this.X * v2.X + this.Y * v2.Y + this.Z * v2.Z);
+            return X * v2.X + Y * v2.Y + Z * v2.Z;
         }
 
         public float DotNorm(Vec3 v2)
@@ -269,9 +265,7 @@ namespace Nav
         public Vec3 Blend(Vec3 v2, float ratio)
         {
             float ratio2 = 1.0f - ratio;
-            return new Vec3(X * ratio2 + v2.X * ratio,
-                            Y * ratio2 + v2.Y * ratio,
-                            Z * ratio2 + v2.Z * ratio);
+            return new Vec3(X * ratio2 + v2.X * ratio, Y * ratio2 + v2.Y * ratio, Z * ratio2 + v2.Z * ratio);
         }
 
         public static Vec3 Max(Vec3 v1, Vec3 v2)

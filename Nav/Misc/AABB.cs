@@ -176,6 +176,12 @@ namespace Nav
             return result.ToArray();
         }
 
+        // returns new aabb that is evenly expanded/shrinked along all axis
+        public AABB Resized(float value)
+        {
+            return new AABB(Min - value, Max + value);
+        }
+
         public void Extend(AABB aabb)
         {
             if (IsZero())
@@ -204,10 +210,9 @@ namespace Nav
             return Vec3.Min(Vec3.Max(Min, p), Max);
         }
 
-        public void Translate(Vec3 v)
+        public AABB Translated(Vec3 v)
         {
-            Min += v;
-            Max += v;
+            return new AABB(Min + v, Max = Max + v);
         }
 
         public void Serialize(BinaryWriter w)
@@ -260,6 +265,33 @@ namespace Nav
         {
             rng = rng ?? new Random();
             return Min + new Vec3((float)rng.NextDouble() * (Max.X - Min.X), (float)rng.NextDouble() * (Max.Y - Min.Y), (float)rng.NextDouble() * (Max.Z - Min.Z));
+        }
+
+        public bool SegmentTest(Vec3 start, Vec3 end, ref Vec3 result)
+        {
+            return InternalSegmentTest(start, end, ref result, 3);
+        }
+
+        public bool SegmentTest2D(Vec3 start, Vec3 end, ref Vec3 result)
+        {
+            return InternalSegmentTest(start, end, ref result, 2);
+        }
+
+        private bool InternalSegmentTest(Vec3 start, Vec3 end, ref Vec3 result, int num_dim)
+        {
+            Vec3 ray_dir = end - start;
+            float length = num_dim > 2 ? ray_dir.Normalize() : ray_dir.Normalize2D();
+            float length_2 = length * length;
+            if (InternalRayTest(start, ray_dir, ref result, num_dim))
+            {
+                if ((num_dim > 2 ? result.DistanceSqr(start) : result.Distance2DSqr(start)) <= length_2)
+                    return true;
+
+                result = end;
+                return false;
+            }
+
+            return false;
         }
 
         public bool RayTest(Vec3 ray_origin, Vec3 ray_dir, ref Vec3 result)

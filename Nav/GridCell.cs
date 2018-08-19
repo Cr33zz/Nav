@@ -143,14 +143,14 @@ namespace Nav
             }
         }
 
-        public IEnumerable<Cell> GetCells(Func<Cell, bool> predicate, bool allow_replacement_cells = true)
+        public List<Cell> GetCells(Func<Cell, bool> predicate, bool allow_replacement_cells = true)
         {
             var result = Cells.Where(predicate);
                 
             if (allow_replacement_cells)
                 result = result.Concat(ReplacementCells.Where(predicate));
 
-            return result;
+            return result.ToList();
         }
 
         public IEnumerable<Cell> GetCellsAt(Vec3 pos, bool test_2d, float z_tolerance)
@@ -159,14 +159,14 @@ namespace Nav
                    Concat(ReplacementCells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance))));
         }
 
-        public IEnumerable<Cell> GetCells(bool allow_replacement_cells = true)
+        public List<Cell> GetCells(bool allow_replacement_cells = true)
         {
             IEnumerable<Cell> result = Cells;
 
             if (allow_replacement_cells)
                 result = result.Concat(ReplacementCells);
 
-            return result;
+            return result.ToList();
         }
 
         public Int32 GetCellsCount(bool count_replacement_cells = true)

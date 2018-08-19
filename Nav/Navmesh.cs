@@ -47,7 +47,7 @@ namespace Nav
 
         public bool Equals(Region region)
         {
-            return MoveCostMult == region.MoveCostMult && Area.Equals(region.Area);
+            return Threat == region.Threat && MoveCostMult == region.MoveCostMult && Area.Equals(region.Area);
         }
 
         public override int GetHashCode()
@@ -405,7 +405,7 @@ namespace Nav
             var regions_copy = Regions;
 
             using (new WriteLock(DataLock))
-            using (new Profiler($"Updating {regions_copy.Count} regions took %t", 50))
+            using (new Profiler($"[Nav] Updating {regions_copy.Count} regions took %t", 50))
             {
                 foreach (var data in CellsOverlappedByRegions)
                     data.Value.overlapping_regions.Clear();

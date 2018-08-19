@@ -221,13 +221,14 @@ namespace Nav
                     RenderHelper.DrawLines(e.Graphics, Pens.Green, m_RenderCenter, m_LastPositionsHistory, 1);
                 }
 
-                if (!m_Navigator.CurrentPos.IsZero())
-                    RenderHelper.DrawPoint(e.Graphics, Pens.Blue, m_RenderCenter, m_Navigator.CurrentPos);
-                if (!m_Navigator.Destination.IsZero())
-                    RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, m_Navigator.Destination);
-
                 Vec3 curr = m_Navigator.CurrentPos;
                 Vec3 dest = m_Navigator.Destination;
+
+                if (!curr.IsZero())
+                    RenderHelper.DrawPoint(e.Graphics, Pens.Blue, m_RenderCenter, curr);
+
+                if (!dest.IsZero())
+                    RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, dest);
 
                 if (!curr.IsZero() && !dest.IsZero())
                 {
@@ -302,7 +303,10 @@ namespace Nav
                         e.Graphics.DrawString(legend[i].Text, LEGEND_FONT, Brushes.Black, 10, Y);
                 }
             }
+        }
 
+        protected virtual void OnRenderPos(PaintEventArgs e)
+        {
             e.Graphics.DrawString("[" + m_RenderCenter.X + ", " + m_RenderCenter.Y + "]", STATS_FONT, Brushes.Black, 10, Height - 55);
         }
 
@@ -482,10 +486,10 @@ namespace Nav
                     //Thread t = new Thread(dbg_MoveRegions);
                     //t.Start();
 
-                    //Thread t = new Thread(dbg_MoveThreatRegions);
+                    //Thread t = new Thread(dbg_MovingRegions);
                     //t.Start();
 
-                    m_Navmesh.dbg_GenerateRandomAvoidAreas(100, 10, 10);
+                    m_Navmesh.dbg_GenerateRandomAvoidAreas(100, 2, 2);
 
                     e.Handled = true;
                 }
@@ -497,9 +501,7 @@ namespace Nav
                                        MovementFlag.Walk,
                                        ref result);
 
-                    if (m_Bot != null)
-                        m_Bot.Dispose();
-                    m_Bot = new TestBot(m_Navmesh, m_Navigator, m_Explorer, result, m_Navigator.Destination, true, false);
+                    m_Bot = new TestBot(m_Navmesh, m_Navigator, m_Explorer, result);
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.C)
@@ -586,6 +588,7 @@ namespace Nav
             e.Graphics.ResetTransform();
 
             OnRenderUI(e);
+            OnRenderPos(e);
         }
 
         private void LoadWaypoints(string filename)
@@ -637,58 +640,29 @@ namespace Nav
             }
         }
 
-        private void dbg_MoveRegions()
+        private void dbg_MovingRegions()
         {
-            Random rng = new Random(0x600DF00D);
-            var regions = new List<Nav.Region>();
+            Random rng = new Random();
+            var regions = new List<Region>();
 
-            for (int i = 0; i < 1200; ++i)
+            for (int i = 0; i < 20; ++i)
             {
                 Vec3 pos = m_Navmesh.GetRandomPos(rng);
                 float size = 20 + (float)rng.NextDouble() * 10;
-                regions.Add(new Nav.Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2));
+                regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 5, 5));
             }
 
-            const int dt = 100;
+            const int dt = 50;
 
             while (true)
             {
-
-                foreach (var region in regions)
+                for (int i = 0; i < regions.Count; ++i)
                 {
+                    var region = regions[i];
+
                     Vec3 dir = new Vec3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, 0);
 
-                    region.Area.Translate(dir * 10 * ((float)dt / 1000));
-                }
-
-                m_Navmesh.Regions = regions;
-
-                Thread.Sleep(dt);
-            }
-        }
-
-        private void dbg_MoveThreatRegions()
-        {
-            Random rng = new Random(0x8AAD);
-            var regions = new List<Nav.Region>();
-
-            for (int i = 0; i < 100; ++i)
-            {
-                Vec3 pos = m_Navmesh.GetRandomPos(rng);
-                float size = 20 + (float)rng.NextDouble() * 10;
-                regions.Add(new Nav.Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 10, 10));
-            }
-
-            const int dt = 100;
-
-            while (true)
-            {
-
-                foreach (var region in regions)
-                {
-                    Vec3 dir = new Vec3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, 0);
-
-                    region.Area.Translate(dir * 10 * ((float)dt / 1000));
+                    regions[i] = new Region(region.Area.Translated(dir * 20 * ((float)dt / 1000)), region.MoveCostMult, region.Threat);
                 }
 
                 m_Navmesh.Regions = regions;
@@ -983,7 +957,7 @@ namespace Nav
         private static Pen GRID_CELL_CONNECTION_PEN = new Pen(Color.FromArgb(255, 50, 50, 50), 4);
         private static Pen CELL_CONNECTION_PEN = new Pen(Color.Black, 0.3f);
         private static Pen CELL_BORDER_PEN = new Pen(Color.Blue, 0.3f);
-        private static Pen REPLACEMENT_CELL_BORDER_PEN = new Pen(Color.LightGray, 0.3f);
+        private static Pen REPLACEMENT_CELL_BORDER_PEN = new Pen(Color.Black, 0.3f);
         public static readonly Pen AXIS_PEN = new Pen(Color.SaddleBrown, 0.3f);
         public static readonly Pen EXPLORE_PATH_PEN = new Pen(Color.Black, 5);
         public static readonly Pen PATH_PEN = new Pen(Color.Black, 1.5f);

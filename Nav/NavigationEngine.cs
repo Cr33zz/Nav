@@ -89,10 +89,15 @@ namespace Nav
         // turn on/off danger detection and danger avoidance
         public bool EnableThreatAvoidance { get; set; } = false;
 
+        public float MaxAllowedThreat { get; set; } = 0;
+
         // when avoidance is enabled and current position is on a cell with threat level higher than MaxAllowedThreat
         public bool InThreat { get; private set; } = false;
 
-        public float MaxAllowedThreat { get; set; } = 0;
+        public bool IsThreatAhead { get; private set; } = false;
+
+        // when not in threat but path leads through threats IsThreatAhead will be turned when agent is closer than ThreatDetectionRange from a threat ahead
+        public float ThreatDetectionRange { get; set; } = 10;
 
         // should be used when EnableAntiStuck is true to notify navigator that actor is not blocked by some obstacle but just standing
         public bool IsStandingOnPurpose { get; set; } = true;
@@ -119,7 +124,7 @@ namespace Nav
 
         public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible)
         {
-            using (new Profiler("[Nav-Profiler] FindPath updated took %t ms", 10))
+            using (new Profiler("[Nav] Path finding took %t", 5))
             return FindPath(from, to, MovementFlags, ref path, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
         }
 
@@ -190,8 +195,19 @@ namespace Nav
                 if (!Algorihms.FindPath(start, from, new Algorihms.AvoidancePathFindStrategy<Cell>(max_allowed_threat, hint_pos), flags, ref tmp_path))
                     return false;
 
+                //m_Navmesh.Log($"original path has {tmp_path.Count} nodes");
+
                 if (smoothen)
                     SmoothenPath(ref tmp_path, flags);
+
+                //m_Navmesh.Log($"smoothened path has {tmp_path.Count} nodes");
+
+                // direct towards safe cell center so user is not stuck on the edge of a threat
+                if (tmp_path.Count > 0)
+                {
+                    var last_node = tmp_path.Last();
+                    tmp_path.Add(new path_pos(last_node.cell.Center, last_node.cell));
+                }
 
                 path = tmp_path.Select(x => x.pos).ToList();
 
@@ -376,9 +392,10 @@ namespace Nav
                 for (int i = path.Count - 2; i > 0; --i)
                 {
                     Vec3 dir_to_next = path[i] - path[i - 1];
-                    dir_to_next.Normalize();
+                    float dist = dir_to_next.Normalize();
 
-                    path[i] += dir_to_next * shift_nodes_distance;
+                    if (dist > 0.01)
+                        path[i] += dir_to_next * shift_nodes_distance;
                 }
             }
         }
@@ -491,7 +508,9 @@ namespace Nav
             get
             {
                 using (new ReadLock(PathLock))
-                    return Path.Count > 0 ? new Vec3(Path[0]) : Vec3.ZERO;
+                {
+                    return Path.Count > 0 ? Path[0] : Vec3.ZERO;
+                }
             }
         }
 
@@ -654,6 +673,13 @@ namespace Nav
                     m_Destination = Vec3.ZERO;
                     m_DestinationType = DestType.None;
                 }
+
+                using (new WriteLock(PathLock))
+                {
+                    m_PathDestination = Vec3.ZERO;
+                    m_PathDestType = DestType.None;
+                    Path.Clear();
+                }
             }
         }
 
@@ -724,7 +750,7 @@ namespace Nav
 
                 destination = new Vec3(m_Destination);
 
-                return (m_CurrentPos.IsZero() || m_Destination.IsZero() || !m_Destination.Equals(m_PathDestination)) ? false : (Path.Count == 0);
+                return (!m_CurrentPos.IsZero() && !m_Destination.IsZero() && m_Destination.Equals(m_PathDestination)) && (Path.Count == 0);
             }
         }
 
@@ -750,7 +776,7 @@ namespace Nav
             UpdateWaypointDestination();
             UpdateGridDestination();
             UpdateBackTrackDestination();
-            //UpdateThreatAvoidance();
+            UpdateThreatAvoidance();
 
             int update_path_interval = m_UpdatePathIntervalOverride > 0 ? m_UpdatePathIntervalOverride : UpdatePathInterval;
 
@@ -792,14 +818,16 @@ namespace Nav
 
             Vec3 current_pos = CurrentPos;
 
-            //refactoring both current position and destination can be ZERO
-            //if (current_pos.IsZero() || destination.IsZero())
-            //    return;
+            if (current_pos.IsZero() || destination.IsZero())
+                return;
 
             List<Vec3> new_path = new List<Vec3>();
 
             if (dest_type == DestType.RunAway)
+            {
                 FindAvoidancePath(current_pos, MaxAllowedThreat, MovementFlags, ref new_path, Vec3.ZERO, false, PathNodesShiftDist);
+                //m_Navmesh.Log($"avoidance path calculated {new_path.Count} nodes");
+            }
             else
                 FindPath(current_pos, destination, MovementFlags, ref new_path, PATH_NODES_MERGE_DISTANCE, true, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist);
 
@@ -840,6 +868,8 @@ namespace Nav
                 // reset override when first destination from path changed
                 if (Path.Count == 0 || (new_path.Count > 0 && !Path[0].Equals(new_path[0])))
                     ResetAntiStuckPrecition(current_pos);
+
+                //m_Navmesh.Log($"final path has {new_path.Count} nodes");
 
                 Path = new_path;
                 m_PathDestination = destination;
@@ -896,25 +926,60 @@ namespace Nav
 
         private void UpdateThreatAvoidance()
         {
-            using (new ReadLock(InputLock))
+            if (EnableThreatAvoidance)
             {
-                if (EnableThreatAvoidance)
-                {
-                    bool was_in_danger = InThreat;
-                    m_Navmesh.GetCellAt(CurrentPos, out Cell curr_cell);
-                    InThreat = (curr_cell?.Threat ?? 0) > MaxAllowedThreat;
+                Vec3 current_pos = CurrentPos;
+                var threats = m_Navmesh.Regions.Where(x => x.Threat > MaxAllowedThreat).ToList();
+                var current_threats = threats.Where(x => x.Area.Contains2D(current_pos));
 
-                    if (InThreat && !was_in_danger)
-                    {
-                        SetDestination(new Vec3(6,6,6), DestType.RunAway, 10);
-                        RequestPathUpdate();
-                    }
+                bool was_in_threat = InThreat;
+                InThreat = current_threats.Any();
+
+                if (InThreat)
+                {
+                    SetDestination(new Vec3(6,6,6), DestType.RunAway, Precision);
+
+                    //if (!was_in_threat)
+                    //    m_Navmesh.Log("now in threat");
+
+                    IsThreatAhead = false; // don't make user stop
                 }
                 else
                 {
-                    InThreat = false;
                     ClearDestination(DestType.RunAway);
+                    if (was_in_threat)
+                    {
+                        RequestPathUpdate();
+                        //m_Navmesh.Log("no longer in threat");
+                    }
+
+                    Vec3 go_to_pos = GoToPosition;
+
+                    // if we are heading to point on a path we have to check if there is a threat-region on our path
+                    if (!go_to_pos.IsZero())
+                    {
+                        Vec3 threat_pos = default(Vec3);
+                        bool threat_ahead = false;
+                        
+                        // since often times we will be traveling along the regions we need to test with slightly minimized region
+                        foreach (var t in threats)
+                        {
+                            if (t.Area.Resized(-0.5f).SegmentTest2D(current_pos, go_to_pos, ref threat_pos))
+                            {
+                                threat_ahead = current_pos.Distance2D(threat_pos) <= ThreatDetectionRange;
+                                break;
+                            }
+                        }
+
+                        IsThreatAhead = threat_ahead;
+                    }
                 }
+            }
+            else
+            {
+                InThreat = false;
+                IsThreatAhead = false;
+                ClearDestination(DestType.RunAway);
             }
         }
 

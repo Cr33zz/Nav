@@ -170,6 +170,11 @@ namespace Nav.D3
             }
         }
 
+        protected override void OnRenderPos(PaintEventArgs e)
+        {
+            e.Graphics.DrawString(m_Navigator.CurrentPos.ToString(), STATS_FONT, Brushes.Black, 10, Height - 55);
+        }
+
         protected override void OnRefresh(int interval)
         {
             base.OnRefresh(interval);

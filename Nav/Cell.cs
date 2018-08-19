@@ -239,7 +239,7 @@ namespace Nav
             else
             {
                 // find plane from all possible plane with smallest average distance of all connection points from it
-                var connect_points = Neighbours.Where(x => (x.connection_flags & MovementFlag.Walk) != 0).Select(x => x.border_point);
+                var connect_points = Neighbours.Where(x => (x.connection_flags & MovementFlag.Walk) != 0).Select(x => x.border_point).ToList();
 
                 //this is Diablo related hack, as most certainly won't work in general case :(
                 Plane[] possible_align_planes = null;
@@ -366,7 +366,7 @@ namespace Nav
                 Cell other_cell = neighbour.cell;
                 for (int i = 0; i < other_cell.Neighbours.Count; ++i)
                 {
-                    if (other_cell.Neighbours[i].cell == this)
+                    if (other_cell.Neighbours[i].cell.Equals(this))
                     {
                         other_cell.Neighbours.RemoveAt(i);
                         break;
