@@ -185,10 +185,7 @@ namespace Nav
                 if (from.IsZero())
                     return false;
 
-                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, false, -1, false, 2, null);
-
-                if (!start_on_nav_mesh)
-                    return false;
+                m_Navmesh.GetCellAt(from, out Cell start, flags, false, true, -1, false, 2, null);
 
                 List<path_pos> tmp_path = new List<path_pos>();
 

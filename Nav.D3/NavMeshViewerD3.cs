@@ -209,10 +209,7 @@ namespace Nav.D3
 
             if (e.Control)
             {
-                if (e.KeyCode == System.Windows.Forms.Keys.D3)
-                {
-                    e.Handled = true;
-                }
+                
             }
             else
             {
