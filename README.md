@@ -1,4 +1,4 @@
-Nav is easy to use 3D navigation library. It operates on axis-aligned cuboids (cells). Navigation data is built on-the-fly as soon as cells are fed to the system. Separate navigation module is responsible for pathing. Exploration module can be supplied for automatic navmesh traversal. Nav was primarily created for Diablo 3 bot navigation. Due to this fact there is built-in implementation of Nav.D3 which requires Enigma.D3 (open source Diablo 3 API created by enigma32). More information can be found here http://www.ownedcore.com/forums/diablo-3/diablo-3-bots-programs/diablo-3-memory-editing/469521-c-enigma-d3.html
+Nav is easy to use 3D navigation library. It operates on axis-aligned cuboids (cells). Navigation data is built on-the-fly as soon as cells are fed to the system. Separate navigation module is responsible for pathing. Exploration module can be supplied for automatic navmesh traversal. Nav was primarily created for Diablo 3 bot navigation but can be used in any project with AABB navmesh data.
 For documentation check out Wiki.
 
 Features
@@ -10,4 +10,4 @@ Features
 * automatic anti-stuck system (altering pathing when actor is potentially stuck on collision with geometry), no configuration required
 * supports ray casts and ray traces
 * supports both walking and flying
-* NavMeshViewer allows easy viewing/debugging (including live D3 navigation data viewing)
+* NavMeshViewer allows easy viewing/debugging
