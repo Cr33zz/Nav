@@ -146,7 +146,8 @@ namespace Nav
                 NotifyOnGridCellAdded(g_cell);
             }
 
-            NotifyOnNavDataChanged();
+            if (trigger_nav_data_change)
+                NotifyOnNavDataChanged();
 
             return true;
         }
