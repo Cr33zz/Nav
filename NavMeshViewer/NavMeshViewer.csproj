@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>NavMeshViewer</RootNamespace>
     <AssemblyName>NavMeshViewer</AssemblyName>
-    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -45,15 +45,64 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <PlatformTarget>x64</PlatformTarget>
-    <OutputPath>bin\x64\Debug\</OutputPath>
+    <OutputPath>.\</OutputPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <PlatformTarget>x64</PlatformTarget>
     <OutputPath>bin\x64\Release\</OutputPath>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Enigma.D3.Assets">
+      <HintPath>..\Nav.D3\Enigma.D3.Assets.dll</HintPath>
+    </Reference>
+    <Reference Include="Enigma.D3.Core">
+      <HintPath>..\Nav.D3\Enigma.D3.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Enigma.D3.MemoryModel">
+      <HintPath>..\Nav.D3\Enigma.D3.MemoryModel.dll</HintPath>
+    </Reference>
+    <Reference Include="Enigma.D3.MemoryModel.Caching">
+      <HintPath>..\Nav.D3\Enigma.D3.MemoryModel.Caching.dll</HintPath>
+    </Reference>
+    <Reference Include="Enigma.Memory">
+      <HintPath>..\Nav.D3\Enigma.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="ExileCore">
+      <HintPath>..\..\Nav.PoE\ExileCore.dll</HintPath>
+    </Reference>
+    <Reference Include="GameOffsets">
+      <HintPath>..\..\Nav.PoE\GameOffsets.dll</HintPath>
+    </Reference>
+    <Reference Include="JM.LinqFaster">
+      <HintPath>..\..\Nav.PoE\JM.LinqFaster.dll</HintPath>
+    </Reference>
+    <Reference Include="MoreLinq">
+      <HintPath>..\..\Nav.PoE\MoreLinq.dll</HintPath>
+    </Reference>
     <Reference Include="Nav">
       <HintPath>.\Nav.dll</HintPath>
+    </Reference>
+    <Reference Include="Nav.D3">
+      <HintPath>.\Nav.D3.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Nav.PoE\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="ProcessMemoryUtilities">
+      <HintPath>..\..\Nav.PoE\ProcessMemoryUtilities.dll</HintPath>
+    </Reference>
+    <Reference Include="Serilog">
+      <HintPath>..\..\Nav.PoE\Serilog.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX">
+      <HintPath>..\..\Nav.PoE\SharpDX.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Desktop">
+      <HintPath>..\..\Nav.PoE\SharpDX.Desktop.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Mathematics">
+      <HintPath>..\..\Nav.PoE\SharpDX.Mathematics.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -69,6 +118,8 @@
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Startup.cs" />
+    <Compile Include="StartupD3.cs" />
+    <Compile Include="StartupPoE.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -98,6 +149,12 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Nav.PoE\Nav.PoE.csproj">
+      <Project>{ec71b994-555d-4d66-8a5e-06800fb06b22}</Project>
+      <Name>Nav.PoE</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

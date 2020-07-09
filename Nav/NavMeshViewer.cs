@@ -23,8 +23,6 @@ namespace Nav
         {
             Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
 
-            InitializeComponents();
-
             BackColor = Color.LightGray;
 
             m_Params = new Params(args);
@@ -73,6 +71,8 @@ namespace Nav
                 m_RenderCenter.X = initial_pos.X;
                 m_RenderCenter.Y = initial_pos.Y;
             }
+
+            InitializeComponents();
         }
 
         protected virtual void CreateNavigation()
@@ -93,6 +93,7 @@ namespace Nav
             m_Navigator.UpdatePathInterval = int.Parse(debug_ini.IniReadValue("Navigator", "update_path_interval"));
             m_Navigator.MovementFlags = (MovementFlag)Enum.Parse(typeof(MovementFlag), debug_ini.IniReadValue("Navigator", "movement_flags"));
             m_Navigator.PathNodesShiftDist = float.Parse(debug_ini.IniReadValue("Navigator", "path_nodes_shift_dist"));
+            m_Explorer.ChangeExploreCellSize(int.Parse(debug_ini.IniReadValue("Explorer", "explore_cell_size")));
         }
 
         private void OnLoad(object sender, EventArgs e)
@@ -688,8 +689,8 @@ namespace Nav
 
             if (!m_LastDragMousePos.IsEmpty)
             {
-                m_RenderCenter.X += m_LastDragMousePos.X - e.X;
-                m_RenderCenter.Y += m_LastDragMousePos.Y - e.Y;
+                m_RenderCenter.X += (m_LastDragMousePos.X - e.X) / m_RenderScale;
+                m_RenderCenter.Y += (m_LastDragMousePos.Y - e.Y) / m_RenderScale;
             }
 
             m_LastDragMousePos = new PointF(e.X, e.Y);
@@ -702,9 +703,10 @@ namespace Nav
 
         private void NavMeshViewer_MouseWheel(object sender, MouseEventArgs e)
         {
-            m_RenderScale += e.Delta * 0.002f;
+            var change = e.Delta * m_ZoomFactor;
+            m_Zoom = Math.Max(m_MinZoom, Math.Min(m_MaxZoom, m_Zoom + change));
 
-            m_RenderScale = Math.Max(0.01f, Math.Min(100.0f, m_RenderScale));
+            m_RenderScale = m_Zoom / 1000;
         }
 
         private void NavMeshViewer_KeyPress(object sender, KeyEventArgs e)
@@ -766,7 +768,11 @@ namespace Nav
         protected Nav.NavigationEngine m_Navigator = null;
         protected Nav.ExplorationEngine m_Explorer = null;
         protected PointF m_RenderCenter = new PointF(200, 350);
-        protected float m_RenderScale = 1.5f;//0.75f;
+        protected float m_RenderScale = 1.0f;
+        protected float m_Zoom = 1000.0f;
+        protected float m_ZoomFactor = 0.5f;
+        protected float m_MinZoom = 50.0f;
+        protected float m_MaxZoom = 10000.0f;
         private bool m_RenderIds = false;
         protected bool m_RenderAxis = true;
         private bool m_RenderConnections = false;
