@@ -71,11 +71,13 @@ namespace Nav
 
         public float KeepFromEdgePrecision { get; set; } = 5;
 
-        // each point on path will be offseted in direction from previous point so bot will move along path more precisely even with high precision parameter
+        // each point on path will be offset-ed in direction from previous point so bot will move along path more precisely even with high precision parameter
         public float PathNodesShiftDist { get; set; } = 10;
 
         // when new CurrentPos differ from last one by more than this value path update will be automatically requested
         public float CurrentPosDiffRecalcThreshold { set; get; } = 15;
+
+        public float MinDestDistToAddToHistory { set; get; } = 75;
 
         // path will be automatically recalculated with this interval (milliseconds)
         public int UpdatePathInterval { get; set; } = -1;
@@ -1061,7 +1063,7 @@ namespace Nav
                     {
                         if (m_DestinationType != DestType.BackTrack &&
                             (m_DestinationsHistory.Count == 0 || (!m_DestinationsHistory[m_DestinationsHistory.Count - 1].Equals(reached_pos) &&
-                                                                    m_DestinationsHistory[m_DestinationsHistory.Count - 1].Distance(reached_pos) > MIN_DEST_DIST_TO_ADD_TO_HISTORY)))
+                                                                    m_DestinationsHistory[m_DestinationsHistory.Count - 1].Distance(reached_pos) > MinDestDistToAddToHistory)))
                         {
                             m_DestinationsHistory.Add(reached_pos);
                         }
@@ -1425,7 +1427,6 @@ namespace Nav
         }
 
         private float PATH_NODES_MERGE_DISTANCE = -1;
-        private float MIN_DEST_DIST_TO_ADD_TO_HISTORY = 75;
 
         private Thread UpdatesThread = null;
         private volatile bool ForcePathUpdate = false;

@@ -771,7 +771,7 @@ namespace Nav
         protected float m_RenderScale = 1.0f;
         protected float m_Zoom = 1000.0f;
         protected float m_ZoomFactor = 0.5f;
-        protected float m_MinZoom = 50.0f;
+        protected float m_MinZoom = 10.0f;
         protected float m_MaxZoom = 10000.0f;
         private bool m_RenderIds = false;
         protected bool m_RenderAxis = true;
