@@ -64,6 +64,8 @@ namespace Nav
         // how much path will be randomized 0 by default
         public float PathRandomCoeff { get; set; } = 0;
 
+        public bool AlignGoToPositionToCurrentPosZWhenZero { get; set; } = false;
+
         public float DistToKeepFromEdge { get; set; } = 0; // not supported
 
         // only initial part of path of this length will be moved away from edges (to minimize performance impact if there are frequent enough path recalculates)
@@ -78,6 +80,7 @@ namespace Nav
         public float CurrentPosDiffRecalcThreshold { set; get; } = 15;
 
         public float MinDestDistToAddToHistory { set; get; } = 75;
+        public float MinDestDistToAddToDebugHistory { set; get; } = 15;
 
         // path will be automatically recalculated with this interval (milliseconds)
         public int UpdatePathInterval { get; set; } = -1;
@@ -529,7 +532,10 @@ namespace Nav
             {
                 using (new ReadLock(PathLock))
                 {
-                    return Path.Count > 0 ? Path[0] : Vec3.ZERO;
+                    var pos = Path.Count > 0 ? Path[0] : Vec3.ZERO;
+                    if (AlignGoToPositionToCurrentPosZWhenZero && pos.Z == 0)
+                        pos.Z = m_CurrentPos.Z;
+                    return pos;
                 }
             }
         }
@@ -555,7 +561,7 @@ namespace Nav
                         diff = m_CurrentPos.Distance2D(value);
                         m_CurrentPos = value;
 
-                        if (m_DebugPositionsHistory.Count == 0 || value.Distance2D(m_DebugPositionsHistory.Last()) > 15)
+                        if (m_DebugPositionsHistory.Count == 0 || value.Distance2D(m_DebugPositionsHistory.Last()) > MinDestDistToAddToDebugHistory)
                             m_DebugPositionsHistory.Add(value);
 
                         // add initial position as history destination
@@ -678,7 +684,7 @@ namespace Nav
             m_Navmesh.RemoveObserver(this);
         }
 
-        // Aquires InputLock (read -> write)
+        // Acquires InputLock (read -> write)
         public void ClearDestination(DestType type)
         {
             using (new ReadLock(InputLock, true))
