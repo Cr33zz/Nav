@@ -1,4 +1,4 @@
-Nav is easy to use 3D navigation library. It operates on axis-aligned cuboids (cells). Navigation data is built on-the-fly as soon as cells are fed to the system. Separate navigation module is responsible for pathing. Exploration module can be supplied for automatic navmesh traversal. Nav was primarily created for Diablo 3 bot navigation but can be used in any project with AABB navmesh data.
+Nav is easy to use 3D navigation library. It operates on axis-aligned cuboids (cells). Navigation data is built on-the-fly as soon as cells are fed to the system. Separate navigation module is responsible for pathing. Exploration module can be supplied for automatic navmesh traversal. Nav can be used in any project with AABB navmesh data.
 For documentation check out Wiki.
 
 Features
