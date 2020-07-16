@@ -5,7 +5,7 @@ Features
 * dynamically builds navmesh from soup of axis-aligned cuboids
 * simple navigation (set Destination, update CurrentPos, then move toward GoToPosition)
 * generates exploration data allowing dynamic navmesh traversal
-* simple exploration (create instance of exploration engine, update CurrentPos, then move toward GoToPosition, Destination will be automatically set by exploration engine)
+* easy exploration (create instance of exploration engine, update CurrentPos, then move toward GoToPosition, Destination will be automatically set by exploration engine)
 * all updated and calculations are performed on separate threads, without blocking user's code execution
 * automatic anti-stuck system (altering pathing when actor is potentially stuck on collision with geometry), no configuration required
 * supports ray casts and ray traces
