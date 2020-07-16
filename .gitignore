@@ -13,3 +13,7 @@ NavMeshViewer/NavMeshViewer.exe
 NavMeshViewer/NavMeshViewer.csproj.user
 NavMeshViewer/NavMeshViewer.exe.config
 NavMeshViewer/NavMeshViewer.csproj.user
+*.nav
+*.PoE
+*.user
+*.user

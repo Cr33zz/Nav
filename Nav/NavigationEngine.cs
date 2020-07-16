@@ -532,10 +532,15 @@ namespace Nav
             {
                 using (new ReadLock(PathLock))
                 {
-                    var pos = Path.Count > 0 ? Path[0] : Vec3.ZERO;
-                    if (AlignGoToPositionToCurrentPosZWhenZero && pos.Z == 0)
-                        pos.Z = m_CurrentPos.Z;
-                    return pos;
+                    if (Path.Count > 0)
+                    {
+                        var pos = Path[0];
+                        if (AlignGoToPositionToCurrentPosZWhenZero && pos.Z == 0)
+                            pos.Z = m_CurrentPos.Z;
+                        return pos;
+                    }
+
+                    return Vec3.ZERO;
                 }
             }
         }
