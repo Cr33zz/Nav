@@ -12,9 +12,7 @@ namespace Nav
         public ExplorationEngine(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90)
         {
             ExploreCellSize = explore_cell_size;
-            MAX_AREA_TO_MARK_AS_SMALL = 2000;
-            ExploreDestPrecision = 20;
-
+            
             m_Navmesh = navmesh;
             m_Navmesh.AddObserver(this);
 
@@ -29,8 +27,15 @@ namespace Nav
             UpdatesThread.Start();
         }
 
-        public float MAX_AREA_TO_MARK_AS_SMALL { get; protected set; }
+        // called every update when heading towards an explore cell. parameters are destination explore cell and current position
+        public Func<ExploreCell, Vec3, bool> AlternativeExploredCondition { get; set; }
 
+        public float MaxAreaToMarkAsSmall { get; set; } = 50 * 50;
+
+        // precision with explore destination will be accepted as reached
+        public float ExploreDestPrecision { get; set; } = 20;
+
+        // change it via ChangeExploreCellSize function
         public int ExploreCellSize { get; private set; }
 
         public void ChangeExploreCellSize(int size)
@@ -38,9 +43,6 @@ namespace Nav
             ExploreCellSize = size;
             Clear();
         }
-
-        // precision with explore destination will be accepted as reached
-        public float ExploreDestPrecision { get; set; }
 
         public virtual void Clear()
         {
@@ -434,14 +436,15 @@ namespace Nav
                     m_Navigator.SetDestination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision);
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
-                
-                {
-                    // mark cells as explored when passing by close enough
-                    ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => !x.Explored && x.Position.Distance2D(current_pos) < ExploreDestPrecision);
 
-                    if (current_explore_cell != null)
-                        OnCellExplored(current_explore_cell);
-                }
+                if (m_DestCell != null && (AlternativeExploredCondition?.Invoke(m_DestCell, current_pos) ?? false))
+                    OnCellExplored(m_DestCell);
+
+                // mark cells as explored when passing by close enough
+                ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => !x.Explored && x.Position.Distance2D(current_pos) < ExploreDestPrecision);
+
+                if (current_explore_cell != null)
+                    OnCellExplored(current_explore_cell);
 
                 OnUpdateExploration();
             }
@@ -534,7 +537,7 @@ namespace Nav
                     ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, nearest_intersection_center, m_LastExploreCellId++);
                     Add(ex_cell);
 
-                    ex_cell.Small = (ex_cell.CellsArea() < MAX_AREA_TO_MARK_AS_SMALL);
+                    ex_cell.Small = (ex_cell.CellsArea() < MaxAreaToMarkAsSmall);
 
                     cells_copy.RemoveWhere(x => visited.Contains(x));
                 }

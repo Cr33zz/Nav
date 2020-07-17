@@ -14,12 +14,16 @@ namespace Nav.ExploreEngine
         {
         }
 
+        public float DistanceReductionExplorePct { get; set; } = 500;
+
         protected class ExploreCellSelector : Algorihms.IDistanceVisitor<ExploreCell>
         {
-            public ExploreCellSelector(Vec3 hint_pos)
+            public ExploreCellSelector(Nearest explorer)
             {
-                if (!hint_pos.IsZero())
-                    this.hint_pos = hint_pos;
+                this.explorer = explorer;
+
+                if (!explorer.HintPos.IsZero())
+                    this.hint_pos = explorer.HintPos;
             }
 
             public void Visit(ExploreCell cell, float distance)
@@ -41,7 +45,7 @@ namespace Nav.ExploreEngine
                 if (!hint_pos.IsZero())
                     dist += cell.Position.Distance(hint_pos);
 
-                dist -= DISTANCE_REDUCTION_EXPLORE_PCT * GetExploredNeighboursPct(cell, 1);
+                dist -= explorer.DistanceReductionExplorePct * GetExploredNeighboursPct(cell, 1);
                 //dist -= DISTANCE_REDUCTION_PER_EXPLORED_NEIGHBOUR * (float)explored_neighbours_count;
                 //dist -= DISTANCE_REDUCTION_PER_MISSING_NEIGHBOUR * Math.Max(0, AVG_NEIGHBOURS_COUNT - cell.Neighbours.Count);
                 //dist -= base_dist * DISTANCE_PCT_REDUCTION_PER_EXPLORED_NEIGHBOUR * (float)explored_neighbours_count;
@@ -65,7 +69,6 @@ namespace Nav.ExploreEngine
 
             //const float DISTANCE_REDUCTION_PER_EXPLORED_NEIGHBOUR = 15;
             //const float DISTANCE_REDUCTION_PER_MISSING_NEIGHBOUR = 10;
-            const float DISTANCE_REDUCTION_EXPLORE_PCT = 500;
             //const float DISTANCE_PCT_REDUCTION_PER_EXPLORED_NEIGHBOUR = 0.06f;
             //const float DISTANCE_PCT_REDUCTION_PER_MISSING_NEIGHBOUR = 0.05f;
             //const int AVG_NEIGHBOURS_COUNT = 8;
@@ -73,6 +76,7 @@ namespace Nav.ExploreEngine
             public ExploreCell dest_cell = null;
             private float dest_cell_distance = float.MaxValue;
             private Vec3 hint_pos = Vec3.ZERO;
+            private Nearest explorer;
         }
 
         internal override ExploreCell GetDestinationCell()
@@ -105,7 +109,7 @@ namespace Nav.ExploreEngine
 
         protected virtual ExploreCellSelector CreateExploreCellSelector()
         {
-            return new ExploreCellSelector(HintPos);
+            return new ExploreCellSelector(this);
         }
     }
 }
