@@ -7,7 +7,7 @@ namespace Nav
 {
     internal class TestBot : INavigationObserver
     {
-        public TestBot(Navmesh navmesh, NavigationEngine navigator, ExplorationEngine explorer, Vec3 pos)
+        public TestBot(Navmesh navmesh, NavigationEngine navigator, ExplorationEngine explorer, Vec3 pos, float speed)
         {
             m_Navmesh = navmesh;
             m_Navmesh.Verbose = true;
@@ -15,25 +15,25 @@ namespace Nav
             m_Navigator = navigator;
             m_Navigator.AddObserver(this);
             m_Navigator.CurrentPos = pos;
-            m_Navigator.EnableThreatAvoidance = true;
-            m_Navigator.DefaultPrecision = 2;
-            m_Navigator.Precision = 2;
-            m_Navigator.PathNodesShiftDist = 2;
-            m_Navigator.EnableAntiStuck = false;
+            //m_Navigator.EnableThreatAvoidance = true;
+            //m_Navigator.DefaultPrecision = 20;
+            //m_Navigator.Precision = 20;
+            //m_Navigator.PathNodesShiftDist = 20;
+            //m_Navigator.EnableAntiStuck = false;
             //m_Navigator.DestinationGridsId = dest_grid_id != -1 ? new List<int>(new int[] { dest_grid_id }) : null;
             //if (waypoints != null)
             //    m_Navigator.Waypoints = waypoints;  
 
             //m_Explorer = new Nav.ExploreEngine.Nearest(m_Navmesh, m_Navigator);
             m_Explorer = explorer;
-            m_Explorer.Enabled = false;
+            //m_Explorer.Enabled = true;
+
+            m_Speed = speed;
 
             SimulateStuck = false;
             Paused = false;
             m_GotoPosUpdateTimer.Start();
         }
-
-        public static float SPEED = 10;//25; //approximated movement speed with 25% move speed bonus
 
         public void OnDestinationReached(DestType type, Vec3 dest)
         {
@@ -76,7 +76,7 @@ namespace Nav
             m_Navigator.IsStandingOnPurpose = m_Navigator.IsThreatAhead;
 
             if (!m_Navigator.IsThreatAhead)
-                m_Navigator.CurrentPos = m_Navigator.CurrentPos + dir * Math.Min(SPEED * dt, dist);
+                m_Navigator.CurrentPos = m_Navigator.CurrentPos + dir * Math.Min(m_Speed * dt, dist);
         }
 
         public void Render(Graphics g, PointF trans)
@@ -112,6 +112,7 @@ namespace Nav
         private Vec3 m_LastGotoPos = Vec3.ZERO;
         private Vec3 m_Destination = Vec3.ZERO;
         private Stopwatch m_GotoPosUpdateTimer = new Stopwatch();
+        private float m_Speed = 10;
         private const int GOTO_POS_UPDATE_INTERVAL = 25;
     }
 }

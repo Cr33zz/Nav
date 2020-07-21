@@ -93,7 +93,17 @@ namespace Nav
             m_Navigator.UpdatePathInterval = int.Parse(debug_ini.IniReadValue("Navigator", "update_path_interval"));
             m_Navigator.MovementFlags = (MovementFlag)Enum.Parse(typeof(MovementFlag), debug_ini.IniReadValue("Navigator", "movement_flags"));
             m_Navigator.PathNodesShiftDist = float.Parse(debug_ini.IniReadValue("Navigator", "path_nodes_shift_dist"));
+            m_Navigator.DefaultPrecision = float.Parse(debug_ini.IniReadValue("Navigator", "default_precision"));
+            m_Navigator.GridDestPrecision = float.Parse(debug_ini.IniReadValue("Navigator", "grid_dest_precision"));
+            m_Navigator.PathSmoothingPrecision = float.Parse(debug_ini.IniReadValue("Navigator", "path_smoothing_precision"));
+            m_Navigator.KeepFromEdgePrecision = float.Parse(debug_ini.IniReadValue("Navigator", "keep_from_edge_precision"));
+            m_Navigator.CurrentPosDiffRecalcThreshold = float.Parse(debug_ini.IniReadValue("Navigator", "current_pos_diff_recalc_threshold"));
+
             m_Explorer.ChangeExploreCellSize(int.Parse(debug_ini.IniReadValue("Explorer", "explore_cell_size")));
+            m_Explorer.Enabled = bool.Parse(debug_ini.IniReadValue("Explorer", "enabled"));
+            m_Explorer.ExploreDestPrecision= float.Parse(debug_ini.IniReadValue("Explorer", "explore_dest_precision"));
+
+            m_BotSpeed = float.Parse(debug_ini.IniReadValue("Bot", "speed"));
         }
 
         private void OnLoad(object sender, EventArgs e)
@@ -175,7 +185,7 @@ namespace Nav
                             RenderHelper.Render(explore_cell, m_Explorer.ExploreDestPrecision, m_RenderCenter, e, m_RenderConnections, m_RenderIds);
 
                             if (m_RenderExploreArea)
-                                RenderHelper.DrawString(e.Graphics, Brushes.Black, m_RenderCenter, explore_cell.Position, explore_cell.CellsArea().ToString(), 5);
+                                RenderHelper.DrawString(e.Graphics, explore_cell.Small ? Brushes.DarkRed : Brushes.Black, m_RenderCenter, explore_cell.Position, explore_cell.CellsArea().ToString(), 12);
                         }
                     }
                 }
@@ -500,12 +510,18 @@ namespace Nav
                 else if (e.KeyCode == Keys.B)
                 {
                     Vec3 result = default(Vec3);
-                    m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
-                                       new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
-                                       MovementFlag.Walk,
-                                       ref result);
 
-                    m_Bot = new TestBot(m_Navmesh, m_Navigator, m_Explorer, result);
+                    if (m_Navigator.CurrentPos.IsZero())
+                    {
+                        m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                                           new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                                           MovementFlag.Fly,
+                                           ref result);
+                    }
+                    else
+                        result = m_Navigator.CurrentPos;
+
+                    m_Bot = new TestBot(m_Navmesh, m_Navigator, m_Explorer, result, m_BotSpeed);
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.C)
@@ -767,6 +783,7 @@ namespace Nav
         protected Nav.Navmesh m_Navmesh = null;
         protected Nav.NavigationEngine m_Navigator = null;
         protected Nav.ExplorationEngine m_Explorer = null;
+        protected float m_BotSpeed = 10;
         protected PointF m_RenderCenter = new PointF(200, 350);
         protected float m_RenderScale = 1.0f;
         protected float m_Zoom = 1000.0f;
