@@ -112,6 +112,7 @@ namespace Nav
                 foreach (ExploreCell explore_cell in m_ExploreCells)
                     explore_cell.Serialize(w);
 
+                w.Write(m_DestCell?.GlobalId ?? -1);
                 w.Write(ExploreCell.LastExploreCellGlobalId);
 
                 m_HintPos.Serialize(w);
@@ -149,6 +150,10 @@ namespace Nav
 
                 foreach (ExploreCell explore_cell in m_ExploreCells)
                     explore_cell.Deserialize(m_ExploreCells, all_cells, r);
+
+                var dest_cell_global_id = r.ReadInt32();
+                if (dest_cell_global_id >= 0)
+                    m_DestCell = m_ExploreCells.FirstOrDefault(x => x.GlobalId == dest_cell_global_id);
 
                 ExploreCell.LastExploreCellGlobalId = r.ReadInt32();
 
@@ -318,21 +323,31 @@ namespace Nav
             ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => x.CellsContains2D(curr_pos));
 
             if (current_explore_cell == null)
-                current_explore_cell = m_ExploreCells.FirstOrDefault(x => x.Contains2D(curr_pos));
-
-            // find nearest explore cell
-            if (current_explore_cell == null)
             {
-                float min_dist = float.MaxValue;
+                // try explore cells containing current position first
+                var potential_explore_cells = m_ExploreCells.Where(x => x.Contains2D(curr_pos));
 
-                foreach (ExploreCell explore_cell in m_ExploreCells)
+                if (potential_explore_cells == null)
+                    potential_explore_cells = m_ExploreCells; // find nearest explore cell
+
+                if (potential_explore_cells != null)
                 {
-                    float dist = explore_cell.Position.DistanceSqr(curr_pos);
-
-                    if (dist < min_dist)
+                    if (potential_explore_cells.Count() == 1)
+                        current_explore_cell = potential_explore_cells.First();
+                    else
                     {
-                        current_explore_cell = explore_cell;
-                        min_dist = dist;
+                        float min_dist = float.MaxValue;
+
+                        foreach (var explore_cell in potential_explore_cells)
+                        {
+                            float dist = explore_cell.Cells.Select(x => x.Distance(curr_pos)).Min();
+
+                            if (dist < min_dist)
+                            {
+                                current_explore_cell = explore_cell;
+                                min_dist = dist;
+                            }
+                        }
                     }
                 }
             }
