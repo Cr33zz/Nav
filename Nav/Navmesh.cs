@@ -186,7 +186,7 @@ namespace Nav
         internal static List<Cell> m_CellsCache = new List<Cell>();
 
         // Returns true when position is on navmesh. Acquires DataLock (read)
-        internal bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool nearest = false, float nearest_tolerance = -1, bool test_2d = false, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
+        internal bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
         {
             using (new ReadLock(DataLock))
             {
@@ -880,13 +880,13 @@ namespace Nav
             using (new ReadLock(DataLock))
             {
                 // do not ignore disabled since cells patches do not include replacement cells!
-                GetCellAt(pos1, out Cell pos1_cell, flags, true, true, nearest_tolerance, false, 2);
+                GetCellAt(pos1, out Cell pos1_cell, flags, true, true, nearest_tolerance, test_2d: true);
 
                 if (pos1_cell == null)
                     return false;
 
                 // do not ignore disabled since cells patches do not include replacement cells!
-                GetCellAt(pos2, out Cell pos2_cell, flags, true, true, nearest_tolerance, false, 2);
+                GetCellAt(pos2, out Cell pos2_cell, flags, true, true, nearest_tolerance, test_2d: true);
 
                 if (pos2_cell == null)
                     return false;

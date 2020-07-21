@@ -53,6 +53,8 @@ namespace Nav
         // defines how user can move through navmesh
         public MovementFlag MovementFlags { get; set; } = MovementFlag.Walk;
 
+        public bool Navigate2D { get; set; } = true;
+
         // precision with each path node will be accepted as reached
         public float DefaultPrecision { get; set; } = 10;
 
@@ -75,6 +77,9 @@ namespace Nav
 
         // each point on path will be offset-ed in direction from previous point so bot will move along path more precisely even with high precision parameter
         public float PathNodesShiftDist { get; set; } = 10;
+
+        // distance to bounce away from wall (used by anti-stuck feature)
+        public float BounceDist { get; set; } = 10;
 
         // when new CurrentPos differ from last one by more than this value path update will be automatically requested
         public float CurrentPosDiffRecalcThreshold { set; get; } = 15;
@@ -163,8 +168,8 @@ namespace Nav
 
                 List<path_pos> tmp_path = new List<path_pos>();
 
-                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, as_close_as_possible, -1, false, 2, null);
-                bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, as_close_as_possible, -1, false, 2, null);
+                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, as_close_as_possible);
+                bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, as_close_as_possible);
 
                 // align to position to closest cell
                 if (!end_on_nav_mesh)
@@ -173,8 +178,8 @@ namespace Nav
                 if (bounce)
                 {
                     Vec3 bounce_dir = start.AABB.GetBounceDir2D(from);
-                    Vec3 new_from = from + bounce_dir * 10;
-                    m_Navmesh.GetCellAt(new_from, out start, flags, false, as_close_as_possible, -1, false, 2, null);
+                    Vec3 new_from = from + bounce_dir * BounceDist;
+                    m_Navmesh.GetCellAt(new_from, out start, flags, false, as_close_as_possible);
 
                     if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, true))
                         return false;
@@ -211,7 +216,7 @@ namespace Nav
                 if (from.IsZero())
                     return false;
 
-                m_Navmesh.GetCellAt(from, out Cell start, flags, false, true, -1, false, 2, null);
+                m_Navmesh.GetCellAt(from, out Cell start, flags, false, true);
 
                 List<path_pos> tmp_path = new List<path_pos>();
 
@@ -274,7 +279,7 @@ namespace Nav
                     path_pos ray_end_data = path[ray_start_index + 2];
 
                     Vec3 dir = ray_end_data.pos - intermediate_data.pos;
-                    float length = dir.Normalize();
+                    float length = dir.Normalize2D();
                     int steps = (int)(length / PathSmoothingPrecision);
                     float max_movement_cost_mult = Math.Min(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult);
 
@@ -292,7 +297,7 @@ namespace Nav
                         intermediate_data = path[ray_start_index + 1] = new path_pos(last_unobstucted_result.End, last_unobstucted_result.EndCell);
 
                     dir = ray_start_data.pos - intermediate_data.pos;
-                    length = dir.Normalize();
+                    length = dir.Normalize2D();
                     steps = (int)(length / PathSmoothingPrecision);
                     max_movement_cost_mult = Math.Min(ray_start_data.cell.MovementCostMult, intermediate_data.cell.MovementCostMult);
 
@@ -405,7 +410,11 @@ namespace Nav
                     }
 
                     if (path.Count != start_count)
-                        path[i] = merge_point / (float)(start_count - path.Count + 1);
+                    {
+                        Vec3 new_point = merge_point / (float)(start_count - path.Count + 1);
+                        new_point.Z = path[i].Z;
+                        path[i] = new_point;
+                    }
                 }
             }
 
@@ -415,7 +424,7 @@ namespace Nav
                 for (int i = path.Count - 2; i > 0; --i)
                 {
                     Vec3 dir_to_next = path[i] - path[i - 1];
-                    float dist = dir_to_next.Normalize();
+                    float dist = dir_to_next.Normalize2D();
 
                     if (dist > 0.01)
                         path[i] += dir_to_next * shift_nodes_distance;
