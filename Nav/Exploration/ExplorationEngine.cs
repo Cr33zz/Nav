@@ -445,7 +445,7 @@ namespace Nav
 
             using (new ReadLock(DataLock, true))
             {
-                if (m_Navigator.GetDestinationType() < DestType.Explore)
+                if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false))
                 {
                     m_DestCell = GetDestinationCell();
                     m_Navigator.SetDestination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision);
