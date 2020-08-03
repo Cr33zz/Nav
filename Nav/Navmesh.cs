@@ -142,9 +142,9 @@ namespace Nav
 
                 m_AllCells.UnionWith(incoming_cells);
                 UpdateCellsPatches(incoming_cells);
-
-                NotifyOnGridCellAdded(g_cell);
             }
+
+            NotifyOnGridCellAdded(g_cell);
 
             if (trigger_nav_data_change)
                 NotifyOnNavDataChanged();
