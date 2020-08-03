@@ -127,6 +127,8 @@ namespace Nav
         // when not in threat but path leads through threats IsThreatAhead will be turned when agent is closer than ThreatDetectionRange from a threat ahead
         public float ThreatDetectionRange { get; set; } = 10;
 
+        public float ThreatDetectionPrecision { get; set; } = 0.5f;
+
         // should be used when EnableAntiStuck is true to notify navigator that actor is not blocked by some obstacle but just standing
         public bool IsStandingOnPurpose { get; set; } = true;
 
@@ -1004,7 +1006,7 @@ namespace Nav
                         // since often times we will be traveling along the regions we need to test with slightly minimized region
                         foreach (var t in threats)
                         {
-                            if (t.Area.Resized(-0.5f).SegmentTest2D(current_pos, go_to_pos, ref threat_pos))
+                            if (t.Area.Resized(-ThreatDetectionPrecision).SegmentTest2D(current_pos, go_to_pos, ref threat_pos))
                             {
                                 threat_ahead = current_pos.Distance2D(threat_pos) <= ThreatDetectionRange;
                                 break;
