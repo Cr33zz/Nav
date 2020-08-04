@@ -501,11 +501,14 @@ namespace Nav
                 HashSet<int> tmp_overlapping_grid_cells = new HashSet<int>();
 
                 // find all cells inside cell_aabb
-                foreach (GridCell grid_cell in m_Navmesh.m_GridCells.Where(x => x.AABB.Overlaps2D(cell_aabb)))
+                using (m_Navmesh.AcquireReadDataLock())
                 {
-                    tmp_overlapping_grid_cells.Add(grid_cell.Id);
+                    foreach (GridCell grid_cell in m_Navmesh.m_GridCells.Where(x => x.AABB.Overlaps2D(cell_aabb)))
+                    {
+                        tmp_overlapping_grid_cells.Add(grid_cell.Id);
 
-                    cells.AddRange(grid_cell.GetCells(x => x.HasFlags(movement_flags) && cell_aabb.Overlaps2D(x.AABB), false));
+                        cells.AddRange(grid_cell.GetCells(x => x.HasFlags(movement_flags) && cell_aabb.Overlaps2D(x.AABB), false));
+                    }
                 }
 
                 // for traversing purposes list will be faster
