@@ -96,6 +96,11 @@ namespace Nav
 
         public bool AntiStuckActive => m_AntiStuckPathingLevel > 0;
 
+        // position must change from last one by at least this to reset precision override
+        public float MinDistToResetAntiStuckPrecision { get; set; } = 10;
+        public float MinDistToResetAntiStuckPathing { get; set; } = 25;
+        public float AntiStuckPrecisionOverride { get; set; } = 60;
+
         // turn on/off danger detection and danger avoidance
         public bool EnableThreatAvoidance { get; set; } = false;
 
@@ -1160,9 +1165,6 @@ namespace Nav
             if (!EnableAntiStuck)
                 return;
 
-            const float MIN_DIST_TO_RESET_ANTI_STUCK_PRECISION = 10;
-            const float MIN_DIST_TO_RESET_ANTI_STUCK_PATHING = 25;
-
             const float MIN_TIME_TO_RECALCULATE_PATH = 2000;
             const float MIN_TIME_TO_OVERRIDE_PRECISION = 4000;
             const float MIN_TIME_TO_BOUNCE = 6000;
@@ -1172,14 +1174,14 @@ namespace Nav
 
             using (new ReadLock(AntiStuckLock, true))
             {
-                if (m_AntiStuckPrecisionTestPos.IsZero() || m_AntiStuckPrecisionTestPos.Distance(curr_pos) > MIN_DIST_TO_RESET_ANTI_STUCK_PRECISION)
+                if (m_AntiStuckPrecisionTestPos.IsZero() || m_AntiStuckPrecisionTestPos.Distance(curr_pos) > MinDistToResetAntiStuckPrecision)
                     ResetAntiStuckPrecition(curr_pos);
                 else if (IsStandingOnPurpose)
                     m_AntiStuckPrecisionTimer.Stop();
                 else
                     m_AntiStuckPrecisionTimer.Start();
 
-                if (m_AntiStuckPathingTestPos.IsZero() || m_AntiStuckPathingTestPos.Distance(curr_pos) > MIN_DIST_TO_RESET_ANTI_STUCK_PATHING)
+                if (m_AntiStuckPathingTestPos.IsZero() || m_AntiStuckPathingTestPos.Distance(curr_pos) > MinDistToResetAntiStuckPathing)
                     ResetAntiStuckPathing(curr_pos);
                 else if (IsStandingOnPurpose)
                     m_AntiStuckPathingTimer.Stop();
@@ -1188,7 +1190,7 @@ namespace Nav
 
                 // handle anti stuck precision management features
                 if (m_AntiStuckPrecisionTimer.ElapsedMilliseconds > MIN_TIME_TO_OVERRIDE_PRECISION)
-                    m_PrecisionOverride = 60;
+                    m_PrecisionOverride = AntiStuckPrecisionOverride;
 
                 // handle anti stuck path management features
 
