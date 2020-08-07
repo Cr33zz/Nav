@@ -240,7 +240,7 @@ namespace Nav
                             if (exclude_cells != null && exclude_cells.Contains(cell))
                                 continue;
 
-                            float dist = cell.Distance(p);
+                            float dist = test_2d ? cell.Distance2D(p) : cell.Distance(p);
 
                             if ((nearest_tolerance < 0 || dist <= nearest_tolerance) && dist < min_dist)
                             {
