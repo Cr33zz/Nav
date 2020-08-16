@@ -195,19 +195,6 @@ namespace Nav
                 if (p.IsZero())
                     return false;
 
-                // check cache first
-                //using (new ReadLock(CellsCacheLock))
-                //{
-                //    foreach (Cell cell in m_CellsCache.FindAll(x => x.HasFlags(flags)))
-                //    {
-                //        if ((allow_disabled || !cell.Disabled) && (exclude_cells == null || !exclude_cells.Contains(cell)) && (test_2d ? cell.Contains2D(p) : cell.Contains(p, z_tolerance)))
-                //        {
-                //            c = cell;
-                //            return true;
-                //        }
-                //    }
-                //}
-
                 float min_dist = float.MaxValue;
 
                 foreach (GridCell grid_cell in m_GridCells)
@@ -218,14 +205,6 @@ namespace Nav
                         foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (exclude_cells == null || !exclude_cells.Contains(x)) && x.HasFlags(flags)))
                         {
                             result_cell = cell;
-
-                            //using (new WriteLock(CellsCacheLock))
-                            //{
-                            //    m_CellsCache.Add(cell);
-
-                            //    if (m_CellsCache.Count > MAX_CELLS_CACHE_SIZE)
-                            //        m_CellsCache.RemoveAt(0);
-                            //}
 
                             return true;
                         }
@@ -252,6 +231,30 @@ namespace Nav
                 }
 
                 return false;
+            }
+        }
+
+        internal void GetCellsWithin(Vec3 p, out List<Cell> result_cells, MovementFlag flags, float radius, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
+        {
+            using (new ReadLock(DataLock))
+            {
+                result_cells = new List<Cell>();
+
+                if (p.IsZero())
+                    return;
+
+                foreach (GridCell grid_cell in m_GridCells)
+                {
+                    var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags));
+
+                    foreach (Cell cell in cells)
+                    {
+                        float dist = test_2d ? cell.Distance2D(p) : cell.Distance(p);
+
+                        if (dist <= radius)
+                            result_cells.Add(cell);
+                    }
+                }
             }
         }
 
@@ -880,23 +883,29 @@ namespace Nav
             using (new ReadLock(DataLock))
             {
                 // do not ignore disabled since cells patches do not include replacement cells!
-                GetCellAt(pos1, out Cell pos1_cell, flags, true, true, nearest_tolerance, test_2d: true);
+                GetCellsWithin(pos1, out var pos1_cells, flags, nearest_tolerance, true, test_2d: true);
 
-                if (pos1_cell == null)
+                if (pos1_cells.Count == 0)
                     return false;
 
                 // do not ignore disabled since cells patches do not include replacement cells!
-                GetCellAt(pos2, out Cell pos2_cell, flags, true, true, nearest_tolerance, test_2d: true);
+                GetCellsWithin(pos2, out var pos2_cells, flags, nearest_tolerance, true, test_2d: true);
 
-                if (pos2_cell == null)
+                if (pos2_cells.Count == 0)
                     return false;
 
-                IEnumerable<CellsPatch> pos1_patches = m_CellsPatches.Where(x => x.Cells.Contains(pos1_cell));
-
-                foreach (var p in pos1_patches)
+                foreach (var pos1_cell in pos1_cells)
                 {
-                    if (p.Cells.Contains(pos2_cell))
-                        return true;
+                    IEnumerable<CellsPatch> pos1_patches = m_CellsPatches.Where(x => x.Cells.Contains(pos1_cell));
+
+                    foreach (var p in pos1_patches)
+                    {
+                        foreach (var pos2_cell in pos2_cells)
+                        {
+                            if (p.Cells.Contains(pos2_cell))
+                                return true;
+                        }
+                    }
                 }
 
                 return false;
