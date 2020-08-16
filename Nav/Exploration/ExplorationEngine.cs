@@ -163,7 +163,7 @@ namespace Nav
 
         public virtual void OnHugeCurrentPosChange()
         {
-            RequestExplorationUpdate();
+            RequestReevaluation();
         }
 
         internal virtual ExploreCell GetDestinationCell()
@@ -191,7 +191,7 @@ namespace Nav
                 m_Enabled = CanBeEnabled() && value;
 
                 if (value)
-                    RequestExplorationUpdate();
+                    RequestReevaluation();
                 else
                     m_Navigator.ClearDestination(DestType.Explore);
             }
@@ -213,9 +213,9 @@ namespace Nav
         protected Navmesh m_Navmesh;
         protected NavigationEngine m_Navigator;
 
-        internal void RequestExplorationUpdate()
+        internal void RequestReevaluation()
         {
-            m_ForceNavUpdate = true;
+            m_ForceReevaluation = true;
         }
 
         public void OnDestinationReached(DestType type, Vec3 dest)
@@ -283,7 +283,7 @@ namespace Nav
 
         public virtual void OnNavDataChanged()
         {
-            RequestExplorationUpdate();
+            RequestReevaluation();
         }
 
         public virtual void OnNavDataCleared()
@@ -407,13 +407,14 @@ namespace Nav
             {
                 long time = timer.ElapsedMilliseconds;
 
-                if (Enabled && (m_ForceNavUpdate || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || m_Navigator.GetDestinationType() < DestType.Explore))
+                if (Enabled && (m_ForceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || m_Navigator.GetDestinationType() < DestType.Explore))
                 {
                     last_update_time = time;
-                    m_ForceNavUpdate = false;
-
+                    
                     //using (new Profiler("[Nav] Nav updated [%t]"))
-                        UpdateExploration();
+                    UpdateExploration();
+
+                    m_ForceReevaluation = false;
                 }
                 else
                     Thread.Sleep(50);
@@ -445,7 +446,7 @@ namespace Nav
 
             using (new ReadLock(DataLock, true))
             {
-                if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false))
+                if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
                 {
                     m_DestCell = GetDestinationCell();
                     m_Navigator.SetDestination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision);
@@ -599,7 +600,7 @@ namespace Nav
         
         private Thread UpdatesThread = null;        
 
-        private volatile bool m_ForceNavUpdate = false;
+        private volatile bool m_ForceReevaluation = false;
         protected int m_UpdateExplorationInterval = 300;
 
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
