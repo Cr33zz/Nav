@@ -14,8 +14,8 @@ namespace Nav
         Explore = 0x0001,
         Waypoint = 0x0002,
         Grid = 0x0004,
-        Custom = 0x0008, // same as user but not cleared automatically
-        User = 0x0010,
+        User = 0x0008,
+        Custom = 0x0010, // same as user but not cleared automatically
         BackTrack = 0x0020, // used for moving along historical destinations
         RunAway = 0x0040, // not used yet
         All = 0xFFFF,
