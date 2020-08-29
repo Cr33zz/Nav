@@ -40,6 +40,9 @@ namespace Nav
 
         public void ChangeExploreCellSize(int size)
         {
+            if (size <= 0)
+                return;
+
             ExploreCellSize = size;
             Clear();
         }
