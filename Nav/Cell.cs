@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Drawing;
 using System.IO;
+using System.Threading;
 
 namespace Nav
 {
@@ -29,14 +30,14 @@ namespace Nav
                 InitCell(-1, new AABB(0, 0, 0, 0, 0, 0), MovementFlag.None, 1);
         }
 
-        public Cell(float min_x, float min_y, float min_z, float max_x, float max_y, float max_z, MovementFlag flags, int id = -1)
+        public Cell(float min_x, float min_y, float min_z, float max_x, float max_y, float max_z, MovementFlag flags, float movement_cost_mult = 1, int id = -1)
         {
-            InitCell(id, new AABB(min_x, min_y, min_z, max_x, max_y, max_z), flags, 1);
+            InitCell(id, new AABB(min_x, min_y, min_z, max_x, max_y, max_z), flags, movement_cost_mult);
         }
 
-        public Cell(Vec3 min, Vec3 max, MovementFlag flags, int id = -1)
+        public Cell(Vec3 min, Vec3 max, MovementFlag flags, float movement_cost_mult = 1, int id = -1)
         {
-            InitCell(id, new AABB(min, max), flags, 1);
+            InitCell(id, new AABB(min, max), flags, movement_cost_mult);
         }
 
         public Cell(AABB aabb, MovementFlag flags, float movement_cost_mult = 1, int id = -1)
@@ -63,7 +64,7 @@ namespace Nav
             Disabled = false;
             AABB = aabb;
             Neighbours = new List<Neighbour>();
-            GlobalId = LastCellGlobalId++;
+            GlobalId = Interlocked.Increment(ref LastCellGlobalId);
         }
 
         public override string ToString()

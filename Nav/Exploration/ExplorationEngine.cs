@@ -284,7 +284,7 @@ namespace Nav
             }
         }
 
-        public virtual void OnNavDataChanged()
+        public virtual void OnNavDataChanged(AABB affected_area)
         {
             RequestReevaluation();
         }
@@ -526,7 +526,8 @@ namespace Nav
                 {
                     HashSet<Cell> visited = new HashSet<Cell>();
 
-                    Algorihms.Visit(cells_copy.First(), ref visited, movement_flags, true, 1, -1, cells_copy);
+                    using (m_Navmesh.AcquireReadDataLock())
+                        Algorihms.Visit(cells_copy.First(), ref visited, movement_flags, true, 1, -1, cells_copy);
 
                     List<AABB> intersections = new List<AABB>();
                     AABB intersections_aabb = new AABB();

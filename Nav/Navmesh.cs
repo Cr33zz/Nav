@@ -147,7 +147,7 @@ namespace Nav
             NotifyOnGridCellAdded(g_cell);
 
             if (trigger_nav_data_change)
-                NotifyOnNavDataChanged();
+                NotifyOnNavDataChanged(g_cell.AABB);
 
             return true;
         }
@@ -408,6 +408,8 @@ namespace Nav
             // copy current regions to avoid acquiring lock later
             var regions_copy = Regions;
 
+            AABB affected_area = AABB.ZERO;
+
             using (new WriteLock(DataLock))
             using (new Profiler($"[Nav] Updating {regions_copy.Count} regions took %t", 50))
             {
@@ -419,6 +421,7 @@ namespace Nav
                     // update cells overlapped by avoid areas
                     foreach (Region region in regions_copy)
                     {
+                        affected_area.Extend(region.Area);
                         var grid_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(region.Area));
 
                         // do not ignore disabled cells on purpose so we don't have to iterate separately over
@@ -563,7 +566,7 @@ namespace Nav
 
                 if (nav_data_changed)
                 {
-                    NotifyOnNavDataChanged();
+                    NotifyOnNavDataChanged(affected_area);
                 }
 
                 // remove inactive data
@@ -649,7 +652,7 @@ namespace Nav
                                 if (data.Length > 7)
                                     flags = (MovementFlag)int.Parse(data[7]);
 
-                                Cell n_cell = new Cell(new Vec3(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3])) - cell_shrink_size, new Vec3(float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])) - cell_shrink_size, flags, m_LastCellId++);
+                                Cell n_cell = new Cell(new Vec3(float.Parse(data[1]), float.Parse(data[2]), float.Parse(data[3])) - cell_shrink_size, new Vec3(float.Parse(data[4]), float.Parse(data[5]), float.Parse(data[6])) - cell_shrink_size, flags, 1, m_LastCellId++);
                                 g_cell.Add(n_cell);
                             }
                             else if (data[0] == "r")
@@ -1067,10 +1070,13 @@ namespace Nav
                 {
                     cell.Serialize(w);
 
-                    foreach (var neighbour in cell.Neighbours)
+                    if (Verbose)
                     {
-                        if (m_AllCells.FirstOrDefault(x => x.GlobalId == neighbour.cell.GlobalId) == null)
-                            Log("[Nav] Cell neighbour not on all cells list! Cell info [" +  neighbour.cell.ToString() + "]", true);
+                        foreach (var neighbour in cell.Neighbours)
+                        {
+                            if (m_AllCells.FirstOrDefault(x => x.GlobalId == neighbour.cell.GlobalId) == null)
+                                Log("[Nav] Cell neighbour not on all cells list! Cell info [" + neighbour.cell.ToString() + "]", true);
+                        }
                     }
                 }
 
@@ -1204,7 +1210,7 @@ namespace Nav
             UpdatesThread.Join();
         }
 
-        protected internal void Log(string msg, bool force = false)
+        internal protected void Log(string msg, bool force = false)
         {
             if (Verbose || force)
             {
@@ -1262,7 +1268,7 @@ namespace Nav
                 m_Observers.Remove(observer);
         }
 
-        protected void NotifyOnNavDataChanged()
+        protected void NotifyOnNavDataChanged(AABB affected_area = default(AABB))
         {
             List<INavmeshObserver> observers_copy = null;
 
@@ -1270,7 +1276,7 @@ namespace Nav
                 observers_copy = m_Observers.ToList();
 
             foreach (INavmeshObserver observer in observers_copy)
-                observer.OnNavDataChanged();
+                observer.OnNavDataChanged(affected_area);
         }
 
         protected void NotifyOnGridCellAdded(GridCell g_cell)

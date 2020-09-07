@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 
 namespace Nav
 {
@@ -11,7 +12,7 @@ namespace Nav
         {
             Flags = movement_flags;
             Cells = cells;
-            GlobalId = LastCellsPatchGlobalId++;
+            GlobalId = Interlocked.Increment(ref LastCellsPatchGlobalId);
         }
 
         internal override void Serialize(BinaryWriter w)

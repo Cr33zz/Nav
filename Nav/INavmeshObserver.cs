@@ -5,7 +5,7 @@ namespace Nav
     public interface INavmeshObserver
     {
         void OnGridCellAdded(GridCell grid_cell);
-        void OnNavDataChanged();
+        void OnNavDataChanged(AABB affected_area);
         void OnNavDataCleared();
     }
 }

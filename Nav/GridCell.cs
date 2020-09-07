@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 
 namespace Nav
 {
@@ -27,7 +28,7 @@ namespace Nav
         private void InitGridCell(int area_id)
         {
             AreaId = area_id;
-            GlobalId = LastGridCellGlobalId++;
+            GlobalId = Interlocked.Increment(ref LastGridCellGlobalId);
         }
 
         public float MIN_CELL_AREA_TO_CONSIDER = 0;

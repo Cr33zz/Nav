@@ -1296,8 +1296,9 @@ namespace Nav
         {
         }
 
-        public virtual void OnNavDataChanged()
+        public virtual void OnNavDataChanged(AABB affected_area)
         {
+            //m_Navmesh.Log($"[Nav] Request path update OnNavDataChanged.");
             RequestPathUpdate();
         }
 
