@@ -611,6 +611,7 @@ namespace Nav
                 m_GridCells.Clear();
                 m_Regions.Clear();
                 CellsOverlappedByRegions.Clear();
+                LastBlockers.Clear();
                 m_CellsPatches.Clear();
                 CellsPatch.LastCellsPatchGlobalId = 0;
                 Cell.LastCellGlobalId = 0;
@@ -1129,6 +1130,10 @@ namespace Nav
                     w.Write(entry.Key);
                     entry.Value.Serialize(w);
                 }
+
+                w.Write(LastBlockers.Count);
+                foreach (var blocker in LastBlockers)
+                    blocker.Serialize(w);
             }
 
             Log("[Nav] Navmesh serialized.");
@@ -1215,6 +1220,10 @@ namespace Nav
                         int key = r.ReadInt32();
                         CellsOverlappedByRegions.Add(key, new overlapped_cell_data(m_GridCells, m_AllCells, r));
                     }
+
+                    int blockers_count = r.ReadInt32();
+                    for (int i = 0; i < blockers_count; ++i)
+                        LastBlockers.Add(new AABB(r));
                 }
             }
 
