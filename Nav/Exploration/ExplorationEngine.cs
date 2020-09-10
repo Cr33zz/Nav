@@ -456,8 +456,32 @@ namespace Nav
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
 
-                if (m_DestCell != null && (AlternativeExploredCondition?.Invoke(m_DestCell, current_pos) ?? false))
-                    OnCellExplored(m_DestCell);
+                if (m_DestCell != null)
+                {
+                    bool mark_dest_cell_as_explored = false;
+                    bool is_dest_cell_connected = m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision);
+
+                    // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
+                    if (!is_dest_cell_connected)
+                    {
+                        if (!m_DestCell.Delayed)
+                        {
+                            m_DestCell.Delayed = true;
+                            m_ForceReevaluation = true; // this is a change to find another un-delayed explore cell
+                        }
+                        else
+                        {
+                            // looks like there are no better cells to visit, and there is no way to reach this one... so sorry but we have to mark it as explored
+                            mark_dest_cell_as_explored = true;
+                        }
+                    }
+                    
+                    // mark destination cell as explored when external function says so or destination cell is no longer connected (mostly due to nav blocker)
+                    mark_dest_cell_as_explored |= AlternativeExploredCondition?.Invoke(m_DestCell, current_pos) ?? false;
+
+                    if (mark_dest_cell_as_explored)
+                        OnCellExplored(m_DestCell);
+                }
 
                 // mark cells as explored when passing by close enough
                 ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => !x.Explored && x.Position.Distance2D(current_pos) < ExploreDestPrecision);
