@@ -562,22 +562,26 @@ namespace Nav
             }
         }
 
-        public static List<CellsPatch> GenerateCellsPatches(List<Cell> cells, MovementFlag movement_flags)
+        public static HashSet<CellsPatch> GenerateCellsPatches(IEnumerable<Cell> cells, MovementFlag movement_flags, bool skip_disabled = false)
         {
-            List<CellsPatch> patches = new List<CellsPatch>();
+            var patches = new HashSet<CellsPatch>();
 
             //create cells patch for each interconnected group of cells
-            HashSet<Cell> cells_copy = new HashSet<Cell>(cells);
+            var cells_copy = new HashSet<Cell>(cells);
 
             while (cells_copy.Count > 0)
             {
+                var start_cell = cells_copy.FirstOrDefault(x => x.HasFlags(movement_flags) && (!skip_disabled || !x.Disabled));
+
+                if (start_cell == null)
+                    break;
+
                 HashSet<Cell> visited = new HashSet<Cell>();
 
-                Algorihms.Visit(cells_copy.First(), ref visited, movement_flags, true, 1, -1, cells_copy);
+                Algorihms.Visit(start_cell, ref visited, movement_flags, !skip_disabled);
 
                 patches.Add(new CellsPatch(visited, movement_flags));
-
-                cells_copy.RemoveWhere(x => visited.Contains(x));
+                cells_copy.ExceptWith(visited);
             }
 
             return patches;

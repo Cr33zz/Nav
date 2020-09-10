@@ -190,6 +190,24 @@ namespace Nav
                     }
                 }
 
+                if (m_RenderPatches)
+                {
+                    using (m_Navmesh.AcquireReadDataLock())
+                    {
+                        int id = 0;
+                        foreach (var patch in m_Navmesh.m_CellsPatches)
+                        {
+                            var rng = new Random(id++);
+                            Color c = Color.FromArgb(rng.Next(255), rng.Next(255), rng.Next(255));
+
+                            foreach (var cell in patch.Cells)
+                            {
+                                RenderHelper.Render(cell, m_RenderCenter, e, draw_connections: false, draw_id: false, render_move_cost_mult: false, render_threat: false, render_outline: false, force_color: c);
+                            }
+                        }
+                    }
+                }
+
                 if (m_RenderRegionsMode == RegionsRenderMode.Outline)
                 {
                     var regions = m_Navmesh.Regions;
@@ -503,7 +521,7 @@ namespace Nav
                     //Thread t = new Thread(dbg_MovingRegions);
                     //t.Start();
 
-                    m_Navmesh.dbg_GenerateRandomAvoidAreas(100, 2, 2);
+                    m_Navmesh.dbg_GenerateRandomAvoidAreas(100, -1, 300, 2);
 
                     e.Handled = true;
                 }
@@ -558,6 +576,11 @@ namespace Nav
                         m_Bot.BackTrace = !m_Bot.BackTrace;
                     e.Handled = true;
                 }
+                else if (e.KeyCode == Keys.P)
+                {
+                    m_RenderPatches = !m_RenderPatches;
+                    e.Handled = true;
+                }
             }
         }
 
@@ -580,6 +603,7 @@ namespace Nav
             legend.Add(new LegendEntry("8: Toggle render original path", true, m_RenderOriginalPath));
             legend.Add(new LegendEntry("9: Toggle render ray cast", true, m_RenderRayCast));
             legend.Add(new LegendEntry("0: Toggle render back track path", true, m_RenderBacktrackPath));
+            legend.Add(new LegendEntry("P: Toggle render patches", true, m_RenderPatches));
             legend.Add(new LegendEntry("S: Set current pos", false));
             legend.Add(new LegendEntry("E: Set destination pos", false));
             legend.Add(new LegendEntry("B: Run bot", false));
@@ -806,6 +830,7 @@ namespace Nav
         private bool m_RenderCells = true;
         private bool m_RenderLegend = true;
         private bool m_RenderGrids = false;
+        private bool m_RenderPatches = false;
         private bool m_CenterOnBot = true;
         private PointF m_LastDragMousePos = PointF.Empty;
         private TestBot m_Bot = null;
@@ -835,12 +860,13 @@ namespace Nav
             return new_min + (new_max - new_min) * value_progress;
         }
 
-        public static void Render(Nav.Cell cell, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id, bool render_move_cost_mult, bool render_threat)
+        public static void Render(Nav.Cell cell, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id, bool render_move_cost_mult, bool render_threat, bool render_outline = true, Color force_color = default(Color))
         {
             if (cell.Disabled)
                 return;
 
-            DrawRectangle(e.Graphics, cell.Replacement ? REPLACEMENT_CELL_BORDER_PEN : CELL_BORDER_PEN, trans, cell.Min, cell.Max);
+            if (render_outline)
+                DrawRectangle(e.Graphics, cell.Replacement ? REPLACEMENT_CELL_BORDER_PEN : CELL_BORDER_PEN, trans, cell.Min, cell.Max);
 
             Color cell_color = Color.White;
 
@@ -860,7 +886,13 @@ namespace Nav
                 cell_color = Color.FromArgb(255, 255, threat_level, threat_level);
             }
 
-            FillRectangle(e.Graphics, cell.Flags == MovementFlag.Fly ? Brushes.Gray : new SolidBrush(cell_color), trans, cell.Min, cell.Max);
+            if (cell.Flags == MovementFlag.Fly)
+                cell_color = Color.Gray;
+
+            if (force_color != Color.Empty)
+                cell_color = force_color;
+
+            FillRectangle(e.Graphics, new SolidBrush(cell_color), trans, cell.Min, cell.Max);
 
             if (draw_connections)
             {

@@ -166,6 +166,9 @@ namespace Nav
                     // find all patches, this cell neighbors belongs to
                     foreach (var neighbour in c.Neighbours)
                     {
+                        if (neighbour.cell.Disabled || !neighbour.cell.HasFlags(MovementFlag.Walk))
+                            continue;
+
                         CellsPatch connected_patch = m_CellsPatches.FirstOrDefault(x => x.Cells.Contains(neighbour.cell));
 
                         if (connected_patch != null)
@@ -374,6 +377,7 @@ namespace Nav
         }
 
         private Dictionary<int, overlapped_cell_data> CellsOverlappedByRegions = new Dictionary<int, overlapped_cell_data>(); // @ DataLock
+        private HashSet<AABB> LastBlockers = new HashSet<AABB>(); //@ DataLock
 
         private void Updates()
         {
@@ -413,6 +417,8 @@ namespace Nav
             using (new WriteLock(DataLock))
             using (new Profiler($"[Nav] Updating {regions_copy.Count} regions took %t", 50))
             {
+                var blockers = new HashSet<AABB>();
+                
                 foreach (var data in CellsOverlappedByRegions)
                     data.Value.overlapping_regions.Clear();
 
@@ -439,6 +445,8 @@ namespace Nav
                             }
                         }
                     }
+
+                    blockers = new HashSet<AABB>(regions_copy.Where(x => x.MoveCostMult < 0).Select(x => x.Area));
                 }
 
                 List<int> no_longer_overlapped_cells_ids = new List<int>();
@@ -562,6 +570,15 @@ namespace Nav
 
                         m_CellsCache.Clear();
                     }
+                }
+
+                // if regions disabling navigation has changed we have to completely rebuild patches as some areas can be disconnected/reconnected
+                bool updatePatches = !blockers.SetEquals(LastBlockers);
+
+                if (updatePatches)
+                {
+                    m_CellsPatches = Algorihms.GenerateCellsPatches(m_AllCells, MovementFlag.Walk, skip_disabled: true);
+                    LastBlockers = blockers;
                 }
 
                 if (nav_data_changed)
@@ -973,7 +990,7 @@ namespace Nav
             return true;
         }
 
-        public void dbg_GenerateRandomAvoidAreas(int areas_num, float move_cost_mult, float threat = 0)
+        public void dbg_GenerateRandomAvoidAreas(int areas_num, float move_cost_mult, int approx_size, float threat = 0)
         {
             Random rng = new Random();
             List<Region> regions = new List<Region>();
@@ -983,7 +1000,7 @@ namespace Nav
                 for (int i = 0; i < areas_num; ++i)
                 {
                     Vec3 pos = GetRandomPos();
-                    float size = 20 + (float)rng.NextDouble() * 10;
+                    float size = approx_size + (float)rng.NextDouble() * (approx_size * 0.5f);
                     regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), move_cost_mult, threat));
                 }
             }
@@ -1303,9 +1320,9 @@ namespace Nav
 
         internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
         // cell patches are interconnected groups of cells allowing ultra fast connection checks
-        private HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
+        internal HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
-        private List<Region> m_Regions = new List<Region>(); //@ InputLock
+        private List<Region> m_Regions = new List<Region>(); //@ InputLock        
         private List<INavmeshObserver> m_Observers = new List<INavmeshObserver>(); //@ InputLock
     }
 }
