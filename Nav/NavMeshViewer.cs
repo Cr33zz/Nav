@@ -229,7 +229,7 @@ namespace Nav
                 if (m_RenderPositionsHistory)
                 {
                     m_Navigator.TryGetDebugPositionsHistory(ref m_LastPositionsHistory);
-                    RenderHelper.DrawLines(e.Graphics, Pens.Green, m_RenderCenter, m_LastPositionsHistory, 1);
+                    RenderHelper.DrawLines(e.Graphics, Pens.Green, m_RenderCenter, m_LastPositionsHistory, 1, true);
                 }
 
                 Vec3 curr = m_Navigator.CurrentPos;
@@ -908,10 +908,10 @@ namespace Nav
 
                         DrawLine(e.Graphics, EXPLORE_CELL_CONNECTION_PEN, trans, cell.Position, neighbour_cell.Position);
                     }
-
-                if (draw_id)
-                    DrawString(e.Graphics, Brushes.Black, trans, cell.Position, cell.Id.ToString(), 10);
             }
+
+            if (draw_id)
+                DrawString(e.Graphics, Brushes.Black, trans, cell.Position, cell.GlobalId.ToString() + " (" + cell.Id.ToString() + ")", 10);
         }
 
         public static void Render(Nav.Navmesh navmesh, Nav.ExploreCell cell, List<Nav.ExploreCell> all_cells, PointF trans, PaintEventArgs e, bool draw_id)
