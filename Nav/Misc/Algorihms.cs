@@ -276,6 +276,26 @@ namespace Nav
             return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end), flags, ref path);
         }
 
+        public static List<Cell> GetCellsWithin(IEnumerable<Cell> cells, Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
+        {
+            var result_cells = new List<Cell>();
+
+            if (p.IsZero())
+                return result_cells;
+
+            var filtered_cells = cells.Where(x => (allow_disabled || !x.Disabled) && (x.Flags & flags) == flags);
+
+            foreach (Cell cell in filtered_cells)
+            {
+                float dist = test_2d ? cell.Distance2D(p) : cell.Distance(p);
+
+                if (dist <= radius)
+                    result_cells.Add(cell);
+            }
+
+            return result_cells;
+        }
+
         private static NodeInfo GetNodeInfoFromList(Cell node, Vec3 leading_point, List<NodeInfo> list)
         {
             for (int i = 0; i < list.Count; ++i)
@@ -567,11 +587,11 @@ namespace Nav
             var patches = new HashSet<CellsPatch>();
 
             //create cells patch for each interconnected group of cells
-            var cells_copy = new HashSet<Cell>(cells);
+            var cells_copy = new HashSet<Cell>(cells.Where(x => x.HasFlags(movement_flags) && (!skip_disabled || !x.Disabled)));
 
             while (cells_copy.Count > 0)
             {
-                var start_cell = cells_copy.FirstOrDefault(x => x.HasFlags(movement_flags) && (!skip_disabled || !x.Disabled));
+                var start_cell = cells_copy.FirstOrDefault();
 
                 if (start_cell == null)
                     break;

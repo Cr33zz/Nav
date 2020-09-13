@@ -237,27 +237,19 @@ namespace Nav
             }
         }
 
-        internal void GetCellsWithin(Vec3 p, out List<Cell> result_cells, MovementFlag flags, float radius, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
+        internal List<Cell> GetCellsWithin(Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
         {
             using (new ReadLock(DataLock))
             {
-                result_cells = new List<Cell>();
+                var result_cells = new List<Cell>();
 
                 if (p.IsZero())
-                    return;
+                    return result_cells;
 
                 foreach (GridCell grid_cell in m_GridCells)
-                {
-                    var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags));
+                    result_cells.AddRange(Algorihms.GetCellsWithin(grid_cell.GetCells(!allow_disabled), p, radius, flags, allow_disabled, test_2d, z_tolerance));
 
-                    foreach (Cell cell in cells)
-                    {
-                        float dist = test_2d ? cell.Distance2D(p) : cell.Distance(p);
-
-                        if (dist <= radius)
-                            result_cells.Add(cell);
-                    }
-                }
+                return result_cells;
             }
         }
 
@@ -573,9 +565,7 @@ namespace Nav
                 }
 
                 // if regions disabling navigation has changed we have to completely rebuild patches as some areas can be disconnected/reconnected
-                bool updatePatches = !blockers.SetEquals(LastBlockers);
-
-                if (updatePatches)
+                if (!blockers.SetEquals(LastBlockers))
                 {
                     m_CellsPatches = Algorihms.GenerateCellsPatches(m_AllCells, MovementFlag.Walk, skip_disabled: true);
                     LastBlockers = blockers;
@@ -723,7 +713,7 @@ namespace Nav
             {
                 rng = rng ?? Rng;
                 GridCell g_cell = m_GridCells.ElementAt(rng.Next(m_GridCells.Count));
-                var enabled_cells = g_cell.GetCells(x => !x.Disabled).ToArray();
+                var enabled_cells = g_cell.GetCells(false).ToArray();
                 return enabled_cells[rng.Next(enabled_cells.Count())].AABB.GetRandomPos(rng);
             }
         }
@@ -903,14 +893,16 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                // do not ignore disabled since cells patches do not include replacement cells!
-                GetCellsWithin(pos1, out var pos1_cells, flags, nearest_tolerance, true, test_2d: true);
+                var all_patches_cells = m_CellsPatches.SelectMany(x => x.Cells);
+
+                // we can ignore disabled because we care about all cells in patches
+                var pos1_cells = Algorihms.GetCellsWithin(all_patches_cells, pos1, nearest_tolerance, flags, allow_disabled: false, test_2d: true);
 
                 if (pos1_cells.Count == 0)
                     return false;
 
-                // do not ignore disabled since cells patches do not include replacement cells!
-                GetCellsWithin(pos2, out var pos2_cells, flags, nearest_tolerance, true, test_2d: true);
+                // we can ignore disabled because we care about all cells in patches
+                var pos2_cells = Algorihms.GetCellsWithin(all_patches_cells, pos2, nearest_tolerance, flags, allow_disabled: false, test_2d: true);
 
                 if (pos2_cells.Count == 0)
                     return false;
@@ -1079,6 +1071,10 @@ namespace Nav
             using (new ReadLock(DataLock))
             using (new ReadLock(InputLock))
             {
+                // cell patches may contain old cells that are no longer in all cells (this is becuase patches only refresh when nav blockers change)
+                // a workaround fix it to add all these cells to all cells for serialization
+                m_AllCells.UnionWith(m_CellsPatches.SelectMany(x => x.Cells));
+
                 // write all cells global IDs
                 w.Write(m_AllCells.Count);
                 foreach (Cell cell in m_AllCells)

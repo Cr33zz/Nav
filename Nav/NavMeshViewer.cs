@@ -515,12 +515,13 @@ namespace Nav
                     //Thread t = new Thread(dbg_ContiniousSerialize);
                     //t.Start();
 
-                    //Thread t = new Thread(dbg_MoveRegions);
-                    //t.Start();
+                    Thread t = new Thread(() => dbg_MovingRegions(200));
+                    t.Start();
 
-                    //Thread t = new Thread(dbg_MovingRegions);
-                    //t.Start();
-
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.F11)
+                {
                     m_Navmesh.dbg_GenerateRandomAvoidAreas(100, -1, 300, 2);
 
                     e.Handled = true;
@@ -684,7 +685,7 @@ namespace Nav
             }
         }
 
-        private void dbg_MovingRegions()
+        private void dbg_MovingRegions(int approx_size)
         {
             Random rng = new Random();
             var regions = new List<Region>();
@@ -692,9 +693,11 @@ namespace Nav
             for (int i = 0; i < 20; ++i)
             {
                 Vec3 pos = m_Navmesh.GetRandomPos(rng);
-                float size = 20 + (float)rng.NextDouble() * 10;
+                float size = approx_size + (float)rng.NextDouble() * (approx_size * 0.5f);
                 regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 5, 5));
             }
+
+            m_Navmesh.Regions = regions;
 
             const int dt = 50;
 
@@ -706,10 +709,8 @@ namespace Nav
 
                     Vec3 dir = new Vec3((float)rng.NextDouble() * 2 - 1, (float)rng.NextDouble() * 2 - 1, 0);
 
-                    regions[i] = new Region(region.Area.Translated(dir * 20 * ((float)dt / 1000)), region.MoveCostMult, region.Threat);
+                    regions[i] = new Region(region.Area.Translated(dir * approx_size * ((float)dt / 1000)), region.MoveCostMult, region.Threat);
                 }
-
-                m_Navmesh.Regions = regions;
 
                 Thread.Sleep(dt);
             }
