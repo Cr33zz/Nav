@@ -141,7 +141,7 @@ namespace Nav
                 }
 
                 m_AllCells.UnionWith(incoming_cells);
-                UpdateCellsPatches(incoming_cells);
+                ForcePatchesUpdate = true;
             }
 
             NotifyOnGridCellAdded(g_cell);
@@ -150,37 +150,6 @@ namespace Nav
                 NotifyOnNavDataChanged(g_cell.AABB);
 
             return true;
-        }
-
-        private void UpdateCellsPatches(IEnumerable<Cell> cells)
-        {
-            //using (new Profiler("[Nav] Cells patches refreshed [%t]"))
-            {
-                foreach (Cell c in cells)
-                {
-                    if (!c.HasFlags(MovementFlag.Walk))
-                        continue;
-
-                    HashSet<Cell> merged_cells = new HashSet<Cell>{c};
-
-                    // find all patches, this cell neighbors belongs to
-                    foreach (var neighbour in c.Neighbours)
-                    {
-                        if (neighbour.cell.Disabled || !neighbour.cell.HasFlags(MovementFlag.Walk))
-                            continue;
-
-                        CellsPatch connected_patch = m_CellsPatches.FirstOrDefault(x => x.Cells.Contains(neighbour.cell));
-
-                        if (connected_patch != null)
-                        {
-                            merged_cells.UnionWith(connected_patch.Cells);
-                            m_CellsPatches.Remove(connected_patch);
-                        }
-                    }
-
-                    m_CellsPatches.Add(new CellsPatch(merged_cells, c.Flags));
-                }
-            }
         }
 
         private const int MAX_CELLS_CACHE_SIZE = 6;
@@ -393,6 +362,30 @@ namespace Nav
                 UpdateRegions();
                 LastUpdateRegionsTime = time;
             }
+
+            if (time - LastUpdatePatchesTime > UpdatePatchesInterval)
+            {
+                UpdatePatches();
+                LastUpdatePatchesTime = time;
+            }
+        }
+
+        public uint UpdatePatchesInterval { get; set; } = 500;
+        private Int64 LastUpdatePatchesTime = 0;
+        internal bool ForcePatchesUpdate = false;
+        
+        private void UpdatePatches()
+        {
+            if (ForcePatchesUpdate)
+            {
+                using (new WriteLock(DataLock))
+                using (new Profiler($"[Nav] Updating cell patches took %t", 30))
+                {
+                    m_CellsPatches = Algorihms.GenerateCellsPatches(m_AllCells, MovementFlag.Walk, skip_disabled: true);
+                }
+
+                ForcePatchesUpdate = false;
+            }
         }
 
         public uint UpdateRegionsInterval { get; set; } = 100;
@@ -567,7 +560,7 @@ namespace Nav
                 // if regions disabling navigation has changed we have to completely rebuild patches as some areas can be disconnected/reconnected
                 if (!blockers.SetEquals(LastBlockers))
                 {
-                    m_CellsPatches = Algorihms.GenerateCellsPatches(m_AllCells, MovementFlag.Walk, skip_disabled: true);
+                    ForcePatchesUpdate = true;
                     LastBlockers = blockers;
                 }
 
@@ -895,14 +888,12 @@ namespace Nav
             {
                 var all_patches_cells = m_CellsPatches.SelectMany(x => x.Cells);
 
-                // we can ignore disabled because we care about all cells in patches
-                var pos1_cells = Algorihms.GetCellsWithin(all_patches_cells, pos1, nearest_tolerance, flags, allow_disabled: false, test_2d: true);
+                var pos1_cells = Algorihms.GetCellsWithin(all_patches_cells, pos1, nearest_tolerance, flags, allow_disabled: true, test_2d: true);
 
                 if (pos1_cells.Count == 0)
                     return false;
 
-                // we can ignore disabled because we care about all cells in patches
-                var pos2_cells = Algorihms.GetCellsWithin(all_patches_cells, pos2, nearest_tolerance, flags, allow_disabled: false, test_2d: true);
+                var pos2_cells = Algorihms.GetCellsWithin(all_patches_cells, pos2, nearest_tolerance, flags, allow_disabled: true, test_2d: true);
 
                 if (pos2_cells.Count == 0)
                     return false;

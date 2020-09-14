@@ -202,7 +202,7 @@ namespace Nav
 
                             foreach (var cell in patch.Cells)
                             {
-                                RenderHelper.Render(cell, m_RenderCenter, e, draw_connections: false, draw_id: false, render_move_cost_mult: false, render_threat: false, render_outline: false, force_color: c);
+                                RenderHelper.Render(cell, m_RenderCenter, e, draw_connections: false, draw_id: false, render_move_cost_mult: false, render_threat: false, render_outline: false, render_disabled: true, force_color: c);
                             }
                         }
                     }
@@ -861,9 +861,9 @@ namespace Nav
             return new_min + (new_max - new_min) * value_progress;
         }
 
-        public static void Render(Nav.Cell cell, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id, bool render_move_cost_mult, bool render_threat, bool render_outline = true, Color force_color = default(Color))
+        public static void Render(Nav.Cell cell, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id, bool render_move_cost_mult, bool render_threat, bool render_outline = true, bool render_disabled = false, Color force_color = default(Color))
         {
-            if (cell.Disabled)
+            if (!render_disabled && cell.Disabled)
                 return;
 
             if (render_outline)
