@@ -404,7 +404,7 @@ namespace Nav
                         result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
                     }
 
-                    m_Navigator.Destination = result;
+                    m_Navigator.SetCustomDestination(result);
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.L)

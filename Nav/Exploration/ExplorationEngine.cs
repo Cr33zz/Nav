@@ -68,11 +68,12 @@ namespace Nav
             Clear();
 
             // generate exploration data from already existing grid cells
+            HashSet<GridCell> grid_cells_copy;
             using (m_Navmesh.AcquireReadDataLock())
-            {
-                foreach (GridCell g_cell in m_Navmesh.m_GridCells)
+                grid_cells_copy = new HashSet<GridCell>(m_Navmesh.m_GridCells);
+
+            foreach (GridCell g_cell in grid_cells_copy)
                     OnGridCellAdded(g_cell);
-            }
         }
 
         public virtual float GetExploredPercent()

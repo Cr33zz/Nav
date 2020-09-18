@@ -602,10 +602,10 @@ namespace Nav
 
                 m_LastGridCellId = 0;
                 m_LastCellId = 0;
-
-                foreach (INavmeshObserver observer in m_Observers)
-                    observer.OnNavDataCleared();
             }
+
+            foreach (INavmeshObserver observer in m_Observers)
+                observer.OnNavDataCleared();
 
             Log("[Nav] Navmesh cleared!");
         }
