@@ -35,13 +35,13 @@ namespace Nav
             m_GotoPosUpdateTimer.Start();
         }
 
-        public void OnDestinationReached(DestType type, Vec3 dest)
+        public void OnDestinationReached(DestType type, Vec3 dest, Object userData)
         {
             if (dest.Equals(m_Destination))
                 m_Destination = Vec3.ZERO;
         }
 
-        public void OnDestinationReachFailed(DestType type, Vec3 dest)
+        public void OnDestinationReachFailed(DestType type, Vec3 dest, Object userData)
         {
         }
 

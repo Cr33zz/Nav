@@ -73,7 +73,7 @@ namespace Nav
                 grid_cells_copy = new HashSet<GridCell>(m_Navmesh.m_GridCells);
 
             foreach (GridCell g_cell in grid_cells_copy)
-                    OnGridCellAdded(g_cell);
+                OnGridCellAdded(g_cell);
         }
 
         public virtual float GetExploredPercent()
@@ -222,7 +222,7 @@ namespace Nav
             m_ForceReevaluation = true;
         }
 
-        public void OnDestinationReached(DestType type, Vec3 dest)
+        public void OnDestinationReached(DestType type, Vec3 dest, Object userData)
         {
             if (type != DestType.Explore)
                 return;
@@ -236,9 +236,9 @@ namespace Nav
             m_Navigator.SetDestination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision);
         }
 
-        public void OnDestinationReachFailed(DestType type, Vec3 dest)
+        public void OnDestinationReachFailed(DestType type, Vec3 dest, Object userData)
         {
-            OnDestinationReached(type, dest);
+            OnDestinationReached(type, dest, userData);
         }
 
         public virtual void OnGridCellAdded(GridCell grid_cell)
