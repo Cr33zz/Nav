@@ -73,7 +73,7 @@ namespace Nav
 
         internal void Deserialize(HashSet<ExploreCell> explore_cells, HashSet<Cell> all_cells, BinaryReader r)
         {
-            base.Deserialize(explore_cells, r);
+            base.Deserialize(explore_cells, null, r);
 
             Explored = r.ReadBoolean();
             Delayed = r.ReadBoolean();

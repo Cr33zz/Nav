@@ -463,7 +463,7 @@ namespace Nav
             }
         }
 
-        internal void Deserialize<T>(HashSet<T> all_cells, BinaryReader r) where T : Cell, new()
+        internal void Deserialize<T>(HashSet<T> all_cells, Dictionary<int, T> id_to_cell, BinaryReader r) where T : Cell, new()
         {
             GlobalId = r.ReadInt32();
             Id = r.ReadInt32();
@@ -480,7 +480,7 @@ namespace Nav
                 Neighbour neighbour = new Neighbour(null, Vec3.ZERO, MovementFlag.None);
 
                 int neighbour_global_id = r.ReadInt32();
-                neighbour.cell = all_cells.FirstOrDefault(x => x.GlobalId == neighbour_global_id);
+                neighbour.cell = id_to_cell != null ? id_to_cell[neighbour_global_id] : all_cells.FirstOrDefault(x => x.GlobalId == neighbour_global_id);
                 neighbour.border_point = new Vec3(r);
                 neighbour.connection_flags = (MovementFlag)r.ReadInt32();
 

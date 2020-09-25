@@ -1066,10 +1066,17 @@ namespace Nav
                 // a workaround fix it to add all these cells to all cells for serialization
                 m_AllCells.UnionWith(m_CellsPatches.SelectMany(x => x.Cells));
 
+                var all_cells_ids = new HashSet<int>();
+
                 // write all cells global IDs
                 w.Write(m_AllCells.Count);
                 foreach (Cell cell in m_AllCells)
+                {
                     w.Write(cell.GlobalId);
+
+                    if (Verbose)
+                        all_cells_ids.Add(cell.GlobalId);
+                }
 
                 foreach (Cell cell in m_AllCells)
                 {
@@ -1079,7 +1086,7 @@ namespace Nav
                     {
                         foreach (var neighbour in cell.Neighbours)
                         {
-                            if (m_AllCells.FirstOrDefault(x => x.GlobalId == neighbour.cell.GlobalId) == null)
+                            if (!all_cells_ids.Contains(neighbour.cell.GlobalId))
                                 Log("[Nav] Cell neighbour not on all cells list! Cell info [" + neighbour.cell.ToString() + "]", true);
                         }
                     }
@@ -1151,16 +1158,19 @@ namespace Nav
 
                     int all_cells_count = r.ReadInt32();
 
+                    var id_to_cell = new Dictionary<int, Cell>();
+
                     // pre-allocate cells
                     for (int i = 0; i < all_cells_count; ++i)
                     {
                         Cell cell = new Cell(0, 0, 0, 0, 0, 0, MovementFlag.None);
                         cell.GlobalId = r.ReadInt32();
+                        id_to_cell[cell.GlobalId] = cell;
                         m_AllCells.Add(cell);
                     }
 
                     foreach (Cell cell in m_AllCells)
-                        cell.Deserialize(m_AllCells, r);
+                        cell.Deserialize(m_AllCells, id_to_cell, r);
 
                     Cell.LastCellGlobalId = r.ReadInt32();
 
@@ -1175,7 +1185,7 @@ namespace Nav
                     }
 
                     foreach (GridCell grid_cell in m_GridCells)
-                        grid_cell.Deserialize(m_GridCells, m_AllCells, r);
+                        grid_cell.Deserialize(m_GridCells, m_AllCells, id_to_cell, r);
 
                     GridCell.LastGridCellGlobalId = r.ReadInt32();
 
@@ -1191,7 +1201,7 @@ namespace Nav
                     }
 
                     foreach (CellsPatch patch in patches)
-                        patch.Deserialize(m_AllCells, r);
+                        patch.Deserialize(m_AllCells, id_to_cell, r);
 
                     m_CellsPatches = new HashSet<CellsPatch>(patches);
 

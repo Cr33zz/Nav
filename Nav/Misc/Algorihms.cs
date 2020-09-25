@@ -276,6 +276,16 @@ namespace Nav
             return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end), flags, ref path);
         }
 
+        public static float GetPathLength(List<Vec3> path)
+        {
+            float length = 0;
+
+            for (int i = 0; i < path.Count - 1; ++i)
+                length += path[i].Distance2D(path[i + 1]);
+
+            return length;
+        }
+
         public static List<Cell> GetCellsWithin(IEnumerable<Cell> cells, Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
         {
             var result_cells = new List<Cell>();
@@ -562,23 +572,28 @@ namespace Nav
 
         public static void Visit<T>(T cell, ref HashSet<T> visited, MovementFlag flags, bool visit_disabled, int depth = 1, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null) where T : Cell
         {
-            visited.Add(cell);
+            if ((allowed_cells != null && !allowed_cells.Contains(cell)) || visited.Contains(cell))
+                return;
+
+            if (!visit_disabled && cell.Disabled)
+                return;
 
             if (max_depth > 0 && depth >= max_depth)
                 return;
+
+            if (visitor != null)
+                visitor.Visit(cell);
+
+            visited.Add(cell);
 
             foreach (Cell.Neighbour neighbour in cell.Neighbours)
             {
                 T neighbour_cell = (T)neighbour.cell;
 
-                if ((!visit_disabled && neighbour_cell.Disabled) || (neighbour.connection_flags & flags) != flags)
+                if ((neighbour.connection_flags & flags) != flags)
                     continue;
 
-                if (visitor != null)
-                    visitor.Visit(neighbour_cell);
-
-                if ((allowed_cells == null || allowed_cells.Contains(neighbour_cell)) && !visited.Contains(neighbour_cell))
-                    Visit(neighbour_cell, ref visited, flags, visit_disabled, depth + 1, max_depth, allowed_cells, visitor);
+                Visit(neighbour_cell, ref visited, flags, visit_disabled, depth + 1, max_depth, allowed_cells, visitor);
             }
         }
 

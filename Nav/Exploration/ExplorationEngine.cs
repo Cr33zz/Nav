@@ -119,6 +119,9 @@ namespace Nav
                 w.Write(m_DestCell?.GlobalId ?? -1);
                 w.Write(ExploreCell.LastExploreCellGlobalId);
 
+                w.Write(m_ExploredCellsCount);
+                w.Write(m_CellsToExploreCount);
+
                 m_HintPos.Serialize(w);
             }
         }
@@ -160,6 +163,9 @@ namespace Nav
                     m_DestCell = m_ExploreCells.FirstOrDefault(x => x.GlobalId == dest_cell_global_id);
 
                 ExploreCell.LastExploreCellGlobalId = r.ReadInt32();
+
+                m_ExploredCellsCount = r.ReadInt32();
+                m_CellsToExploreCount = r.ReadInt32();
 
                 m_HintPos = new Vec3(r);
             }

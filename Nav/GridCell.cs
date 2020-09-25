@@ -125,15 +125,15 @@ namespace Nav
                 w.Write(cell.GlobalId);
         }
 
-        internal void Deserialize(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
-            base.Deserialize(all_grid_cells, r);
+            base.Deserialize(all_grid_cells, null, r);
 
             int cells_count = r.ReadInt32();
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.AddFirst(all_cells.First(x => x.GlobalId == cell_global_id));
+                Cells.AddFirst(id_to_cell != null ? id_to_cell[cell_global_id] : all_cells.First(x => x.GlobalId == cell_global_id));
             }
 
             int replacement_cells_count = r.ReadInt32();

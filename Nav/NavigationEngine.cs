@@ -180,7 +180,12 @@ namespace Nav
 
                 // align to position to closest cell
                 if (!end_on_nav_mesh)
+                {
+                    if (end == null)
+                        return false;
+
                     to = end.AABB.Align(to);
+                }
 
                 if (bounce)
                 {
@@ -497,8 +502,7 @@ namespace Nav
 
             if (PathLock.TryEnterReadLock(0))
             {
-                for (int i = 0; i < Path.Count - 1; ++i)
-                    length += Path[i].Distance2D(Path[i + 1]);
+                length = Algorihms.GetPathLength(Path);
                 p_dest_type = m_PathDestType;
                 PathLock.ExitReadLock();
             }

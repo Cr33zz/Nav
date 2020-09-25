@@ -24,15 +24,15 @@ namespace Nav
                 w.Write(cell.GlobalId);
         }
 
-        internal void Deserialize(HashSet<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
-            base.Deserialize(all_cells, r);
+            base.Deserialize(all_cells, null, r);
 
             int cells_count = r.ReadInt32();
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
+                Cells.Add(id_to_cell != null ? id_to_cell[cell_global_id] : all_cells.First(x => x.GlobalId == cell_global_id));
             }
         }
 

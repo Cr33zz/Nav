@@ -7,7 +7,7 @@ namespace Nav
 {
     internal class TestBot : INavigationObserver
     {
-        public TestBot(Navmesh navmesh, NavigationEngine navigator, ExplorationEngine explorer, Vec3 pos, float speed)
+        public TestBot(Navmesh navmesh, NavigationEngine navigator, ExplorationEngine explorer, Vec3 pos, float speed, bool enableExplorer = true)
         {
             m_Navmesh = navmesh;
             m_Navmesh.Verbose = true;
@@ -26,7 +26,8 @@ namespace Nav
 
             //m_Explorer = new Nav.ExploreEngine.Nearest(m_Navmesh, m_Navigator);
             m_Explorer = explorer;
-            //m_Explorer.Enabled = true;
+            if (enableExplorer)
+                m_Explorer.Enabled = true;
 
             m_Speed = speed;
 

@@ -333,7 +333,8 @@ namespace Nav
                 }
             }
 
-            e.Graphics.DrawString($"Grid cells: {m_Navmesh.GridCellsCount}", STATS_FONT, Brushes.Black, 10, Height - 75);
+            e.Graphics.DrawString($"Explored: {m_Explorer.GetExploredPercent()}%", STATS_FONT, Brushes.Black, 10, Height - 100);
+            e.Graphics.DrawString($"Grid cells: {m_Navmesh.GridCellsCount}", STATS_FONT, Brushes.Black, 10, Height - 70);
             e.Graphics.DrawString($"Cells: {m_Navmesh.CellsCount}", STATS_FONT, Brushes.Black, 10, Height - 85);
         }
 
