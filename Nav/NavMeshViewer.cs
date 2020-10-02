@@ -264,7 +264,7 @@ namespace Nav
                     if (m_RenderOriginalPath)
                     {
                         List<Vec3> path = new List<Vec3>();
-                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, -1, false, false, 0, false, 0, false);
+                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var path_recalc_trigger_position, -1, false, false, 0, false, 0, smoothen_distance: 0);
                         path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
                     }
@@ -288,7 +288,7 @@ namespace Nav
                     if (m_RenderAvoidancePath)
                     {
                         List<Vec3> path = new List<Vec3>();
-                        m_Navigator.FindAvoidancePath(curr, 0, MovementFlag.Walk, ref path, Vec3.ZERO, false, 0, true);
+                        m_Navigator.FindAvoidancePath(curr, 0, MovementFlag.Walk, ref path, Vec3.ZERO, false, 0, float.MaxValue);
                         path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
                     }

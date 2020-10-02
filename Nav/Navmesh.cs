@@ -1315,7 +1315,7 @@ namespace Nav
 
         private int m_LastGridCellId = 0;
         private int m_LastCellId = 0;
-        private Random Rng = new Random();
+        protected Random Rng = new Random();
 
         private Thread UpdatesThread = null;
 
