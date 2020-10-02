@@ -49,7 +49,7 @@ namespace Nav
             if (m_Params.HasParam("end"))
             {
                 m_Params.GetParam("end", out string str);
-                m_Navigator.Destination = new Vec3(str);
+                m_Navigator.Destination = new destination(new Vec3(str));
             }
 
             if (m_Params.HasParam("load_waypoints"))
@@ -251,7 +251,7 @@ namespace Nav
                 }
 
                 Vec3 curr = m_Navigator.CurrentPos;
-                Vec3 dest = m_Navigator.Destination;
+                Vec3 dest = m_Navigator.Destination.pos;
 
                 if (!curr.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.Blue, m_RenderCenter, curr);

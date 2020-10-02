@@ -21,6 +21,22 @@ namespace Nav
         All = 0xFFFF,
     }
 
+    public struct destination
+    {
+        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, Object user_data = null)
+        {
+            this.pos = pos;
+            this.type = type;
+            this.precision = precision;
+            this.user_data = user_data;
+        }
+
+        public Vec3 pos;
+        public DestType type;
+        public float precision;
+        public Object user_data;
+    }
+
     public class NavigationEngine : IDisposable, INavmeshObserver
     {
         public NavigationEngine(Navmesh navmesh)
@@ -139,7 +155,7 @@ namespace Nav
         public bool IsStandingOnPurpose { get; set; } = true;
 
         // is current path for currently requested destination type (may be false when destination change has been requested but path is not updated yet)
-        public bool IsPathUpToDate => m_PathDestType == m_DestinationType;
+        public bool IsPathUpToDate => m_PathDestination.type == m_Destination.type;
 
         public List<int> DestinationGridsId
         {
@@ -464,23 +480,23 @@ namespace Nav
             }
         }
 
-        public Vec3 Destination
+        public destination Destination
         {
             get
             {
                 using (new ReadLock(InputLock))
-                    return new Vec3(m_Destination);
+                    return m_Destination;
             }
 
             set
             {
-                SetDestination(value, DestType.User, DefaultPrecision);
+                SetDestination(new destination(value.pos, value.type, value.precision < 0 ? DefaultPrecision : value.precision, value.user_data));
             }
         }
 
-        public void SetDestination(Vec3 pos, float precision, Object userData = null)
+        public void SetDestination(Vec3 pos, float precision, Object user_data = null)
         {
-            SetDestination(pos, DestType.User, precision > 0 ? precision : DefaultPrecision, userData);
+            SetDestination(new destination(pos, DestType.User, precision > 0 ? precision : DefaultPrecision, user_data));
         }
 
         public void ClearAllDestinations()
@@ -493,9 +509,9 @@ namespace Nav
             ClearDestination(DestType.Grid);
         }
 
-        public void SetCustomDestination(Vec3 pos, float precision = -1, Object userData = null)
+        public void SetCustomDestination(Vec3 pos, float precision = -1, Object user_data = null)
         {
-            SetDestination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, userData);
+            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, user_data));
         }
 
         public void ClearCustomDestination()
@@ -508,7 +524,7 @@ namespace Nav
             if (PathLock.TryEnterReadLock(0))
             {
                 p = new List<Vec3>(Path);
-                p_dest_type = m_PathDestType;
+                p_dest_type = m_PathDestination.type;
                 PathLock.ExitReadLock();
                 return true;
             }
@@ -523,7 +539,7 @@ namespace Nav
             if (PathLock.TryEnterReadLock(0))
             {
                 length = Algorihms.GetPathLength(Path);
-                p_dest_type = m_PathDestType;
+                p_dest_type = m_PathDestination.type;
                 PathLock.ExitReadLock();
             }
 
@@ -563,7 +579,7 @@ namespace Nav
 
         public DestType GetDestinationType()
         {
-            return m_DestinationType;
+            return m_Destination.type;
         }
 
         public Vec3 GoToPosition
@@ -716,7 +732,7 @@ namespace Nav
             while (timeout_watch.ElapsedMilliseconds < timeout)
             {
                 CurrentPos = m_Navmesh.GetRandomPos();
-                Destination = m_Navmesh.GetRandomPos();
+                Destination = new destination(m_Navmesh.GetRandomPos());
                 m_Navmesh.RayCast2D(m_Navmesh.GetRandomPos(), m_Navmesh.GetRandomPos(), MovementFlag.Fly);
                 m_Navmesh.Log("[Nav] Ray cast done!");
             }
@@ -737,22 +753,19 @@ namespace Nav
         {
             using (new ReadLock(InputLock, true))
             {
-                if ((m_DestinationType & type) == 0)
+                if ((m_Destination.type & type) == 0)
                     return;
 
                 using (new WriteLock(InputLock))
                 {
                     //m_Navmesh.Log("[Nav] Dest [" + m_DestinationType + "] cleared using [" + type + "] flags!");
 
-                    m_Destination = Vec3.ZERO;
-                    m_DestinationType = DestType.None;
-                    m_DestinationUserData = null;
+                    m_Destination = default(destination);
                 }
 
                 using (new WriteLock(PathLock))
                 {
-                    m_PathDestination = Vec3.ZERO;
-                    m_PathDestType = DestType.None;
+                    m_PathDestination = default(destination);
                     Path.Clear();
                 }
             }
@@ -764,17 +777,14 @@ namespace Nav
             using (new WriteLock(PathLock))
             {
                 m_CurrentPos = Vec3.ZERO;
-                m_Destination = Vec3.ZERO;
-                m_DestinationType = DestType.None;
-                m_DestinationUserData = null;
+                m_Destination = default(destination);
                 m_Waypoints.Clear();
                 m_DestinationsHistory.Clear();
                 m_DebugPositionsHistory.Clear();
                 m_HistoryDestId = -1;
                 m_DestinationGridsId.Clear();
                 Path.Clear();
-                m_PathDestination = Vec3.ZERO;
-                m_PathDestType = DestType.None;
+                m_PathDestination = default(destination);
             }
 
             ResetAntiStuckPrecition(Vec3.ZERO);
@@ -782,26 +792,24 @@ namespace Nav
         }
 
         // May enter InputLock (read -> write).
-        internal void SetDestination(Vec3 pos, DestType type, float precision, Object userData = null)
+        internal void SetDestination(destination dest)
         {
-            if (pos.IsZero())
+            if (dest.pos.IsZero())
             {
-                ClearDestination(type);
+                ClearDestination(dest.type);
                 return;
             }
 
             using (new ReadLock(InputLock, true))
             {
-                m_DestinationUserData = userData;
+                m_Destination.user_data = dest.user_data;
 
-                if ((m_Destination.Equals(pos) && m_DestinationType == type) || (!m_Destination.IsZero() && m_DestinationType > type))
+                if ((m_Destination.pos.Equals(dest.pos) && m_Destination.type == dest.type) || (!m_Destination.pos.IsZero() && m_Destination.type > dest.type))
                     return;
 
                 using (new WriteLock(InputLock))
                 {
-                    m_Destination = pos;
-                    m_DestinationType = type;
-                    Precision = precision;
+                    m_Destination = dest;
                 }
 
                 //m_Navmesh.Log("[Nav] Dest changed to " + pos + " [" + type + "] precision " + precision);
@@ -818,17 +826,17 @@ namespace Nav
             return IsDestinationReached(type_filter, ref temp);
         }
 
-        internal bool IsDestinationReached(DestType type_filter, ref Vec3 destination)
+        internal bool IsDestinationReached(DestType type_filter, ref Vec3 dest_pos)
         {
             using (new ReadLock(InputLock))
             using (new ReadLock(PathLock))
             {
-                if ((m_DestinationType & type_filter) == 0)
+                if ((m_Destination.type & type_filter) == 0)
                     return false;
 
-                destination = new Vec3(m_Destination);
+                dest_pos = new Vec3(m_Destination.pos);
 
-                return (!m_CurrentPos.IsZero() && !m_Destination.IsZero() && m_Destination.Equals(m_PathDestination)) && (Path.Count == 0);
+                return (!m_CurrentPos.IsZero() && !m_Destination.pos.IsZero() && m_Destination.pos.Equals(m_PathDestination)) && (Path.Count == 0);
             }
         }
 
@@ -884,31 +892,22 @@ namespace Nav
             if (!m_Navmesh.IsNavDataAvailable)
                 return;
 
-            Vec3 destination;
-            DestType dest_type;
-
-            // make sure destination and its type are in sync
-            using (new ReadLock(InputLock))
-            {
-                destination = m_Destination;
-                dest_type = m_DestinationType;
-            }
-
+            var dest = Destination;
             Vec3 current_pos = CurrentPos;
 
-            if (current_pos.IsZero() || destination.IsZero())
+            if (current_pos.IsZero() || dest.pos.IsZero())
                 return;
 
             var new_path = new List<Vec3>();
             var new_path_recalc_trigger_position = Vec3.ZERO;
 
-            if (dest_type == DestType.RunAway)
+            if (dest.type == DestType.RunAway)
             {
                 FindAvoidancePath(current_pos, MaxAllowedThreat, MovementFlags, ref new_path, Vec3.ZERO, false, PathNodesShiftDist);
                 //m_Navmesh.Log($"avoidance path calculated {new_path.Count} nodes");
             }
             else
-                FindPath(current_pos, destination, MovementFlags, ref new_path, out new_path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, true, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, PathSmoothingDistance);
+                FindPath(current_pos, dest.pos, MovementFlags, ref new_path, out new_path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, true, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, PathSmoothingDistance);
 
             // verify whenever some point of path was not already passed during its calculation (this may take place when path calculations took long time)
             // this is done by finding first path segment current position can be casted on and removing all points preceding this segment including segment origin
@@ -952,14 +951,13 @@ namespace Nav
 
                 Path = new_path;
                 PathRecalcTriggerPosition = new_path_recalc_trigger_position;
-                m_PathDestination = destination;
-                m_PathDestType = dest_type;
+                m_PathDestination = dest;
             }
         }
 
         private void UpdateGridDestination()
         {
-            Vec3 destination = Vec3.ZERO;
+            Vec3 dest_pos = Vec3.ZERO;
             bool grid_dest_found = false;
             List<int> destination_grids_id = null;
 
@@ -977,18 +975,18 @@ namespace Nav
                     if (destination_grid != null)
                     {
                         grid_dest_found = true;
-                        destination = m_Navmesh.GetNearestCell(destination_grid.GetCells(), destination_grid.Center).Center;
+                        dest_pos = m_Navmesh.GetNearestCell(destination_grid.GetCells(), destination_grid.Center).Center;
                     }
                 }
             }
 
             if (grid_dest_found)
-                SetDestination(destination, DestType.Grid, GridDestPrecision);
+                SetDestination(new destination(dest_pos, DestType.Grid, GridDestPrecision));
         }
 
         private void UpdateBackTrackDestination()
         {
-            Vec3 destination = Vec3.ZERO;
+            Vec3 dest_pos = Vec3.ZERO;
             bool backtrack_dest_found = false;
 
             using (new ReadLock(InputLock))
@@ -996,12 +994,12 @@ namespace Nav
                 if (BackTrackEnabled)
                 {
                     backtrack_dest_found = true;
-                    destination = m_DestinationsHistory[m_HistoryDestId];
+                    dest_pos = m_DestinationsHistory[m_HistoryDestId];
                 }
             }
 
             if (backtrack_dest_found)
-                SetDestination(destination, DestType.BackTrack, DefaultPrecision);
+                SetDestination(new destination(dest_pos, DestType.BackTrack, DefaultPrecision));
         }
 
         private void UpdateThreatAvoidance()
@@ -1017,7 +1015,7 @@ namespace Nav
 
                 if (IsInThreat)
                 {
-                    SetDestination(new Vec3(6,6,6), DestType.RunAway, Precision);
+                    SetDestination(new destination(new Vec3(6,6,6), DestType.RunAway, Precision));
 
                     //if (!was_in_threat)
                     //    m_Navmesh.Log("now in threat");
@@ -1065,7 +1063,7 @@ namespace Nav
 
         private void UpdateWaypointDestination()
         {
-            Vec3 destination = Vec3.ZERO;
+            Vec3 dest_pos = Vec3.ZERO;
             bool waypoint_dest_found = false;
 
             using (new ReadLock(InputLock))
@@ -1073,12 +1071,12 @@ namespace Nav
                 if (m_Waypoints.Count > 0)
                 {
                     waypoint_dest_found = true;
-                    destination = m_Waypoints[0];
+                    dest_pos = m_Waypoints[0];
                 }
             }
 
             if (waypoint_dest_found)
-                SetDestination(destination, DestType.Waypoint, DefaultPrecision);
+                SetDestination(new destination(dest_pos, DestType.Waypoint, DefaultPrecision));
         }
 
         private void UpdatePathProgression(Vec3 current_pos)
@@ -1100,9 +1098,9 @@ namespace Nav
 
                     bool destination_reached = false;
 
-                    Vec3 dest = Path.Last();
+                    Vec3 dest_pos = Path.Last();
                     // if there are no obstacles between current position and destination when in arrival radius, consider reached
-                    if (current_pos.Distance2D(dest) <= Precision && m_Navmesh.RayCast2D(current_pos, dest, MovementFlag.Walk))
+                    if (current_pos.Distance2D(dest_pos) <= Precision && m_Navmesh.RayCast2D(current_pos, dest_pos, MovementFlag.Walk))
                         destination_reached = true;
 
                     if (current_pos.Distance2D(Path[0]) > precision && !destination_reached)
@@ -1128,7 +1126,7 @@ namespace Nav
                 }
             }
 
-            Vec3 destination = Destination;
+            var dest = Destination;
 
             // update destination arrived
             if (any_node_reached)
@@ -1137,7 +1135,7 @@ namespace Nav
                 {
                     using (new WriteLock(InputLock))
                     {
-                        if (m_DestinationType != DestType.BackTrack &&
+                        if (m_Destination.type != DestType.BackTrack &&
                             (m_DestinationsHistory.Count == 0 || (!m_DestinationsHistory[m_DestinationsHistory.Count - 1].Equals(reached_pos) &&
                                                                     m_DestinationsHistory[m_DestinationsHistory.Count - 1].Distance(reached_pos) > MinDestDistToAddToHistory)))
                         {
@@ -1145,7 +1143,7 @@ namespace Nav
                         }
                     }
 
-                    NotifyOnDestinationReached(m_DestinationType, destination, m_DestinationUserData);
+                    NotifyOnDestinationReached(dest);
 
                     ResetAntiStuckPathing(current_pos);
 
@@ -1192,21 +1190,9 @@ namespace Nav
 
             if (m_DestReachFailedTimer.ElapsedMilliseconds > MIN_TIME_TO_FAIL_DESTINATION_REACH)
             {
-                DestType dest_type = DestType.None;
-                Vec3 dest = default(Vec3);
-                Object userData = null;
-
-                using (new ReadLock(InputLock))
-                {
-                    dest_type = m_DestinationType;
-                    dest = m_Destination;
-                    userData = m_DestinationUserData;
-                }
-
                 //m_Navmesh.Log("[Nav] Destination " + dest + " [" + dest_type + "] reach failed!");
 
-                NotifyOnDestinationReachFailed(dest_type, dest, userData);
-
+                NotifyOnDestinationReachFailed(Destination);
                 ResetDestReachFailed(curr_pos);
             }
         }
@@ -1369,7 +1355,7 @@ namespace Nav
                 observer.OnHugeCurrentPosChange();
         }
 
-        protected void NotifyOnDestinationReached(DestType type, Vec3 dest, Object userData)
+        protected void NotifyOnDestinationReached(destination dest)
         {
             List<INavigationObserver> observers_copy = null;
 
@@ -1377,10 +1363,10 @@ namespace Nav
                 observers_copy = m_Observers.ToList();
 
             foreach (INavigationObserver observer in observers_copy)
-                observer.OnDestinationReached(type, dest, userData);
+                observer.OnDestinationReached(dest);
         }
 
-        protected void NotifyOnDestinationReachFailed(DestType type, Vec3 dest, Object userData)
+        protected void NotifyOnDestinationReachFailed(destination dest)
         {
             List<INavigationObserver> observers_copy = null;
 
@@ -1388,7 +1374,7 @@ namespace Nav
                 observers_copy = m_Observers.ToList();
 
             foreach (INavigationObserver observer in observers_copy)
-                observer.OnDestinationReachFailed(type, dest, userData);
+                observer.OnDestinationReachFailed(dest);
         }
 
         // Extension will be automatically added
@@ -1412,8 +1398,8 @@ namespace Nav
                 w.Write(Path.Count);
                 foreach (Vec3 p in Path)
                     p.Serialize(w);
-                m_PathDestination.Serialize(w);
-                w.Write((int)m_PathDestType);
+                m_PathDestination.pos.Serialize(w);
+                w.Write((int)m_PathDestination.type);
 
                 w.Write(m_DestinationsHistory.Count);
                 foreach (Vec3 p in m_DestinationsHistory)
@@ -1429,8 +1415,8 @@ namespace Nav
                     w.Write(d);
 
                 m_CurrentPos.Serialize(w);
-                m_Destination.Serialize(w);
-                w.Write((int)m_DestinationType);
+                m_Destination.pos.Serialize(w);
+                w.Write((int)m_Destination.type);
 
                 w.Write(UpdatePathInterval);
                 w.Write(CurrentPosDiffRecalcThreshold);
@@ -1468,8 +1454,8 @@ namespace Nav
                 int path_count = r.ReadInt32();
                 for (int i = 0; i < path_count; ++i)
                     Path.Add(new Vec3(r));
-                m_PathDestination = new Vec3(r);
-                m_PathDestType = (DestType)r.ReadInt32();
+                m_PathDestination.pos = new Vec3(r);
+                m_PathDestination.type = (DestType)r.ReadInt32();
 
                 int destination_history_count = r.ReadInt32();
                 for (int i = 0; i < destination_history_count; ++i)
@@ -1485,8 +1471,8 @@ namespace Nav
                     m_DestinationGridsId.Add(r.ReadInt32());
 
                 m_CurrentPos = new Vec3(r);
-                m_Destination = new Vec3(r);
-                m_DestinationType = (DestType)r.ReadInt32();
+                m_Destination.pos = new Vec3(r);
+                m_Destination.type = (DestType)r.ReadInt32();
 
                 UpdatePathInterval = r.ReadInt32();
                 CurrentPosDiffRecalcThreshold = r.ReadSingle();
@@ -1513,8 +1499,7 @@ namespace Nav
 
         private List<Vec3> Path = new List<Vec3>(); //@ PathLock
         private Vec3 PathRecalcTriggerPosition = Vec3.ZERO; //@ PathLock
-        private Vec3 m_PathDestination = Vec3.ZERO; //@ PathLock
-        private DestType m_PathDestType = DestType.None; //@ PathLock
+        private destination m_PathDestination = default(destination); //@ PathLock
         private List<Vec3> m_Waypoints = new List<Vec3>(); //@ InputLock
         private List<Vec3> m_DestinationsHistory = new List<Vec3>(); //@ InputLock
         private List<Vec3> m_DebugPositionsHistory = new List<Vec3>(); //@ InputLock
@@ -1535,10 +1520,7 @@ namespace Nav
         private Vec3 m_DestReachFailedTestPos = Vec3.ZERO;
 
         private Vec3 m_CurrentPos = Vec3.ZERO; //@ InputLock
-        private Vec3 m_Destination = Vec3.ZERO; //@ InputLock
-        private Object m_DestinationUserData = null; //@ InputLock
-        private DestType m_DestinationType = DestType.None; //@ InputLock
-
+        private destination m_Destination = default(destination); //@ InputLock
         private List<INavigationObserver> m_Observers = new List<INavigationObserver>(); //@ InputLock
 
         private Navmesh m_Navmesh = null;

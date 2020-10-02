@@ -36,13 +36,13 @@ namespace Nav
             m_GotoPosUpdateTimer.Start();
         }
 
-        public void OnDestinationReached(DestType type, Vec3 dest, Object userData)
+        public void OnDestinationReached(destination dest)
         {
-            if (dest.Equals(m_Destination))
+            if (dest.pos.Equals(m_Destination))
                 m_Destination = Vec3.ZERO;
         }
 
-        public void OnDestinationReachFailed(DestType type, Vec3 dest, Object userData)
+        public void OnDestinationReachFailed(destination dest)
         {
         }
 
@@ -59,7 +59,7 @@ namespace Nav
             }
 
             if (!m_Destination.IsZero())
-                m_Navigator.Destination = m_Destination;
+                m_Navigator.Destination = new destination(m_Destination);
 
             if (m_Explorer.IsExplored() || m_LastGotoPos.IsZero())
                 return;
@@ -104,7 +104,7 @@ namespace Nav
 
         public Vec3 Destination
         {
-            set { m_Destination = value; m_Navigator.Destination = value; }
+            set { m_Destination = value; m_Navigator.Destination = new destination(value); }
         }
 
         private Navmesh m_Navmesh = null;

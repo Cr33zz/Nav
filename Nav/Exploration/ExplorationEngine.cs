@@ -228,23 +228,24 @@ namespace Nav
             m_ForceReevaluation = true;
         }
 
-        public void OnDestinationReached(DestType type, Vec3 dest, Object userData)
+        public void OnDestinationReached(destination dest)
         {
-            if (type != DestType.Explore)
+            if (dest.type != DestType.Explore)
                 return;
 
-            ExploreCell dest_cell = m_ExploreCells.FirstOrDefault(x => x.Position.Equals(dest));
+            // todo get dest cell from user data
+            ExploreCell dest_cell = m_ExploreCells.FirstOrDefault(x => x.Position.Equals(dest.pos));
 
             if (dest_cell != null)
                 OnCellExplored(dest_cell);
 
             m_DestCell = GetDestinationCell();
-            m_Navigator.SetDestination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision);
+            m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision));
         }
 
-        public void OnDestinationReachFailed(DestType type, Vec3 dest, Object userData)
+        public void OnDestinationReachFailed(destination dest)
         {
-            OnDestinationReached(type, dest, userData);
+            OnDestinationReached(dest);
         }
 
         public virtual void OnGridCellAdded(GridCell grid_cell)
@@ -486,7 +487,7 @@ namespace Nav
                 if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
                 {
                     m_DestCell = GetDestinationCell();
-                    m_Navigator.SetDestination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision);
+                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision));
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
 
