@@ -17,24 +17,43 @@ namespace Nav
         User = 0x0008,
         Custom = 0x0010, // same as user but not cleared automatically
         BackTrack = 0x0020, // used for moving along historical destinations
-        RunAway = 0x0040, // not used yet
+        RunAway = 0x0040, // used for threat avoidance
         All = 0xFFFF,
     }
 
-    public struct destination
+    public struct destination : IEquatable<destination>
     {
-        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, Object user_data = null)
+        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, float precision_max = 0, Object user_data = null)
         {
             this.pos = pos;
             this.type = type;
             this.precision = precision;
+            this.precision_max = precision_max;
             this.user_data = user_data;
+            this.is_ring = false;
+        }
+
+        public override bool Equals(Object obj)
+        {
+            return obj is destination d && Equals(d);
+        }
+
+        public bool Equals(destination d)
+        {
+            return pos.Equals(d.pos) && type == d.type && precision == d.precision && precision_max == d.precision_max && user_data == d.user_data && is_ring == d.is_ring;
+        }
+
+        public override int GetHashCode()
+        {
+            return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ is_ring.GetHashCode() ^ precision_max.GetHashCode();
         }
 
         public Vec3 pos;
         public DestType type;
         public float precision;
+        public float precision_max;
         public Object user_data;
+        internal bool is_ring;
     }
 
     public class NavigationEngine : IDisposable, INavmeshObserver
@@ -73,8 +92,6 @@ namespace Nav
 
         // precision with each path node will be accepted as reached
         public float DefaultPrecision { get; set; } = 10;
-
-        public float Precision { get; set; }
 
         // precision with grid destination will be accepted as reached
         public float GridDestPrecision { get; set; } = 40;
@@ -480,6 +497,15 @@ namespace Nav
             }
         }
 
+        public destination RingDestination
+        {
+            get
+            {
+                using (new ReadLock(InputLock))
+                    return m_RingDestination;
+            }
+        }
+
         public destination Destination
         {
             get
@@ -490,17 +516,30 @@ namespace Nav
 
             set
             {
-                SetDestination(new destination(value.pos, value.type, value.precision < 0 ? DefaultPrecision : value.precision, value.user_data));
+                SetDestination(new destination(value.pos, value.type, value.precision < 0 ? DefaultPrecision : value.precision, value.precision_max, value.user_data));
             }
         }
 
-        public void SetDestination(Vec3 pos, float precision, Object user_data = null)
+        public void SetDestination(Vec3 pos, float precision, float precision_max = -1, Object user_data = null)
         {
-            SetDestination(new destination(pos, DestType.User, precision > 0 ? precision : DefaultPrecision, user_data));
+            SetDestination(new destination(pos, DestType.User, precision > 0 ? precision : DefaultPrecision, precision_max, user_data));
+        }
+
+        public void ClearRingDestinations()
+        {
+            using (new WriteLock(InputLock))
+            {
+                if (m_Destination.is_ring)
+                    m_Destination = default(destination);
+
+                m_RingDestination = default(destination);
+
+            }
         }
 
         public void ClearAllDestinations()
         {
+            ClearRingDestinations();
             ClearDestination(DestType.All);
         }
 
@@ -509,9 +548,9 @@ namespace Nav
             ClearDestination(DestType.Grid);
         }
 
-        public void SetCustomDestination(Vec3 pos, float precision = -1, Object user_data = null)
+        public void SetCustomDestination(Vec3 pos, float precision = -1, float precision_max = -1, Object user_data = null)
         {
-            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, user_data));
+            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, precision_max, user_data));
         }
 
         public void ClearCustomDestination()
@@ -519,12 +558,12 @@ namespace Nav
             ClearDestination(DestType.Custom);
         }
 
-        public bool TryGetPath(ref List<Vec3> p, ref DestType p_dest_type)
+        public bool TryGetPath(ref List<Vec3> path, ref destination path_dest)
         {
             if (PathLock.TryEnterReadLock(0))
             {
-                p = new List<Vec3>(Path);
-                p_dest_type = m_PathDestination.type;
+                path = new List<Vec3>(Path);
+                path_dest = m_PathDestination;
                 PathLock.ExitReadLock();
                 return true;
             }
@@ -532,14 +571,14 @@ namespace Nav
             return false;
         }
 
-        public float TryGetPathLength(ref DestType p_dest_type)
+        public float TryGetPathLength(ref destination path_dest)
         {
             float length = 0;
 
             if (PathLock.TryEnterReadLock(0))
             {
                 length = Algorihms.GetPathLength(Path);
-                p_dest_type = m_PathDestination.type;
+                path_dest = m_PathDestination;
                 PathLock.ExitReadLock();
             }
 
@@ -809,7 +848,14 @@ namespace Nav
 
                 using (new WriteLock(InputLock))
                 {
-                    m_Destination = dest;
+                    if (dest.precision_max > 0)
+                        m_RingDestination = dest;
+                    else
+                        m_Destination = dest;
+
+                    // clear ring destination when overwritten by any other destination that is not coming from ring destination update
+                    if (!dest.is_ring && dest.precision_max <= 0)
+                        m_RingDestination = default(destination);
                 }
 
                 //m_Navmesh.Log("[Nav] Dest changed to " + pos + " [" + type + "] precision " + precision);
@@ -836,7 +882,7 @@ namespace Nav
 
                 dest_pos = new Vec3(m_Destination.pos);
 
-                return (!m_CurrentPos.IsZero() && !m_Destination.pos.IsZero() && m_Destination.pos.Equals(m_PathDestination)) && (Path.Count == 0);
+                return (!m_CurrentPos.IsZero() && !m_Destination.pos.IsZero() && m_Destination.pos.Equals(m_PathDestination.pos)) && (Path.Count == 0);
             }
         }
 
@@ -859,6 +905,7 @@ namespace Nav
 
         protected virtual void OnUpdate(Int64 time)
         {
+            UpdateRingDestination();
             UpdateWaypointDestination();
             UpdateGridDestination();
             UpdateBackTrackDestination();
@@ -1002,6 +1049,61 @@ namespace Nav
                 SetDestination(new destination(dest_pos, DestType.BackTrack, DefaultPrecision));
         }
 
+        private void UpdateRingDestination()
+        {
+            var dest = RingDestination;
+
+            if (dest.precision_max <= 0)
+                return;
+
+            var current_pos = CurrentPos;
+            float distance = current_pos.Distance2D(dest.pos);
+            bool too_far = distance > dest.precision_max;
+            bool too_close = distance < dest.precision;
+
+            const int RAYS_COUNT = 16;
+            const float ROTATE_STEP_ANGLE = 360 / RAYS_COUNT;
+            Vec3 ROTATE_AXIS = new Vec3(0, 0, 1);
+
+            Vec3[] DESTINATIONS = new Vec3[RAYS_COUNT];
+            Vec3 start_dir = new Vec3(1, 0, 0);
+            for (int i = 0; i < RAYS_COUNT; ++i)
+                DESTINATIONS[i] = dest.pos + Vec3.Rotate(start_dir, i * ROTATE_STEP_ANGLE, ROTATE_AXIS) * dest.precision_max;
+
+            DESTINATIONS = DESTINATIONS.OrderBy(x => x.Distance2D(current_pos)).ToArray();
+            
+            //if (distance < dest.precision || distance > dest.precision_max)
+            {
+                Vec3 best_dest = Vec3.ZERO;
+                Vec3 furthest_dest = Vec3.ZERO;
+                float furthest_dest_dist = -1;
+
+                //find best visible spot round the destination
+                foreach (var dest_to_test in DESTINATIONS)
+                {
+                    var dest_pos = m_Navmesh.RayCast2D(dest.pos, dest_to_test, MovementFlag.Walk).End;
+                    var dist = dest_pos.Distance2D(dest.pos);
+
+                    if (dist >= dest.precision * 1.2f)
+                    {
+                        best_dest = dest_pos;
+                        break;
+                    }
+
+                    if (furthest_dest_dist < 0 || dist > furthest_dest_dist)
+                    {
+                        furthest_dest = dest_pos;
+                        furthest_dest_dist = dist;
+                    }
+                }
+
+                if (best_dest.IsZero())
+                    best_dest = furthest_dest;
+
+                SetDestination(new destination(best_dest, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true });
+            }
+        }
+
         private void UpdateThreatAvoidance()
         {
             if (EnableThreatAvoidance)
@@ -1015,7 +1117,7 @@ namespace Nav
 
                 if (IsInThreat)
                 {
-                    SetDestination(new destination(new Vec3(6,6,6), DestType.RunAway, Precision));
+                    SetDestination(new destination(new Vec3(6,6,6), DestType.RunAway, DefaultPrecision * 0.3f));
 
                     //if (!was_in_threat)
                     //    m_Navmesh.Log("now in threat");
@@ -1094,13 +1196,13 @@ namespace Nav
                     if (m_PrecisionOverride > 0)
                         precision = m_PrecisionOverride;
                     else if (Path.Count == 1)
-                        precision = Precision;
+                        precision = m_PathDestination.precision;
 
                     bool destination_reached = false;
 
                     Vec3 dest_pos = Path.Last();
                     // if there are no obstacles between current position and destination when in arrival radius, consider reached
-                    if (current_pos.Distance2D(dest_pos) <= Precision && m_Navmesh.RayCast2D(current_pos, dest_pos, MovementFlag.Walk))
+                    if (current_pos.Distance2D(dest_pos) <= m_PathDestination.precision && m_Navmesh.RayCast2D(current_pos, dest_pos, MovementFlag.Walk))
                         destination_reached = true;
 
                     if (current_pos.Distance2D(Path[0]) > precision && !destination_reached)
@@ -1423,7 +1525,6 @@ namespace Nav
                 w.Write(PathNodesShiftDist);
                 w.Write(PathRandomCoeff);
                 w.Write(DefaultPrecision);
-                w.Write(Precision);
             }
         }
 
@@ -1479,7 +1580,6 @@ namespace Nav
                 PathNodesShiftDist = r.ReadSingle();
                 PathRandomCoeff = r.ReadSingle();
                 DefaultPrecision = r.ReadSingle();
-                Precision = r.ReadSingle();
             }
 
             Vec3 curr_pos = CurrentPos;
@@ -1521,6 +1621,7 @@ namespace Nav
 
         private Vec3 m_CurrentPos = Vec3.ZERO; //@ InputLock
         private destination m_Destination = default(destination); //@ InputLock
+        private destination m_RingDestination = default(destination); //@ InputLock
         private List<INavigationObserver> m_Observers = new List<INavigationObserver>(); //@ InputLock
 
         private Navmesh m_Navmesh = null;

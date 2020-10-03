@@ -231,8 +231,8 @@ namespace Nav
 
                 if (!m_RenderOriginalPath && m_RenderPath)
                 {
-                    DestType last_path_dest_type = DestType.None;
-                    if (m_Navigator.TryGetPath(ref m_LastPath, ref last_path_dest_type))
+                    destination last_path_dest = default(destination);
+                    if (m_Navigator.TryGetPath(ref m_LastPath, ref last_path_dest))
                         m_LastPath.Insert(0, m_Navigator.CurrentPos);
                     RenderHelper.DrawLines(e.Graphics, RenderHelper.PATH_PEN, m_RenderCenter, m_LastPath, 1, true);
                 }
@@ -252,12 +252,20 @@ namespace Nav
 
                 Vec3 curr = m_Navigator.CurrentPos;
                 Vec3 dest = m_Navigator.Destination.pos;
+                var ring_dest = m_Navigator.RingDestination;
 
                 if (!curr.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.Blue, m_RenderCenter, curr);
 
                 if (!dest.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, dest);
+
+                if (!ring_dest.pos.IsZero())
+                {
+                    RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, ring_dest.pos);
+                    RenderHelper.DrawCircle(e.Graphics, Pens.LightBlue, m_RenderCenter, ring_dest.pos, ring_dest.precision);
+                    RenderHelper.DrawCircle(e.Graphics, Pens.LightBlue, m_RenderCenter, ring_dest.pos, ring_dest.precision_max);
+                }
 
                 if (!curr.IsZero() && !dest.IsZero())
                 {
@@ -406,6 +414,20 @@ namespace Nav
                     }
 
                     m_Navigator.SetCustomDestination(result);
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.R)
+                {
+                    Vec3 result = default(Vec3);
+                    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                                            MovementFlag.Walk,
+                                            ref result))
+                    {
+                        result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
+                    }
+
+                    m_Navigator.Destination = new destination(result, DestType.Custom, m_Navigator.DefaultPrecision, m_Navigator.DefaultPrecision * 2);
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.L)
