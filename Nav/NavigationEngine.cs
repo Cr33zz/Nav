@@ -30,7 +30,9 @@ namespace Nav
             this.precision = precision;
             this.precision_max = precision_max;
             this.user_data = user_data;
-            this.is_ring = false;
+
+            is_ring = false;
+            shift = false;
         }
 
         public override bool Equals(Object obj)
@@ -54,6 +56,7 @@ namespace Nav
         public float precision_max;
         public Object user_data;
         internal bool is_ring;
+        internal bool shift;
     }
 
     public class NavigationEngine : IDisposable, INavmeshObserver
@@ -138,21 +141,21 @@ namespace Nav
         // turn on/off danger detection and danger avoidance
         public bool EnableThreatAvoidance { get; set; } = false;
 
-        public float MaxAllowedThreat { get; set; } = 0;
+        public float ThreatThreshold { get; set; } = 0;
 
         // when avoidance is enabled and current position is on a cell with threat level higher than MaxAllowedThreat
         public bool IsInThreat { get; private set; } = false;
 
         public bool IsThreatAt(Vec3 pos)
         {
-            return m_Navmesh.Regions.Any(x => x.Threat > MaxAllowedThreat && x.Area.Contains2D(pos));
+            return m_Navmesh.Regions.Any(x => x.Threat > ThreatThreshold && x.Area.Contains2D(pos));
         }
 
         public bool IsThreatBetween(Vec3 start, Vec3 end)
         {
             Vec3 threat_pos = default(Vec3);
 
-            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat > MaxAllowedThreat).ToList())
+            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat > ThreatThreshold).ToList())
             {
                 if (t.Area.SegmentTest2D(start, end, ref threat_pos))
                     return true;
@@ -197,10 +200,10 @@ namespace Nav
         public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible)
         {
             using (new Profiler("[Nav] Path finding took %t", 5))
-            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, PathSmoothingDistance);
+            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, false, PathSmoothingDistance);
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, float smoothen_distance = float.MaxValue)
+        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue)
         {
             using (m_Navmesh.AcquireReadDataLock())
             {
@@ -248,7 +251,7 @@ namespace Nav
 
                 path = tmp_path.Select(x => x.pos).ToList();
 
-                PostProcessPath(ref path, merge_distance, shift_nodes_distance);
+                PostProcessPath(ref path, merge_distance, shift_nodes_distance, shift_dest);
 
                 if (!include_from && start_on_nav_mesh)
                     path.RemoveAt(0);
@@ -287,7 +290,7 @@ namespace Nav
 
                 path = tmp_path.Select(x => x.pos).ToList();
 
-                PostProcessPath(ref path, -1, shift_nodes_distance);
+                PostProcessPath(ref path, -1, shift_nodes_distance, true);
 
                 if (!include_from)
                     path.RemoveAt(0);
@@ -459,7 +462,7 @@ namespace Nav
             //}
         }
 
-        private void PostProcessPath(ref List<Vec3> path, float merge_distance, float shift_nodes_distance)
+        private void PostProcessPath(ref List<Vec3> path, float merge_distance, float shift_nodes_distance, bool shift_dest = false)
         {
             if (merge_distance > 0)
             {
@@ -486,13 +489,15 @@ namespace Nav
             // shift points to increase movement accuracy
             if (shift_nodes_distance > 0)
             {
-                for (int i = path.Count - 2; i > 0; --i)
+                for (int i = path.Count - (shift_dest ? 1 : 2); i > 0; --i)
                 {
+                    bool is_dest = (i == path.Count - 1);
+
                     Vec3 dir_to_next = path[i] - path[i - 1];
                     float dist = dir_to_next.Normalize2D();
 
                     if (dist > 0.01)
-                        path[i] += dir_to_next * shift_nodes_distance;
+                        path[i] += dir_to_next * shift_nodes_distance * (is_dest ? 0.8f : 1.0f);
                 }
             }
         }
@@ -950,11 +955,11 @@ namespace Nav
 
             if (dest.type == DestType.RunAway)
             {
-                FindAvoidancePath(current_pos, MaxAllowedThreat, MovementFlags, ref new_path, Vec3.ZERO, false, PathNodesShiftDist);
+                FindAvoidancePath(current_pos, ThreatThreshold, MovementFlags, ref new_path, Vec3.ZERO, false, PathNodesShiftDist);
                 //m_Navmesh.Log($"avoidance path calculated {new_path.Count} nodes");
             }
             else
-                FindPath(current_pos, dest.pos, MovementFlags, ref new_path, out new_path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, true, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, PathSmoothingDistance);
+                FindPath(current_pos, dest.pos, MovementFlags, ref new_path, out new_path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, as_close_as_possible: true, include_from: false, random_coeff: m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, bounce: m_PathBounce, shift_nodes_distance: PathNodesShiftDist, shift_dest: dest.shift, smoothen_distance: PathSmoothingDistance);
 
             // verify whenever some point of path was not already passed during its calculation (this may take place when path calculations took long time)
             // this is done by finding first path segment current position can be casted on and removing all points preceding this segment including segment origin
@@ -1065,10 +1070,11 @@ namespace Nav
             const float ROTATE_STEP_ANGLE = 360 / RAYS_COUNT;
             Vec3 ROTATE_AXIS = new Vec3(0, 0, 1);
 
-            Vec3[] DESTINATIONS = new Vec3[RAYS_COUNT];
+            Vec3[] DESTINATIONS = new Vec3[RAYS_COUNT + 1];
             Vec3 start_dir = new Vec3(1, 0, 0);
             for (int i = 0; i < RAYS_COUNT; ++i)
                 DESTINATIONS[i] = dest.pos + Vec3.Rotate(start_dir, i * ROTATE_STEP_ANGLE, ROTATE_AXIS) * dest.precision_max;
+            DESTINATIONS[RAYS_COUNT] = dest.pos + (current_pos - dest.pos).Normalized2D() * dest.precision_max;
 
             DESTINATIONS = DESTINATIONS.OrderBy(x => x.Distance2D(current_pos)).ToArray();
             
@@ -1100,7 +1106,7 @@ namespace Nav
                 if (best_dest.IsZero())
                     best_dest = furthest_dest;
 
-                SetDestination(new destination(best_dest, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true });
+                SetDestination(new destination(best_dest, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true, shift = true });
             }
         }
 
@@ -1109,7 +1115,7 @@ namespace Nav
             if (EnableThreatAvoidance)
             {
                 Vec3 current_pos = CurrentPos;
-                var threats = m_Navmesh.Regions.Where(x => x.Threat > MaxAllowedThreat).ToList();
+                var threats = m_Navmesh.Regions.Where(x => x.Threat > ThreatThreshold).ToList();
                 var current_threats = threats.Where(x => x.Area.Contains2D(current_pos));
 
                 bool was_in_threat = IsInThreat;
@@ -1228,8 +1234,6 @@ namespace Nav
                 }
             }
 
-            var dest = Destination;
-
             // update destination arrived
             if (any_node_reached)
             {
@@ -1245,7 +1249,7 @@ namespace Nav
                         }
                     }
 
-                    NotifyOnDestinationReached(dest);
+                    NotifyOnDestinationReached(m_PathDestination);
 
                     ResetAntiStuckPathing(current_pos);
 
