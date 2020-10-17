@@ -34,6 +34,9 @@ namespace Nav
                         throw new Exception("Invalid parameter: " + arg);
                 }
             }
+
+            if (last_param_name != "")
+                m_Params[last_param_name] = "__present";
         }
 
         public bool GetParam(string name, out string value)
