@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Nav
 {
-    public abstract class ExplorationEngine : IDisposable, INavigationObserver, INavmeshObserver
+    public abstract class ExplorationEngine : IDisposable, INavigationObserver, INavmeshObserver, IRoughPathEstimator
     {
         public ExplorationEngine(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90)
         {
@@ -18,6 +18,7 @@ namespace Nav
 
             m_Navigator = navigator;
             m_Navigator.AddObserver(this);
+            m_Navigator.m_RoughtPathEstimator = m_Navigator.m_RoughtPathEstimator ?? this;
 
             // generate exploration data from already existing grid cells
             Reset();
@@ -233,14 +234,13 @@ namespace Nav
             if (dest.type != DestType.Explore)
                 return;
 
-            // todo get dest cell from user data
-            ExploreCell dest_cell = m_ExploreCells.FirstOrDefault(x => x.Position.Equals(dest.pos));
+            ExploreCell dest_cell = dest.user_data as ExploreCell;
 
             if (dest_cell != null)
                 OnCellExplored(dest_cell);
 
             m_DestCell = GetDestinationCell();
-            m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision));
+            m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell));
         }
 
         public void OnDestinationReachFailed(destination dest)
@@ -304,6 +304,9 @@ namespace Nav
 
         protected virtual void OnCellExplored(ExploreCell cell)
         {
+            if (cell == null)
+                return;
+
             cell.Explored = true; // this is safe as explore cells cannot be added/removed now
             m_Navmesh.Log("[Nav] Explored cell " + cell.GlobalId + " [progress: " + GetExploredPercent() + "%]!");
         }
@@ -458,7 +461,7 @@ namespace Nav
             if (m_DestCell != null)
             {
                 bool mark_dest_cell_as_explored = false;
-                bool is_dest_cell_connected = m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision);
+                bool is_dest_cell_connected = m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, ExploreDestPrecision, out var unused1, out var unused2);
 
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)
@@ -487,7 +490,7 @@ namespace Nav
                 if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
                 {
                     m_DestCell = GetDestinationCell();
-                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision));
+                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell));
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
 
@@ -501,7 +504,7 @@ namespace Nav
             }
         }
 
-        // DataLock is already aquired in read-upgradeable state
+        // DataLock is already acquired in read-upgradeable state
         protected virtual void OnUpdateExploration()
         {
         }
@@ -599,6 +602,55 @@ namespace Nav
 
                 return m_ExploreCells.Count - last_explore_cells_count;
             }
+        }
+
+        internal bool GetCellAt(Vec3 p, out ExploreCell result_cell)
+        {
+            using (new ReadLock(DataLock))
+            {
+                result_cell = null;
+
+                if (p.IsZero())
+                    return false;
+
+                foreach (var explore_cell in m_ExploreCells)
+                {
+                    if (explore_cell.Contains2D(p))
+                    {
+                        var cells = explore_cell.GetCellsAt(p, test_2d: true, z_tolerance: 0);
+
+                        if (cells.Count() > 0)
+                        {
+                            result_cell = explore_cell;
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        public bool FindRoughPath(Vec3 from, Vec3 to, ref List<Vec3> path)
+        {
+            if (from.IsZero() || to.IsZero())
+                return false;
+
+            List<path_pos> tmp_path = new List<path_pos>();
+
+            bool start_on_nav_mesh = GetCellAt(from, out ExploreCell start);
+            bool end_on_nav_mesh = GetCellAt(to, out ExploreCell end);
+
+            using (new ReadLock(DataLock))
+                Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<ExploreCell>(to, end), MovementFlag.None, ref tmp_path, use_cell_centers: true);
+
+            path = tmp_path.Select(x => x.pos).ToList();
+            return true;
+        }
+
+        public float GetRoughPathRecalcPrecision()
+        {
+            return ExploreCellSize * 1;
         }
 
         // Position toward which exploration should be conducted

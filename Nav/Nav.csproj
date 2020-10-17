@@ -90,6 +90,7 @@
     <Compile Include="GridCell.cs" />
     <Compile Include="Exploration\ExplorationEngine.cs" />
     <Compile Include="Ini.cs" />
+    <Compile Include="IRoughPathEstimator.cs" />
     <Compile Include="Misc\AABB.cs" />
     <Compile Include="Misc\Algorihms.cs" />
     <Compile Include="Misc\CellIdPair.cs" />

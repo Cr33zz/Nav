@@ -53,6 +53,11 @@ namespace Nav
             return false;
         }
 
+        public IEnumerable<Cell> GetCellsAt(Vec3 pos, bool test_2d, float z_tolerance)
+        {
+            return Cells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance)));
+        }
+
         internal override void Serialize(BinaryWriter w)
         {
             base.Serialize(w);
@@ -115,6 +120,7 @@ namespace Nav
         public List<Cell> Cells { get; private set; }
         public List<int> GridCellsId { get; private set; }
         public Vec3 Position { get; private set; }
+        public override Vec3 Center { get { return Position; } }
 
         public bool Explored { get; set; }
 

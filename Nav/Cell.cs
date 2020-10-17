@@ -407,7 +407,7 @@ namespace Nav
         public float Threat { get; set; }
         public Int64 UserData { get; set; }
         public AABB AABB { get; protected set; }
-        public Vec3 Center { get { return AABB.Center; } }
+        public virtual Vec3 Center { get { return AABB.Center; } }
         public Vec3 Min { get { return AABB.Min; } }
         public Vec3 Max { get { return AABB.Max; } }
         public Plane Plane { get { UpdateAlignPlane(); return AlignPlane; } }

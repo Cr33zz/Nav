@@ -126,6 +126,7 @@ namespace Nav
         // path will be automatically recalculated with this interval (milliseconds)
         public int UpdatePathInterval { get; set; } = -1;
 
+        public bool AllowRoughPath { get; set; } = false;
         public float PathSmoothingDistance { get; set; } = float.MaxValue;
         public float PathSmoothingPrecision { get; set; } = 3;
 
@@ -197,22 +198,21 @@ namespace Nav
             }
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible)
+        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path)
         {
-            using (new Profiler("[Nav] Path finding took %t", 5))
-            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, false, PathSmoothingDistance);
+            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, false, PathSmoothingDistance, AllowRoughPath);
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue)
+        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false)
         {
             using (m_Navmesh.AcquireReadDataLock())
+            //using (new Profiler("[Nav] Path finding took %t", 20))
             {
                 path_recalc_trigger_position = Vec3.ZERO;
+                path_recalc_trigger_precision = 0;
 
                 if (from.IsZero() || to.IsZero())
                     return false;
-
-                List<path_pos> tmp_path = new List<path_pos>();
 
                 bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, as_close_as_possible);
                 bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, as_close_as_possible);
@@ -225,6 +225,26 @@ namespace Nav
 
                     to = end.AABB.Align(to);
                 }
+
+                List<Vec3> rought_path = new List<Vec3>();
+
+                if (m_RoughtPathEstimator != null && allow_rough_path && !m_Navmesh.AreNavBlockersPresent())
+                    m_RoughtPathEstimator.FindRoughPath(from, to, ref rought_path);
+
+                if (rought_path.Count > 4)
+                {
+                    to = rought_path[4];
+                    m_Navmesh.GetCellAt(to, out end, flags, false, as_close_as_possible);
+
+                    // ideally this point should be set somewhere along the path to rough path node (but it would required going over the path to find it afterwards)
+                    path_recalc_trigger_position = to;
+                    path_recalc_trigger_precision = m_RoughtPathEstimator.GetRoughPathRecalcPrecision();
+                    rought_path.RemoveRange(0, 4);
+                }
+                else
+                    rought_path.Clear();
+
+                List<path_pos> tmp_path = new List<path_pos>();
 
                 if (bounce)
                 {
@@ -244,12 +264,12 @@ namespace Nav
                 }
 
                 if (smoothen_distance > 0 && random_coeff == 0)
-                    SmoothenPath(ref tmp_path, flags, smoothen_distance, out path_recalc_trigger_position, bounce ? 1 : 0);
+                    SmoothenPath(ref tmp_path, flags, smoothen_distance, ref path_recalc_trigger_position, ref path_recalc_trigger_precision, bounce ? 1 : 0);
 
                 if (DistToKeepFromEdge > 0 && random_coeff == 0)
                     KeepAwayFromEdges(ref tmp_path, flags);
 
-                path = tmp_path.Select(x => x.pos).ToList();
+                path = tmp_path.Select(x => x.pos).Concat(rought_path).ToList();
 
                 PostProcessPath(ref path, merge_distance, shift_nodes_distance, shift_dest);
 
@@ -277,7 +297,11 @@ namespace Nav
                 //m_Navmesh.Log($"original path has {tmp_path.Count} nodes");
 
                 if (smoothen_distance > 0)
-                    SmoothenPath(ref tmp_path, flags, smoothen_distance, out var path_recalc_trigger_position);
+                {
+                    Vec3 path_recalc_trigger_position = Vec3.ZERO;
+                    float path_recalc_trigger_precision = 0;
+                    SmoothenPath(ref tmp_path, flags, smoothen_distance, ref path_recalc_trigger_position, ref path_recalc_trigger_precision);
+                }
 
                 //m_Navmesh.Log($"smoothened path has {tmp_path.Count} nodes");
 
@@ -299,13 +323,11 @@ namespace Nav
             }
         }
 
-        private void SmoothenPath(ref List<path_pos> path, MovementFlag flags, float smoothen_distance, out Vec3 smoothen_end_pos, int skip_first_count = 0)
+        private void SmoothenPath(ref List<path_pos> path, MovementFlag flags, float smoothen_distance, ref Vec3 path_recalc_trigger_position, ref float path_recalc_trigger_precision, int skip_first_count = 0)
         {
             int ray_start_index = skip_first_count;
             float distanceCovered = 0;
             int force_stop_index = -1;
-
-            smoothen_end_pos = Vec3.ZERO;
 
             while (ray_start_index + 2 < path.Count)
             {
@@ -325,7 +347,8 @@ namespace Nav
 
                 if (smoothen_distance > 0 && distanceCovered > smoothen_distance)
                 {
-                    smoothen_end_pos = ray_end_data.pos;
+                    path_recalc_trigger_position = ray_end_data.pos;
+                    path_recalc_trigger_precision = PathSmoothingDistance * 0.3f;
                     force_stop_index = ray_start_index;
                     break;
                 }
@@ -693,7 +716,7 @@ namespace Nav
                     RequestPathUpdate();
                 }
 
-                if (!PathRecalcTriggerPosition.IsZero() && PathRecalcTriggerPosition.Distance2D(value) < PathSmoothingDistance * 0.3f)
+                if (!PathRecalcTriggerPosition.IsZero() && PathRecalcTriggerPosition.Distance2D(value) < PathRecalcTriggerPrecision)
                     RequestPathUpdate();
 
                 if (was_empty)
@@ -952,6 +975,7 @@ namespace Nav
 
             var new_path = new List<Vec3>();
             var new_path_recalc_trigger_position = Vec3.ZERO;
+            float new_path_recalc_trigger_precision = 0;
 
             if (dest.type == DestType.RunAway)
             {
@@ -959,7 +983,7 @@ namespace Nav
                 //m_Navmesh.Log($"avoidance path calculated {new_path.Count} nodes");
             }
             else
-                FindPath(current_pos, dest.pos, MovementFlags, ref new_path, out new_path_recalc_trigger_position, PATH_NODES_MERGE_DISTANCE, as_close_as_possible: true, include_from: false, random_coeff: m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, bounce: m_PathBounce, shift_nodes_distance: PathNodesShiftDist, shift_dest: dest.shift, smoothen_distance: PathSmoothingDistance);
+                FindPath(current_pos, dest.pos, MovementFlags, ref new_path, out new_path_recalc_trigger_position, out new_path_recalc_trigger_precision, PATH_NODES_MERGE_DISTANCE, as_close_as_possible: true, include_from: false, random_coeff: m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, bounce: m_PathBounce, shift_nodes_distance: PathNodesShiftDist, shift_dest: dest.shift, smoothen_distance: PathSmoothingDistance, allow_rough_path: AllowRoughPath);
 
             // verify whenever some point of path was not already passed during its calculation (this may take place when path calculations took long time)
             // this is done by finding first path segment current position can be casted on and removing all points preceding this segment including segment origin
@@ -1003,6 +1027,7 @@ namespace Nav
 
                 Path = new_path;
                 PathRecalcTriggerPosition = new_path_recalc_trigger_position;
+                PathRecalcTriggerPrecision = new_path_recalc_trigger_precision;
                 m_PathDestination = dest;
             }
         }
@@ -1066,20 +1091,20 @@ namespace Nav
             bool too_far = distance > dest.precision_max;
             bool too_close = distance < dest.precision;
 
-            const int RAYS_COUNT = 16;
-            const float ROTATE_STEP_ANGLE = 360 / RAYS_COUNT;
-            Vec3 ROTATE_AXIS = new Vec3(0, 0, 1);
-
-            Vec3[] DESTINATIONS = new Vec3[RAYS_COUNT + 1];
-            Vec3 start_dir = new Vec3(1, 0, 0);
-            for (int i = 0; i < RAYS_COUNT; ++i)
-                DESTINATIONS[i] = dest.pos + Vec3.Rotate(start_dir, i * ROTATE_STEP_ANGLE, ROTATE_AXIS) * dest.precision_max;
-            DESTINATIONS[RAYS_COUNT] = dest.pos + (current_pos - dest.pos).Normalized2D() * dest.precision_max;
-
-            DESTINATIONS = DESTINATIONS.OrderBy(x => x.Distance2D(current_pos)).ToArray();
-            
-            //if (distance < dest.precision || distance > dest.precision_max)
+            if (distance < dest.precision || distance > dest.precision_max)
             {
+                const int RAYS_COUNT = 16;
+                const float ROTATE_STEP_ANGLE = 360 / RAYS_COUNT;
+                Vec3 ROTATE_AXIS = new Vec3(0, 0, 1);
+
+                Vec3[] DESTINATIONS = new Vec3[RAYS_COUNT + 1];
+                Vec3 start_dir = new Vec3(1, 0, 0);
+                for (int i = 0; i < RAYS_COUNT; ++i)
+                    DESTINATIONS[i] = dest.pos + Vec3.Rotate(start_dir, i * ROTATE_STEP_ANGLE, ROTATE_AXIS) * dest.precision_max;
+                DESTINATIONS[RAYS_COUNT] = dest.pos + (current_pos - dest.pos).Normalized2D() * dest.precision_max;
+
+                DESTINATIONS = DESTINATIONS.OrderBy(x => x.Distance2D(current_pos)).ToArray();
+
                 Vec3 best_dest = Vec3.ZERO;
                 Vec3 furthest_dest = Vec3.ZERO;
                 float furthest_dest_dist = -1;
@@ -1108,6 +1133,8 @@ namespace Nav
 
                 SetDestination(new destination(best_dest, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true, shift = true });
             }
+            else
+                SetDestination(new destination(current_pos, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true });
         }
 
         private void UpdateThreatAvoidance()
@@ -1524,11 +1551,17 @@ namespace Nav
                 m_Destination.pos.Serialize(w);
                 w.Write((int)m_Destination.type);
 
+                w.Write(PathRecalcTriggerPrecision);
+                PathRecalcTriggerPosition.Serialize(w);
+
                 w.Write(UpdatePathInterval);
                 w.Write(CurrentPosDiffRecalcThreshold);
                 w.Write(PathNodesShiftDist);
                 w.Write(PathRandomCoeff);
                 w.Write(DefaultPrecision);
+                w.Write(AllowRoughPath);
+                w.Write(PathSmoothingDistance);
+                w.Write(PathSmoothingPrecision);
             }
         }
 
@@ -1579,11 +1612,17 @@ namespace Nav
                 m_Destination.pos = new Vec3(r);
                 m_Destination.type = (DestType)r.ReadInt32();
 
+                PathRecalcTriggerPrecision = r.ReadSingle();
+                PathRecalcTriggerPosition = new Vec3(r);
+
                 UpdatePathInterval = r.ReadInt32();
                 CurrentPosDiffRecalcThreshold = r.ReadSingle();
                 PathNodesShiftDist = r.ReadSingle();
                 PathRandomCoeff = r.ReadSingle();
                 DefaultPrecision = r.ReadSingle();
+                AllowRoughPath = r.ReadBoolean();
+                PathSmoothingDistance = r.ReadSingle();
+                PathSmoothingPrecision = r.ReadSingle();
             }
 
             Vec3 curr_pos = CurrentPos;
@@ -1602,7 +1641,8 @@ namespace Nav
         private ReaderWriterLockSlim AntiStuckLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         private List<Vec3> Path = new List<Vec3>(); //@ PathLock
-        private Vec3 PathRecalcTriggerPosition = Vec3.ZERO; //@ PathLock
+        internal Vec3 PathRecalcTriggerPosition = Vec3.ZERO; //@ PathLock
+        internal float PathRecalcTriggerPrecision = 0; //@ PathLock
         private destination m_PathDestination = default(destination); //@ PathLock
         private List<Vec3> m_Waypoints = new List<Vec3>(); //@ InputLock
         private List<Vec3> m_DestinationsHistory = new List<Vec3>(); //@ InputLock
@@ -1627,6 +1667,8 @@ namespace Nav
         private destination m_Destination = default(destination); //@ InputLock
         private destination m_RingDestination = default(destination); //@ InputLock
         private List<INavigationObserver> m_Observers = new List<INavigationObserver>(); //@ InputLock
+
+        public IRoughPathEstimator m_RoughtPathEstimator;
 
         private Navmesh m_Navmesh = null;
     }

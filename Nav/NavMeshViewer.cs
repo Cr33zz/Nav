@@ -235,6 +235,9 @@ namespace Nav
                     if (m_Navigator.TryGetPath(ref m_LastPath, ref last_path_dest))
                         m_LastPath.Insert(0, m_Navigator.CurrentPos);
                     RenderHelper.DrawLines(e.Graphics, RenderHelper.PATH_PEN, m_RenderCenter, m_LastPath, 1, true);
+
+                    if (!m_Navigator.PathRecalcTriggerPosition.IsZero())
+                        RenderHelper.DrawCircle(e.Graphics, Pens.DarkRed, m_RenderCenter, m_Navigator.PathRecalcTriggerPosition, m_Navigator.PathRecalcTriggerPrecision);
                 }
 
                 if (m_RenderBacktrackPath)
@@ -272,9 +275,20 @@ namespace Nav
                     if (m_RenderOriginalPath)
                     {
                         List<Vec3> path = new List<Vec3>();
-                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var path_recalc_trigger_position, -1, false, false, 0, false, 0, smoothen_distance: 0);
+                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_precision, -1, false, false, 0, false, 0, smoothen_distance: 0);
                         path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
+                    }
+
+                    if (m_RenderRoughPath)
+                    {
+                        List<Vec3> rought_path = new List<Vec3>();
+
+                        if (m_Navigator.m_RoughtPathEstimator != null)
+                            m_Navigator.m_RoughtPathEstimator.FindRoughPath(curr, dest, ref rought_path);
+
+                        rought_path.Insert(0, curr);
+                        RenderHelper.DrawLines(e.Graphics, RenderHelper.EXPLORE_PATH_PEN, m_RenderCenter, rought_path, 1, true);
                     }
 
                     if (m_RenderRayCast)
@@ -285,8 +299,10 @@ namespace Nav
 
                     if (m_RenderConnected)
                     {
-                        bool connected = m_Navmesh.AreConnected(curr, dest, MovementFlag.Walk, 40);
+                        bool connected = m_Navmesh.AreConnected(curr, dest, MovementFlag.Walk, 100, 400, out var curr_on_nav, out var dest_on_nav);
                         RenderHelper.DrawLine(e.Graphics, connected ? Pens.Green : Pens.Red, m_RenderCenter, curr, dest);
+                        RenderHelper.DrawLine(e.Graphics, Pens.Gray, m_RenderCenter, curr, curr_on_nav);
+                        RenderHelper.DrawLine(e.Graphics, Pens.Gray, m_RenderCenter, dest, dest_on_nav);
                         RenderHelper.DrawString(e.Graphics, connected ? Brushes.Green : Brushes.Red, m_RenderCenter, dest, connected ? "connected" : "not connected", 4);
                     }
                 }
@@ -383,6 +399,11 @@ namespace Nav
                 else if (e.KeyCode == Keys.D4)
                 {
                     m_RenderPositionsHistory = !m_RenderPositionsHistory;
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.D5)
+                {
+                    m_RenderRoughPath = !m_RenderRoughPath;
                     e.Handled = true;
                 }
             }
@@ -492,7 +513,7 @@ namespace Nav
                 }
                 else if (e.KeyCode == Keys.F2)
                 {
-                    LoadData(m_LastDataFile);
+                    LoadData(m_LastDataFile ?? "nav_dump.txt");
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.F3)
@@ -637,6 +658,7 @@ namespace Nav
             legend.Add(new LegendEntry("Ctrl+2: Toggle regions update", true, m_Navmesh.RegionsEnabled));
             legend.Add(new LegendEntry("Ctrl+3: Toggle render avoidance path", true, m_RenderAvoidancePath));
             legend.Add(new LegendEntry("Ctrl+4: Toggle render positions history", true, m_RenderPositionsHistory));
+            legend.Add(new LegendEntry("Ctrl+5: Toggle render rough path", true, m_RenderRoughPath));
         }
 
         private void Render(object sender, PaintEventArgs e)
@@ -841,7 +863,8 @@ namespace Nav
         private bool m_RenderIds = false;
         protected bool m_RenderAxis = true;
         private bool m_RenderConnections = false;
-        private bool m_RenderPath = true;
+        private bool m_RenderPath = false;
+        private bool m_RenderRoughPath = true;
         private bool m_RenderOriginalPath = false;
         private bool m_RenderAvoidancePath = false;
         private bool m_RenderBacktrackPath = false;
@@ -962,7 +985,7 @@ namespace Nav
                     {
                         ExploreCell neighbour_cell = (ExploreCell)neighbour.cell;
 
-                        DrawLine(e.Graphics, EXPLORE_CELL_CONNECTION_PEN, trans, cell.Position, neighbour_cell.Position);
+                        DrawLine(e.Graphics, EXPLORE_CELL_CONNECTION_PEN, trans, cell.Center, neighbour.border_point);
                     }
             }
 

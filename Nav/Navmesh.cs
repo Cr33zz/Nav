@@ -117,6 +117,7 @@ namespace Nav
                 return false;
 
             using (new WriteLock(DataLock))
+            //using (new WriteLock(DataLock, context: "Add"))
             {
                 var incoming_cells = g_cell.GetCells(false);
 
@@ -158,9 +159,10 @@ namespace Nav
         internal static List<Cell> m_CellsCache = new List<Cell>();
 
         // Returns true when position is on navmesh. Acquires DataLock (read)
-        internal bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
+        internal protected bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
         {
             using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock, context: "GetCellAt"))
             {
                 result_cell = null;
 
@@ -209,6 +211,7 @@ namespace Nav
         internal List<Cell> GetCellsWithin(Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
         {
             using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock, context: "GetCellsWithin"))
             {
                 var result_cells = new List<Cell>();
 
@@ -216,15 +219,28 @@ namespace Nav
                     return result_cells;
 
                 foreach (GridCell grid_cell in m_GridCells)
-                    result_cells.AddRange(Algorihms.GetCellsWithin(grid_cell.GetCells(!allow_disabled), p, radius, flags, allow_disabled, test_2d, z_tolerance));
+                {
+                    if (grid_cell.Distance2D(p) > radius)
+                        continue;
 
-                return result_cells;
+                    result_cells.AddRange(Algorihms.GetCellsWithin(grid_cell.GetCells(!allow_disabled), p, radius, flags, true, test_2d, z_tolerance));
+                }
+
+                // extract replacement cells for disabled cells
+                foreach (var cell in result_cells.Where(x => x.Disabled).ToList())
+                {
+                    if (CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out overlapped_cell_data data))
+                        result_cells.AddRange(data.replacement_cells);
+                }
+
+                return result_cells.Where(x => allow_disabled || !x.Disabled).ToList();
             }
         }
 
         public int GetGridCellId(Vec3 pos)
         {
             using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock, context: "GetGridCellId"))
             {
                 return GetGridCell(pos)?.Id ?? -1;
             }
@@ -337,6 +353,8 @@ namespace Nav
             }
         }
 
+        internal bool AreNavBlockersPresent() { return LastBlockers.Count > 0; }
+
         private Dictionary<int, overlapped_cell_data> CellsOverlappedByRegions = new Dictionary<int, overlapped_cell_data>(); // @ DataLock
         private HashSet<AABB> LastBlockers = new HashSet<AABB>(); //@ DataLock
 
@@ -379,6 +397,7 @@ namespace Nav
             if (ForcePatchesUpdate)
             {
                 using (new WriteLock(DataLock))
+                //using (new WriteLock(DataLock, context: "UpdatePatches"))
                 using (new Profiler($"[Nav] Updating cell patches took %t", 30))
                 {
                     m_CellsPatches = Algorihms.GenerateCellsPatches(m_AllCells, MovementFlag.Walk, skip_disabled: true);
@@ -400,6 +419,7 @@ namespace Nav
             AABB affected_area = AABB.ZERO;
 
             using (new WriteLock(DataLock))
+            //using (new WriteLock(DataLock, context: "UpdateRegions"))
             using (new Profiler($"[Nav] Updating {regions_copy.Count} regions took %t", 50))
             {
                 var blockers = new HashSet<AABB>();
@@ -554,6 +574,9 @@ namespace Nav
                             cell_data.replaced_cell.Disabled = false;
 
                         m_CellsCache.Clear();
+
+                        // request patches update at the earliest convenience when regions changed
+                        ForcePatchesUpdate = true;
                     }
                 }
 
@@ -580,6 +603,7 @@ namespace Nav
             get
             {
                 using (new ReadLock(DataLock))
+                //using (new ReadLock(DataLock, context: "IsNavDataAvailable"))
                     return m_GridCells.Count > 0;
             }
         }
@@ -702,7 +726,8 @@ namespace Nav
 
         public Vec3 GetRandomPos(Random rng = null)
         {
-            using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock))
+            using (new ReadLock(DataLock, context: "GetRandomPos"))
             {
                 rng = rng ?? Rng;
                 GridCell g_cell = m_GridCells.ElementAt(rng.Next(m_GridCells.Count));
@@ -729,6 +754,7 @@ namespace Nav
             List<Cell> result = new List<Cell>();
 
             using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock, context: "GetCellsInside"))
             {
                 var g_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(area));
                 List<Cell> cells = new List<Cell>();
@@ -799,6 +825,7 @@ namespace Nav
         private RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, float max_movement_cost_mult, ref HashSet<Cell> ignored_cells)
         {
             using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock, context: "RayCast"))
             {
                 if (from_cell == null && !GetCellAt(from, out from_cell, flags, false, false, -1, test_2d, 2, ignored_cells))
                 {
@@ -882,18 +909,27 @@ namespace Nav
             }
         }
 
-        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance)
+        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2)
         {
-            using (new ReadLock(DataLock))
-            {
-                var all_patches_cells = m_CellsPatches.SelectMany(x => x.Cells);
+            return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out var pos1_on_navmesh, out var pos2_on_navmesh);
+        }
 
-                var pos1_cells = Algorihms.GetCellsWithin(all_patches_cells, pos1, nearest_tolerance, flags, allow_disabled: true, test_2d: true);
+        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh)
+        {
+            //using (new Profiler("Navmesh AreConnected (incl. lock) took %t", 5))
+            using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock, context: "AreConnected"))
+            using (new Profiler("Navmesh AreConnected took %t", 5))
+            {
+                pos1_on_navmesh = pos1;
+                pos2_on_navmesh = pos2;
+
+                var pos1_cells = GetCellsWithin(pos1, nearest_tolerance_pos1, flags, allow_disabled: true, test_2d: true);
 
                 if (pos1_cells.Count == 0)
                     return false;
 
-                var pos2_cells = Algorihms.GetCellsWithin(all_patches_cells, pos2, nearest_tolerance, flags, allow_disabled: true, test_2d: true);
+                var pos2_cells = GetCellsWithin(pos2, nearest_tolerance_pos2, flags, allow_disabled: true, test_2d: true);
 
                 if (pos2_cells.Count == 0)
                     return false;
@@ -907,7 +943,14 @@ namespace Nav
                         foreach (var pos2_cell in pos2_cells)
                         {
                             if (p.Cells.Contains(pos2_cell))
+                            {
+                                var pos1_nearest_cell = p.Cells.Intersect(pos1_cells).OrderBy(x => pos1.Distance2DSqr(x.AABB.Align(pos1))).First();
+                                var pos2_nearest_cell = p.Cells.Intersect(pos2_cells).OrderBy(x => pos2.Distance2DSqr(x.AABB.Align(pos2))).First();
+
+                                pos1_on_navmesh = pos1_nearest_cell.AABB.Align(pos1);
+                                pos2_on_navmesh = pos2_nearest_cell.AABB.Align(pos2);
                                 return true;
+                            }
                         }
                     }
                 }
@@ -1322,8 +1365,12 @@ namespace Nav
         private ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
-        public ReadLock AcquireReadDataLock() { return new ReadLock(DataLock); }
-
+        public ReadLock AcquireReadDataLock()
+        {
+            return new ReadLock(DataLock);
+            //return new ReadLock(DataLock, context: "AcquireReadDataLock");
+        }
+        
         internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
         // cell patches are interconnected groups of cells allowing ultra fast connection checks
         internal HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
