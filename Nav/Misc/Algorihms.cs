@@ -393,7 +393,7 @@ namespace Nav
             private Vec3 HintPos;
         }
 
-        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false)
+        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false, bool use_cell_centers = false)
             where T : Cell
             where S : PathFindStrategy<T>
         {
@@ -422,51 +422,51 @@ namespace Nav
                 open.Remove(best);
 
                 //take node with lower cost from open list
-                NodeInfo info = best;
+                NodeInfo current_node = best;
 
-                if (strategy.IsDestCell((T)info.cell))
+                if (strategy.IsDestCell((T)current_node.cell))
                 {
-                    strategy.FinalDestCell = (T)info.cell;
-                    BuildPath(start, info.cell, from, strategy.UseFinalCellEntranceAsDestination() ? info.leading_point : strategy.GetDestination(), info, ref path);
+                    strategy.FinalDestCell = (T)current_node.cell;
+                    BuildPath(start, current_node.cell, from, strategy.UseFinalCellEntranceAsDestination() ? current_node.leading_point : strategy.GetDestination(), current_node, ref path, use_cell_centers);
                     return true;
                 }
 
-                closed.Insert(0, info);
+                closed.Insert(0, current_node);
 
-                foreach (Cell.Neighbour neighbour in info.cell.Neighbours)
+                foreach (Cell.Neighbour neighbour in current_node.cell.Neighbours)
                 {
                     Cell cell_neighbour = neighbour.cell;
 
                     if (cell_neighbour.Disabled || (neighbour.connection_flags & flags) != flags)
                         continue;
 
-                    Vec3 leading_point = neighbour.cell.AABB.Align(info.leading_point);
+                    Vec3 leading_point = use_cell_centers ? neighbour.cell.Center : neighbour.cell.AABB.Align(current_node.leading_point);
 
-                    NodeInfo info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
+                    NodeInfo neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
 
                     // if already processed then skip this neighbour
-                    if (info_neighbour != null)
+                    if (neighbour_node != null)
                         continue;
 
                     float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
 
-                    float new_g = info.g + info.leading_point.Distance(leading_point) * (1 + random_dist_mod) * info.cell.MovementCostMult;
-                    float new_h = strategy.GetMinDistance(leading_point) * (1 + random_dist_mod) * info.cell.MovementCostMult;
+                    float new_g = current_node.g + current_node.leading_point.Distance(leading_point) * (1 + random_dist_mod) * current_node.cell.MovementCostMult;
+                    float new_h = strategy.GetMinDistance(leading_point);
 
-                    info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, open);
+                    neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, open);
 
                     // if not in open list
-                    if (info_neighbour == null)
+                    if (neighbour_node == null)
                     {
-                        info_neighbour = new NodeInfo(cell_neighbour, leading_point, info, new_g, new_h); // g and h will be set later on
-                        open.Insert(0, info_neighbour);
+                        neighbour_node = new NodeInfo(cell_neighbour, leading_point, current_node, new_g, new_h); // g and h will be set later on
+                        open.Insert(0, neighbour_node);
                     }
-                    else if ((new_g + new_h) < info_neighbour.TotalCost)
+                    else if ((new_g + new_h) < neighbour_node.TotalCost)
                     {
-                        info_neighbour.parent = info;
-                        info_neighbour.leading_point = leading_point;
-                        info_neighbour.g = new_g;
-                        info_neighbour.h = new_h;
+                        neighbour_node.parent = current_node;
+                        neighbour_node.leading_point = leading_point;
+                        neighbour_node.g = new_g;
+                        neighbour_node.h = new_h;
                     }
                 }
             }
@@ -477,14 +477,14 @@ namespace Nav
                 NodeInfo best = closed.Find(x => x.h.Equals(min_total_cost));
                 strategy.FinalDestCell = (T)best.cell;
 
-                BuildPath(start, best.cell, from, strategy.UseFinalCellEntranceAsDestination() ? best.leading_point : strategy.GetDestination(), best, ref path);
+                BuildPath(start, best.cell, from, strategy.UseFinalCellEntranceAsDestination() ? best.leading_point : strategy.GetDestination(), best, ref path, use_cell_centers);
                 return true;
             }
 
             return false;
         }
 
-        private static void BuildPath<T>(T start, T end, Vec3 from, Vec3 to, NodeInfo info, ref List<path_pos> path) where T : Cell
+        private static void BuildPath<T>(T start, T end, Vec3 from, Vec3 to, NodeInfo info, ref List<path_pos> path, bool use_cell_centers = false) where T : Cell
         {
             // build result path
             if (path == null)
@@ -497,7 +497,7 @@ namespace Nav
 
             while (info != null)
             {
-                path.Add(new path_pos(info.leading_point, info.cell));
+                path.Add(new path_pos((use_cell_centers && info.parent != null) ? info.cell.Center : info.leading_point, info.cell));
                 info = info.parent;
             }
 
