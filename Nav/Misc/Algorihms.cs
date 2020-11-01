@@ -276,14 +276,14 @@ namespace Nav
             return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end), flags, ref path);
         }
 
-        public static float GetPathLength(List<Vec3> path)
+        public static float GetPathLength(List<Vec3> path, Vec3 pos)
         {
             float length = 0;
 
             for (int i = 0; i < path.Count - 1; ++i)
                 length += path[i].Distance2D(path[i + 1]);
 
-            return length;
+            return length + ((path.Count > 0 && !pos.IsZero()) ? path[0].Distance2D(pos) : 0);
         }
 
         public static List<Cell> GetCellsWithin(IEnumerable<Cell> cells, Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
@@ -386,7 +386,8 @@ namespace Nav
             }
 
             public override float GetMinDistance(Vec3 from) { return HintPos.IsZero() ? 0 : from.Distance(HintPos); }
-            public override bool IsDestCell(T cell) { return cell.Threat <= MaxAllowedThreat; }
+            // while path finding consider future threat regions (those with negative threat) as actual threats
+            public override bool IsDestCell(T cell) { return Math.Abs(cell.Threat) <= MaxAllowedThreat; }
             public override bool UseFinalCellEntranceAsDestination() { return true; }
 
             private float MaxAllowedThreat;
