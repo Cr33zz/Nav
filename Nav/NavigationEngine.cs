@@ -605,7 +605,7 @@ namespace Nav
 
             if (PathLock.TryEnterReadLock(0))
             {
-                length = Algorihms.GetPathLength(Path);
+                length = Algorihms.GetPathLength(Path, CurrentPos);
                 path_dest = m_PathDestination;
                 PathLock.ExitReadLock();
             }
@@ -1091,7 +1091,7 @@ namespace Nav
             bool too_far = distance > dest.precision_max;
             bool too_close = distance < dest.precision;
 
-            if (distance < dest.precision || distance > dest.precision_max)
+            if (distance < dest.precision || distance > dest.precision_max || !m_Navmesh.RayCast2D(dest.pos, current_pos, MovementFlag.Walk))
             {
                 const int RAYS_COUNT = 16;
                 const float ROTATE_STEP_ANGLE = 360 / RAYS_COUNT;
@@ -1106,7 +1106,7 @@ namespace Nav
                 DESTINATIONS = DESTINATIONS.OrderBy(x => x.Distance2D(current_pos)).ToArray();
 
                 Vec3 best_dest = Vec3.ZERO;
-                Vec3 furthest_dest = Vec3.ZERO;
+                Vec3 furthest_dest = current_pos;
                 float furthest_dest_dist = -1;
 
                 //find best visible spot round the destination
@@ -1115,7 +1115,10 @@ namespace Nav
                     var dest_pos = m_Navmesh.RayCast2D(dest.pos, dest_to_test, MovementFlag.Walk).End;
                     var dist = dest_pos.Distance2D(dest.pos);
 
-                    if (dist >= dest.precision * 1.2f)
+                    if (IsThreatAt(dest_pos))
+                        continue;
+
+                    if (dist >= dest.precision && dist <= dest.precision_max)
                     {
                         best_dest = dest_pos;
                         break;
@@ -1131,7 +1134,7 @@ namespace Nav
                 if (best_dest.IsZero())
                     best_dest = furthest_dest;
 
-                SetDestination(new destination(best_dest, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true, shift = true });
+                SetDestination(new destination(best_dest, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true/*, shift = true*/ });
             }
             else
                 SetDestination(new destination(current_pos, dest.type, DefaultPrecision * 0.8f, 0, dest.user_data) { is_ring = true });
