@@ -927,10 +927,15 @@ namespace Nav
                 int move_cost_level = 255 - (int) Math.Min(GetProportional(cell.MovementCostMult, 1, 100, 20, 255), 255);
                 cell_color = Color.FromArgb(255, move_cost_level, move_cost_level, move_cost_level);
             }
-            else if (cell.Threat > 0 && render_threat)
+            else if (cell.Threat != 0 && render_threat)
             {
-                int threat_level = 255 - (int)Math.Min(GetProportional(cell.MovementCostMult, 1, 100, 20, 255), 255);
-                cell_color = Color.FromArgb(255, 255, threat_level, threat_level);
+                if (cell.Threat > 0)
+                {
+                    int threat_level = 255 - (int)Math.Min(GetProportional(cell.MovementCostMult, 1, 100, 20, 255), 255);
+                    cell_color = Color.FromArgb(255, 255, threat_level, threat_level);
+                }
+                else
+                    cell_color = Color.Aquamarine;
             }
 
             if (cell.Flags == MovementFlag.Fly)
