@@ -588,9 +588,7 @@ namespace Nav
                 }
 
                 if (nav_data_changed)
-                {
                     NotifyOnNavDataChanged(affected_area);
-                }
 
                 // remove inactive data
                 foreach (int key in no_longer_overlapped_cells_ids)

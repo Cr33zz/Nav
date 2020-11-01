@@ -461,7 +461,8 @@ namespace Nav
             if (m_DestCell != null)
             {
                 bool mark_dest_cell_as_explored = false;
-                bool is_dest_cell_connected = m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, ExploreDestPrecision, out var unused1, out var unused2);
+                // perform connection check only when reevaluation is forced (usually due to navigation data change)
+                bool is_dest_cell_connected = !m_ForceReevaluation || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, ExploreDestPrecision, out var unused1, out var unused2);
 
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)
