@@ -52,7 +52,7 @@ namespace Nav
 
         public override int GetHashCode()
         {
-            return Area.GetHashCode();
+            return Area.GetHashCode() ^ Threat.GetHashCode() ^ MoveCostMult.GetHashCode();
         }
 
         public void Serialize(BinaryWriter w)
@@ -588,7 +588,10 @@ namespace Nav
                 }
 
                 if (nav_data_changed)
+                {
+                    //Trace.WriteLine($"{DateTime.Now.ToString("HH:mm:ss:ffff")} regions nav data changed");
                     NotifyOnNavDataChanged(affected_area);
+                }
 
                 // remove inactive data
                 foreach (int key in no_longer_overlapped_cells_ids)
