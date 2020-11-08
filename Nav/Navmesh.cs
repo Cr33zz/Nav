@@ -727,8 +727,8 @@ namespace Nav
 
         public Vec3 GetRandomPos(Random rng = null)
         {
-            //using (new ReadLock(DataLock))
-            using (new ReadLock(DataLock, context: "GetRandomPos"))
+            using (new ReadLock(DataLock))
+            //using (new ReadLock(DataLock, context: "GetRandomPos"))
             {
                 rng = rng ?? Rng;
                 GridCell g_cell = m_GridCells.ElementAt(rng.Next(m_GridCells.Count));
@@ -926,6 +926,7 @@ namespace Nav
                 pos2_on_navmesh = pos2;
 
                 var pos1_cells = GetCellsWithin(pos1, nearest_tolerance_pos1, flags, allow_disabled: true, test_2d: true);
+                //var pos1_cells = Algorihms.GetCellsWithin(pos1, nearest_tolerance_pos1, flags, allow_disabled: true, test_2d: true);
 
                 if (pos1_cells.Count == 0)
                     return false;

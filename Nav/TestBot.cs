@@ -13,6 +13,7 @@ namespace Nav
             m_Navmesh.Verbose = true;
             //m_Navigator = new NavigationEngine(navmesh);
             m_Navigator = navigator;
+            m_Navigator.EnableThreatAvoidance = true;
             m_Navigator.AddObserver(this);
             m_Navigator.CurrentPos = pos;
             //m_Navigator.EnableThreatAvoidance = true;
@@ -61,7 +62,7 @@ namespace Nav
             if (!m_Destination.IsZero())
                 m_Navigator.Destination = new destination(m_Destination);
 
-            if (m_Explorer.IsExplored() || m_LastGotoPos.IsZero())
+            if (m_LastGotoPos.IsZero())
                 return;
 
             Vec3 dir = Vec3.ZERO;

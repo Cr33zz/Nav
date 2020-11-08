@@ -90,17 +90,27 @@ namespace Nav
 
         public float Distance2D(Vec3 p)
         {
+            return (float)Math.Sqrt(Distance2DSqr(p));
+        }
+
+        public float Distance2DSqr(Vec3 p)
+        {
             float dx = Math.Max(0, Math.Max(Min.X - p.X, p.X - Max.X));
             float dy = Math.Max(0, Math.Max(Min.Y - p.Y, p.Y - Max.Y));
-            return (float)Math.Sqrt(dx * dx + dy * dy);
+            return dx * dx + dy * dy;
         }
 
         public float Distance(Vec3 p)
         {
+            return (float)Math.Sqrt(DistanceSqr(p));
+        }
+
+        public float DistanceSqr(Vec3 p)
+        {
             float dx = Math.Max(0, Math.Max(Min.X - p.X, p.X - Max.X));
             float dy = Math.Max(0, Math.Max(Min.Y - p.Y, p.Y - Max.Y));
             float dz = Math.Max(0, Math.Max(Min.Z - p.Z, p.Z - Max.Z));
-            return (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            return dx * dx + dy * dy + dz * dz;
         }
 
         public bool Contains(Vec3 p, float z_tolerance = 0)

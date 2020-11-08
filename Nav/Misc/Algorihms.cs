@@ -286,6 +286,23 @@ namespace Nav
             return length + ((path.Count > 0 && !pos.IsZero()) ? path[0].Distance2D(pos) : 0);
         }
 
+        public static Cell GetCellAt(IEnumerable<Cell> cells, Vec3 p, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
+        {
+            if (p.IsZero())
+                return null;
+
+            foreach (Cell cell in cells)
+            {
+                if ((!allow_disabled && cell.Disabled) || (cell.Flags & flags) != flags)
+                    continue;
+
+                if (test_2d ? cell.Contains2D(p) : cell.Contains(p, z_tolerance))
+                    return cell;
+            }
+
+            return null;
+        }
+
         public static List<Cell> GetCellsWithin(IEnumerable<Cell> cells, Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
         {
             var result_cells = new List<Cell>();
@@ -293,13 +310,16 @@ namespace Nav
             if (p.IsZero())
                 return result_cells;
 
-            var filtered_cells = cells.Where(x => (allow_disabled || !x.Disabled) && (x.Flags & flags) == flags);
+            float radiusSqr = radius * radius;
 
-            foreach (Cell cell in filtered_cells)
+            foreach (Cell cell in cells)
             {
-                float dist = test_2d ? cell.Distance2D(p) : cell.Distance(p);
+                if ((!allow_disabled && cell.Disabled) || (cell.Flags & flags) != flags)
+                    continue;
 
-                if (dist <= radius)
+                float distSqr = test_2d ? cell.Distance2DSqr(p) : cell.DistanceSqr(p);
+
+                if (distSqr <= radiusSqr)
                     result_cells.Add(cell);
             }
 
@@ -622,91 +642,5 @@ namespace Nav
 
             return patches;
         }
-
-        //public static Vec3 GetRunAwayPosition(List<GridCell> grid_cells, HashSet<Navmesh.region_data> regions, Vec3 p, float min_run_away_dist, MovementFlag flags = MovementFlag.Walk)
-        //{
-        //    Cell start = null;
-        //    if (!GetCellContaining(grid_cells, p, out start, false, flags, 2))
-        //        return Vec3.Empty;
-
-
-        //    List<NodeInfo> open = new List<NodeInfo>();
-        //    List<NodeInfo> closed = new List<NodeInfo>();
-
-        //    NodeInfo s = new NodeInfo(start, p, null, 0, 0);
-        //    open.Add(s);
-
-        //    while (open.Count > 0)
-        //    {
-        //        //sort by cost
-        //        float min_total_cost = open.Min(x => x.TotalCost);
-        //        NodeInfo best = open.Find(x => x.TotalCost.Equals(min_total_cost));
-
-        //        open.Remove(best);
-
-        //        //take node with lower cost from open list
-        //        NodeInfo info = best;
-
-        //        if (info.g >= min_run_away_dist)
-        //        {
-        //            bool overlaped_by_avoid_area = false;
-        //            foreach (var region in regions)
-        //            {
-        //                if (info.cell.AABB.Overlaps2D(region.area, true))
-        //                {
-        //                    overlaped_by_avoid_area = true;
-        //                    break;
-        //                }
-        //            }
-
-        //            if (!overlaped_by_avoid_area)
-        //                return info.cell.Center;
-        //        }
-
-        //        closed.Insert(0, info);
-
-        //        foreach (Cell.Neighbour neighbour in info.cell.Neighbours)
-        //        {
-        //            Cell cell_neighbour = neighbour.cell;
-
-        //            if ((neighbour.connection_flags & flags) != flags)
-        //                continue;
-
-        //            Vec3 leading_point = cell_neighbour.AABB.Align(info.leading_point);
-
-        //            NodeInfo info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
-
-        //            // if already processed then skip this neighbour
-        //            if (info_neighbour != null)
-        //                continue;
-
-        //            float new_g = info.g + info.leading_point.Distance2D(leading_point);
-        //            bool is_better = false;
-
-        //            info_neighbour = GetNodeInfoFromList(cell_neighbour, leading_point, open);
-
-        //            // if not in open list
-        //            if (info_neighbour == null)
-        //            {
-        //                info_neighbour = new NodeInfo(cell_neighbour, leading_point, null, new_g, 0);
-        //                is_better = true;
-
-        //                open.Insert(0, info_neighbour);
-        //            }
-        //            else if (new_g < info_neighbour.g)
-        //            {
-        //                is_better = true;
-        //            }
-
-        //            if (is_better)
-        //            {
-        //                info_neighbour.parent = info;
-        //                info_neighbour.g = new_g;
-        //            }
-        //        }
-        //    }
-
-        //    return Vec3.Empty;
-        //}
     }
 }

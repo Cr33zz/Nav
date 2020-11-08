@@ -388,9 +388,19 @@ namespace Nav
             return AABB.Distance(p);
         }
 
+        public float DistanceSqr(Vec3 p)
+        {
+            return AABB.DistanceSqr(p);
+        }
+
         public float Distance2D(Vec3 p)
         {
             return AABB.Distance2D(p);
+        }
+
+        public float Distance2DSqr(Vec3 p)
+        {
+            return AABB.Distance2DSqr(p);
         }
 
         public bool HasFlags(MovementFlag flags)

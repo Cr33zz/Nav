@@ -863,8 +863,8 @@ namespace Nav
         private bool m_RenderIds = false;
         protected bool m_RenderAxis = true;
         private bool m_RenderConnections = false;
-        private bool m_RenderPath = false;
-        private bool m_RenderRoughPath = true;
+        private bool m_RenderPath = true;
+        private bool m_RenderRoughPath = false;
         private bool m_RenderOriginalPath = false;
         private bool m_RenderAvoidancePath = false;
         private bool m_RenderBacktrackPath = false;
