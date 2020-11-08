@@ -991,9 +991,9 @@ namespace Nav
             var new_path_recalc_trigger_position = Vec3.ZERO;
             float new_path_recalc_trigger_precision = 0;
 
-            if (dest.type == DestType.RunAway)
+            if (!m_AvoidanceDestination.pos.IsZero())
             {
-                FindAvoidancePath(current_pos, ThreatThreshold, MovementFlags, ref new_path, Vec3.ZERO, false, PathNodesShiftDist);
+                FindAvoidancePath(current_pos, ThreatThreshold, MovementFlags, ref new_path, m_AvoidanceDestination.pos, false, PathNodesShiftDist);
                 //m_Navmesh.Log($"avoidance path calculated {new_path.Count} nodes");
             }
             else
@@ -1172,7 +1172,7 @@ namespace Nav
             if (EnableThreatAvoidance)
             {
                 Vec3 current_pos = CurrentPos;
-                bool is_already_avoiding = GetDestinationType() == DestType.RunAway;
+                bool is_already_avoiding = m_AvoidanceDestination.type == DestType.RunAway;
                 var threats = m_Navmesh.Regions.Where(x => (is_already_avoiding ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold).ToList();
                 var current_threats = threats.Where(x => x.Area.Contains2D(current_pos));
 
@@ -1181,16 +1181,12 @@ namespace Nav
 
                 if (IsInThreat)
                 {
-                    SetDestination(new destination(new Vec3(6,6,6), DestType.RunAway, DefaultPrecision * 0.3f));
-
-                    //if (!was_in_threat)
-                    //    m_Navmesh.Log("now in threat");
-
+                    m_AvoidanceDestination = new destination(Destination.pos, DestType.RunAway, DefaultPrecision * 0.3f);
                     IsThreatAhead = false; // don't make user stop
                 }
                 else
                 {
-                    ClearDestination(DestType.RunAway);
+                    m_AvoidanceDestination = default(destination);
                     if (was_in_threat)
                     {
                         RequestPathUpdate();
@@ -1221,9 +1217,9 @@ namespace Nav
             }
             else
             {
+                m_AvoidanceDestination = default(destination);
                 IsInThreat = false;
                 IsThreatAhead = false;
-                ClearDestination(DestType.RunAway);
             }
         }
 
@@ -1697,6 +1693,7 @@ namespace Nav
         private Vec3 m_CurrentPos = Vec3.ZERO; //@ InputLock
         private destination m_Destination = default(destination); //@ InputLock
         private destination m_RingDestination = default(destination); //@ InputLock
+        private destination m_AvoidanceDestination = default(destination); //@ InputLock
         private List<INavigationObserver> m_Observers = new List<INavigationObserver>(); //@ InputLock
 
         public IRoughPathEstimator m_RoughtPathEstimator;
