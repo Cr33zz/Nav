@@ -54,7 +54,7 @@ namespace Nav
         {
             if (m_GotoPosUpdateTimer.ElapsedMilliseconds > GOTO_POS_UPDATE_INTERVAL)
             {
-                m_LastGotoPos = m_Navigator.GoToPosition;
+                m_LastGotoPos = m_Navigator.GoToPosition.pos;
                 m_GotoPosUpdateTimer.Restart();
             }
 
