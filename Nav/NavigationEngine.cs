@@ -981,17 +981,17 @@ namespace Nav
             if (!m_Navmesh.IsNavDataAvailable)
                 return;
 
-            var dest = Destination;
+            var dest = m_AvoidanceDestination.type == DestType.RunAway ? m_AvoidanceDestination : Destination;
             Vec3 current_pos = CurrentPos;
 
-            if (current_pos.IsZero() || dest.pos.IsZero())
+            if (current_pos.IsZero() || (dest.pos.IsZero() && dest.type != DestType.RunAway))
                 return;
 
             var new_path = new List<Vec3>();
             var new_path_recalc_trigger_position = Vec3.ZERO;
             float new_path_recalc_trigger_precision = 0;
 
-            if (!m_AvoidanceDestination.pos.IsZero())
+            if (dest.type == DestType.RunAway)
             {
                 FindAvoidancePath(current_pos, ThreatThreshold, MovementFlags, ref new_path, m_AvoidanceDestination.pos, false, PathNodesShiftDist);
                 //m_Navmesh.Log($"avoidance path calculated {new_path.Count} nodes");
