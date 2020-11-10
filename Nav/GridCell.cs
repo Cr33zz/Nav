@@ -44,6 +44,7 @@ namespace Nav
             foreach (Cell our_cell in Cells)
                 our_cell.AddNeighbour(cell, ref border_point);
 
+            cell.ParentAABB = AABB;
             Cells.AddFirst(cell);
 
             return true;

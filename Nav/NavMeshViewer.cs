@@ -301,8 +301,8 @@ namespace Nav
                     {
                         bool connected = m_Navmesh.AreConnected(curr, dest, MovementFlag.Walk, 100, 400, out var curr_on_nav, out var dest_on_nav);
                         RenderHelper.DrawLine(e.Graphics, connected ? Pens.Green : Pens.Red, m_RenderCenter, curr, dest);
-                        RenderHelper.DrawLine(e.Graphics, Pens.Gray, m_RenderCenter, curr, curr_on_nav);
-                        RenderHelper.DrawLine(e.Graphics, Pens.Gray, m_RenderCenter, dest, dest_on_nav);
+                        RenderHelper.DrawLine(e.Graphics, Pens.Lavender, m_RenderCenter, curr, curr_on_nav);
+                        RenderHelper.DrawLine(e.Graphics, Pens.Lavender, m_RenderCenter, dest, dest_on_nav);
                         RenderHelper.DrawString(e.Graphics, connected ? Brushes.Green : Brushes.Red, m_RenderCenter, dest, connected ? "connected" : "not connected", 4);
                     }
                 }

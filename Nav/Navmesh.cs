@@ -925,36 +925,24 @@ namespace Nav
                 pos1_on_navmesh = pos1;
                 pos2_on_navmesh = pos2;
 
-                var pos1_cells = GetCellsWithin(pos1, nearest_tolerance_pos1, flags, allow_disabled: true, test_2d: true);
-                //var pos1_cells = Algorihms.GetCellsWithin(pos1, nearest_tolerance_pos1, flags, allow_disabled: true, test_2d: true);
-
-                if (pos1_cells.Count == 0)
-                    return false;
-
-                var pos2_cells = GetCellsWithin(pos2, nearest_tolerance_pos2, flags, allow_disabled: true, test_2d: true);
-
-                if (pos2_cells.Count == 0)
-                    return false;
-
-                foreach (var pos1_cell in pos1_cells)
+                foreach (var patch in m_CellsPatches)
                 {
-                    IEnumerable<CellsPatch> pos1_patches = m_CellsPatches.Where(x => x.Cells.Contains(pos1_cell));
+                    var pos1_cells = patch.GetCellsWithin(pos1, nearest_tolerance_pos1, flags);
 
-                    foreach (var p in pos1_patches)
-                    {
-                        foreach (var pos2_cell in pos2_cells)
-                        {
-                            if (p.Cells.Contains(pos2_cell))
-                            {
-                                var pos1_nearest_cell = p.Cells.Intersect(pos1_cells).OrderBy(x => pos1.Distance2DSqr(x.AABB.Align(pos1))).First();
-                                var pos2_nearest_cell = p.Cells.Intersect(pos2_cells).OrderBy(x => pos2.Distance2DSqr(x.AABB.Align(pos2))).First();
+                    if (pos1_cells.Count == 0)
+                        continue;
 
-                                pos1_on_navmesh = pos1_nearest_cell.AABB.Align(pos1);
-                                pos2_on_navmesh = pos2_nearest_cell.AABB.Align(pos2);
-                                return true;
-                            }
-                        }
-                    }
+                    var pos2_cells = patch.GetCellsWithin(pos2, nearest_tolerance_pos2, flags);
+
+                    if (pos2_cells.Count == 0)
+                        continue;
+
+                    var pos1_nearest_cell = pos1_cells.OrderBy(x => pos1.Distance2DSqr(x.AABB.Align(pos1))).First();
+                    var pos2_nearest_cell = pos2_cells.OrderBy(x => pos2.Distance2DSqr(x.AABB.Align(pos2))).First();
+
+                    pos1_on_navmesh = pos1_nearest_cell.AABB.Align(pos1);
+                    pos2_on_navmesh = pos2_nearest_cell.AABB.Align(pos2);
+                    return true;
                 }
 
                 return false;
@@ -1240,7 +1228,7 @@ namespace Nav
                     // pre-allocate patches
                     for (int i = 0; i < patches_count; ++i)
                     {
-                        CellsPatch patch = new CellsPatch(new HashSet<Cell>(), MovementFlag.None);
+                        CellsPatch patch = new CellsPatch(new HashSet<Cell>(), new Dictionary<AABB, List<Cell>>(), MovementFlag.None);
                         patch.GlobalId = r.ReadInt32();
                         patches.Add(patch);
                     }

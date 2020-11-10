@@ -417,6 +417,7 @@ namespace Nav
         public float Threat { get; set; }
         public Int64 UserData { get; set; }
         public AABB AABB { get; protected set; }
+        public AABB ParentAABB { get; internal set; } = default(AABB);
         public virtual Vec3 Center { get { return AABB.Center; } }
         public Vec3 Min { get { return AABB.Min; } }
         public Vec3 Max { get { return AABB.Max; } }
@@ -458,6 +459,7 @@ namespace Nav
             w.Write(GlobalId);
             w.Write(Id);
             AABB.Serialize(w);
+            ParentAABB.Serialize(w);
             w.Write((int)Flags);
             w.Write(Replacement);
             w.Write(Disabled);
@@ -478,6 +480,7 @@ namespace Nav
             GlobalId = r.ReadInt32();
             Id = r.ReadInt32();
             AABB = new AABB(r);
+            ParentAABB = new AABB(r);
             Flags = (MovementFlag)r.ReadInt32();
             Replacement = r.ReadBoolean();
             Disabled = r.ReadBoolean();

@@ -618,6 +618,23 @@ namespace Nav
             }
         }
 
+        private class PatchVisitor : Algorihms.IVisitor<Cell>
+        {
+            public void Visit(Cell cell)
+            {
+                cells.Add(cell);
+
+                AABB gridAABB = cell.ParentAABB;
+                if (!cellsGrid.ContainsKey(gridAABB))
+                    cellsGrid.Add(gridAABB, new List<Cell>() { cell });
+                else
+                    cellsGrid[gridAABB].Add(cell);
+            }
+
+            public HashSet<Cell> cells = new HashSet<Cell>();
+            public Dictionary<AABB, List<Cell>> cellsGrid = new Dictionary<AABB, List<Cell>>();
+        }
+
         public static HashSet<CellsPatch> GenerateCellsPatches(IEnumerable<Cell> cells, MovementFlag movement_flags, bool skip_disabled = false)
         {
             var patches = new HashSet<CellsPatch>();
@@ -632,11 +649,12 @@ namespace Nav
                 if (start_cell == null)
                     break;
 
+                PatchVisitor patchVisitor = new PatchVisitor();
                 HashSet<Cell> visited = new HashSet<Cell>();
 
-                Algorihms.Visit(start_cell, ref visited, movement_flags, !skip_disabled);
+                Algorihms.Visit(start_cell, ref visited, movement_flags, !skip_disabled, visitor: patchVisitor);
 
-                patches.Add(new CellsPatch(visited, movement_flags));
+                patches.Add(new CellsPatch(patchVisitor.cells, patchVisitor.cellsGrid, movement_flags));
                 cells_copy.ExceptWith(visited);
             }
 
