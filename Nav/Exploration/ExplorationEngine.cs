@@ -239,8 +239,15 @@ namespace Nav
             if (dest_cell != null)
                 OnCellExplored(dest_cell);
 
+            SelectNewDestinationCell();
+        }
+
+        private void SelectNewDestinationCell()
+        {
             m_DestCell = GetDestinationCell();
             m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell));
+            // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
+            m_ValidateDestCell = true;
         }
 
         public void OnDestinationReachFailed(destination dest)
@@ -462,7 +469,7 @@ namespace Nav
             {
                 bool mark_dest_cell_as_explored = false;
                 // perform connection check only when reevaluation is forced (usually due to navigation data change)
-                bool is_dest_cell_connected = !m_ForceReevaluation || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, ExploreDestPrecision, out var unused1, out var unused2);
+                bool is_dest_cell_connected = (!m_ForceReevaluation && !m_ValidateDestCell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, 0, out var unused1, out var unused2);
 
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)
@@ -479,6 +486,8 @@ namespace Nav
                     }
                 }
 
+                m_ValidateDestCell = false;
+
                 // mark destination cell as explored when external function says so or destination cell is no longer connected (mostly due to nav blocker)
                 mark_dest_cell_as_explored |= AlternativeExploredCondition?.Invoke(m_DestCell, current_pos) ?? false;
 
@@ -490,8 +499,7 @@ namespace Nav
             {
                 if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
                 {
-                    m_DestCell = GetDestinationCell();
-                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell));
+                    SelectNewDestinationCell();
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
 
@@ -690,6 +698,7 @@ namespace Nav
         private Thread UpdatesThread = null;        
 
         private volatile bool m_ForceReevaluation = false;
+        private bool m_ValidateDestCell = false;
         protected int m_UpdateExplorationInterval = 300;
 
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
