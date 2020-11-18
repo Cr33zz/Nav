@@ -542,7 +542,7 @@ namespace Nav
                                                 threat += region.Threat;
                                             }
 
-                                            Cell r_cell = new Cell(extracted[k], cell_data.replaced_cell.Flags, movement_cost_mult);
+                                            Cell r_cell = new Cell(extracted[k], cell_data.replaced_cell.Flags, movement_cost_mult) { ParentAABB = cell_data.replaced_cell.ParentAABB };
                                             r_cell.Replacement = true;
                                             r_cell.Threat = threat;
                                             cell_data.replacement_cells.Add(r_cell);
