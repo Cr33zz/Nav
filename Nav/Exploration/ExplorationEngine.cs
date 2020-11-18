@@ -79,7 +79,7 @@ namespace Nav
 
         public virtual float GetExploredPercent()
         {
-            return (float)Math.Round(m_ExploredCellsCount / (float)m_CellsToExploreCount * 100, 1);
+            return m_CellsToExploreCount > 0 ? (float)Math.Round(m_ExploredCellsCount / (float)m_CellsToExploreCount * 100, 1) : 0;
         }
 
         public virtual void Dispose()
@@ -245,7 +245,7 @@ namespace Nav
         private void SelectNewDestinationCell()
         {
             m_DestCell = GetDestinationCell();
-            m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell));
+            m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false));
             // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
             m_ValidateDestCell = true;
         }
