@@ -299,7 +299,7 @@ namespace Nav
 
                     if (m_RenderConnected)
                     {
-                        bool connected = m_Navmesh.AreConnected(curr, dest, MovementFlag.Walk, 100, 400, out var curr_on_nav, out var dest_on_nav);
+                        bool connected = m_Navmesh.AreConnected(curr, dest, MovementFlag.Walk, 0, 0, out var curr_on_nav, out var dest_on_nav);
                         RenderHelper.DrawLine(e.Graphics, connected ? Pens.Green : Pens.Red, m_RenderCenter, curr, dest);
                         RenderHelper.DrawLine(e.Graphics, Pens.Lavender, m_RenderCenter, curr, curr_on_nav);
                         RenderHelper.DrawLine(e.Graphics, Pens.Lavender, m_RenderCenter, dest, dest_on_nav);
@@ -739,7 +739,7 @@ namespace Nav
             {
                 Vec3 pos = m_Navmesh.GetRandomPos(rng);
                 float size = approx_size + (float)rng.NextDouble() * (approx_size * 0.5f);
-                regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 5, 5));
+                regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2, -5));
             }
 
             m_Navmesh.Regions = regions;
@@ -980,18 +980,18 @@ namespace Nav
                 //DrawLine(e.Graphics, explored_pen, trans, new Vec3(cell.Min.X, cell.Max.Y), new Vec3(cell.Max.X, cell.Min.Y));
                 FillRectangle(e.Graphics, explored_brush, trans, cell.Min, cell.Max);
             }
-            else
+
+            //DrawCircle(e.Graphics, Pens.Red, trans, cell.Position, radius);
+            //DrawString(e.Graphics, Brushes.Black, trans, cell.Position, cell.UserData.ToString(), 10);
+
+            if (draw_connections)
             {
-                //DrawCircle(e.Graphics, Pens.Red, trans, cell.Position, radius);
-                //DrawString(e.Graphics, Brushes.Black, trans, cell.Position, cell.UserData.ToString(), 10);
+                foreach (Nav.Cell.Neighbour neighbour in cell.Neighbours)
+                {
+                    ExploreCell neighbour_cell = (ExploreCell)neighbour.cell;
 
-                if (draw_connections)
-                    foreach (Nav.Cell.Neighbour neighbour in cell.Neighbours)
-                    {
-                        ExploreCell neighbour_cell = (ExploreCell)neighbour.cell;
-
-                        DrawLine(e.Graphics, EXPLORE_CELL_CONNECTION_PEN, trans, cell.Center, neighbour.border_point);
-                    }
+                    DrawLine(e.Graphics, EXPLORE_CELL_CONNECTION_PEN, trans, cell.Center, neighbour.cell.Center);
+                }
             }
 
             if (draw_id)
