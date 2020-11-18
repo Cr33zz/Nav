@@ -63,13 +63,15 @@ namespace Nav
 
     public struct goto_data
     {
-        public goto_data(Vec3 pos, bool stop = false)
+        public goto_data(Vec3 pos, float precision, bool stop = false)
         {
             this.pos = pos;
+            this.precision = precision;
             this.stop = stop;
         }
 
         public Vec3 pos;
+        public float precision;
         public bool stop;
     }
 
@@ -161,9 +163,9 @@ namespace Nav
         // when avoidance is enabled and current position is on a cell with threat level higher than MaxAllowedThreat
         public bool IsInThreat { get; private set; } = false;
 
-        public bool IsThreatAt(Vec3 pos)
+        public bool IsThreatAt(Vec3 pos, bool considerFutureThreats = false)
         {
-            return m_Navmesh.Regions.Any(x => x.Threat > ThreatThreshold && x.Area.Contains2D(pos));
+            return m_Navmesh.Regions.Any(x => (considerFutureThreats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Contains2D(pos));
         }
 
         public bool IsThreatBetween(Vec3 start, Vec3 end)
@@ -190,7 +192,7 @@ namespace Nav
         public bool IsStandingOnPurpose { get; set; } = true;
 
         // is current path for currently requested destination type (may be false when destination change has been requested but path is not updated yet)
-        public bool IsPathUpToDate => m_PathDestination.type == m_Destination.type;
+        public bool IsPathUpToDate => m_PathDestination.pos == m_Destination.pos;
 
         public List<int> DestinationGridsId
         {
@@ -674,10 +676,10 @@ namespace Nav
                         var pos = Path[0];
                         if (AlignGoToPositionToCurrentPosZWhenZero && pos.Z == 0)
                             pos.Z = m_CurrentPos.Z;
-                        return new goto_data(pos, Path.Count > 1 || m_PathDestination.stop);
+                        return new goto_data(pos, GetPrecision(), stop: Path.Count == 1 && m_PathDestination.stop);
                     }
 
-                    return new goto_data(Vec3.ZERO);
+                    return new goto_data(Vec3.ZERO, 0);
                 }
             }
         }
@@ -1133,7 +1135,7 @@ namespace Nav
                 DESTINATIONS = DESTINATIONS.OrderBy(x => x.Distance2D(current_pos)).ToArray();
 
                 Vec3 best_dest = Vec3.ZERO;
-                Vec3 furthest_dest = current_pos;
+                Vec3 furthest_dest = DESTINATIONS[RAYS_COUNT]; // by default use direct towards player (it will only be selected when no ray cast passes or all targets positions are in threat)
                 float furthest_dest_dist = -1;
 
                 //find best visible spot round the destination
@@ -1142,7 +1144,7 @@ namespace Nav
                     var dest_pos = m_Navmesh.RayCast2D(dest.pos, dest_to_test, MovementFlag.Walk).End;
                     var dist = dest_pos.Distance2D(dest.pos);
 
-                    if (IsThreatAt(dest_pos))
+                    if (IsThreatAt(dest_pos, considerFutureThreats: true))
                         continue;
 
                     if (dist >= dest.precision && dist <= dest.precision_max)
@@ -1207,7 +1209,9 @@ namespace Nav
                             if (t.Area.Resized(-ThreatDetectionPrecision).SegmentTest2D(current_pos, go_to_pos, ref threat_pos))
                             {
                                 threat_ahead = current_pos.Distance2D(threat_pos) <= ThreatDetectionRange;
-                                break;
+
+                                if (threat_ahead)
+                                    break;
                             }
                         }
 
@@ -1241,6 +1245,19 @@ namespace Nav
                 SetDestination(new destination(dest_pos, DestType.Waypoint, DefaultPrecision));
         }
 
+        // assumes path lock active
+        private float GetPrecision()
+        {
+            float precision = DefaultPrecision;
+
+            if (m_PrecisionOverride > 0)
+                precision = m_PrecisionOverride;
+            else if (Path.Count == 1)
+                precision = m_PathDestination.precision;
+
+            return precision;
+        }
+
         private void UpdatePathProgression(Vec3 current_pos)
         {
             bool any_node_reached = false;
@@ -1251,12 +1268,7 @@ namespace Nav
             {
                 while (Path.Count > 0)
                 {
-                    float precision = DefaultPrecision;
-
-                    if (m_PrecisionOverride > 0)
-                        precision = m_PrecisionOverride;
-                    else if (Path.Count == 1)
-                        precision = m_PathDestination.precision;
+                    float precision = GetPrecision();
 
                     bool destination_reached = false;
 
