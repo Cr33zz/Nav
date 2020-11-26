@@ -51,6 +51,28 @@ namespace Nav
             return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ is_ring.GetHashCode() ^ precision_max.GetHashCode();
         }
 
+        public void Serialize(BinaryWriter w)
+        {
+            pos.Serialize(w);
+            w.Write((Int32)type);
+            w.Write(precision);
+            w.Write(precision_max);
+            w.Write(stop);
+            w.Write(is_ring);
+            w.Write(shift);
+        }
+
+        public void Deserialize(BinaryReader r)
+        {
+            pos = new Vec3(r);
+            type = (DestType)r.ReadInt32();
+            precision = r.ReadSingle();
+            precision_max = r.ReadSingle();
+            stop = r.ReadBoolean();
+            is_ring = r.ReadBoolean();
+            shift = r.ReadBoolean();
+        }
+
         public Vec3 pos;
         public DestType type;
         public float precision;
@@ -162,10 +184,16 @@ namespace Nav
 
         // when avoidance is enabled and current position is on a cell with threat level higher than MaxAllowedThreat
         public bool IsInThreat { get; private set; } = false;
+        public float Threat { get; private set; } = 0;
 
         public bool IsThreatAt(Vec3 pos, bool considerFutureThreats = false)
         {
             return m_Navmesh.Regions.Any(x => (considerFutureThreats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Contains2D(pos));
+        }
+
+        public float GetThreatAt(Vec3 pos)
+        {
+            return m_Navmesh.Regions.FirstOrDefault(x => x.Area.Contains2D(pos)).Threat;
         }
 
         public bool IsThreatBetween(Vec3 start, Vec3 end)
@@ -214,9 +242,9 @@ namespace Nav
             }
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path)
+        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path, float randomCoeff = 0, float nodesShiftDist = 0)
         {
-            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, m_PathBounce, PathNodesShiftDist, false, PathSmoothingDistance, AllowRoughPath);
+            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, randomCoeff, m_PathBounce, nodesShiftDist, false, PathSmoothingDistance, AllowRoughPath);
         }
 
         public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false)
@@ -1109,19 +1137,20 @@ namespace Nav
 
         private void UpdateRingDestination()
         {
-            var dest = RingDestination;
+            var ring_dest = RingDestination;
 
-            if (dest.precision_max <= 0)
+            if (ring_dest.precision_max <= 0)
                 return;
 
             var current_pos = CurrentPos;
-            float distance = current_pos.Distance2D(dest.pos);
-            bool too_far = distance > dest.precision_max;
-            bool too_close = distance < dest.precision;
+            var dest = Destination;
+            float distance = current_pos.Distance2D(ring_dest.pos);
+            bool too_far = distance > ring_dest.precision_max;
+            bool too_close = distance < ring_dest.precision;
 
-            if (distance < dest.precision || distance > dest.precision_max || !m_Navmesh.RayCast2D(dest.pos, current_pos, MovementFlag.Walk))
+            if (distance < ring_dest.precision || distance > ring_dest.precision_max || !m_Navmesh.RayCast2D(ring_dest.pos, current_pos, MovementFlag.Walk) || (ring_dest.precision > 0 && IsThreatAt(dest.pos, considerFutureThreats: true)))
             {
-                float RAY_DIST = (dest.precision + dest.precision_max) * 0.5f;
+                float RAY_DIST = (ring_dest.precision + ring_dest.precision_max) * 0.5f;
                 const int RAYS_COUNT = 16;
                 const float ROTATE_STEP_ANGLE = 360 / RAYS_COUNT;
                 Vec3 ROTATE_AXIS = new Vec3(0, 0, 1);
@@ -1129,8 +1158,8 @@ namespace Nav
                 Vec3[] DESTINATIONS = new Vec3[RAYS_COUNT + 1];
                 Vec3 start_dir = new Vec3(1, 0, 0);
                 for (int i = 0; i < RAYS_COUNT; ++i)
-                    DESTINATIONS[i] = dest.pos + Vec3.Rotate(start_dir, i * ROTATE_STEP_ANGLE, ROTATE_AXIS) * RAY_DIST;
-                DESTINATIONS[RAYS_COUNT] = dest.pos + (current_pos - dest.pos).Normalized2D() * RAY_DIST;
+                    DESTINATIONS[i] = ring_dest.pos + Vec3.Rotate(start_dir, i * ROTATE_STEP_ANGLE, ROTATE_AXIS) * RAY_DIST;
+                DESTINATIONS[RAYS_COUNT] = ring_dest.pos + (current_pos - ring_dest.pos).Normalized2D() * RAY_DIST;
 
                 DESTINATIONS = DESTINATIONS.OrderBy(x => x.Distance2D(current_pos)).ToArray();
 
@@ -1141,13 +1170,13 @@ namespace Nav
                 //find best visible spot round the destination
                 foreach (var dest_to_test in DESTINATIONS)
                 {
-                    var dest_pos = m_Navmesh.RayCast2D(dest.pos, dest_to_test, MovementFlag.Walk).End;
-                    var dist = dest_pos.Distance2D(dest.pos);
+                    var dest_pos = m_Navmesh.RayCast2D(ring_dest.pos, dest_to_test, MovementFlag.Walk).End;
+                    var dist = dest_pos.Distance2D(ring_dest.pos);
 
                     if (IsThreatAt(dest_pos, considerFutureThreats: true))
                         continue;
 
-                    if (dist >= dest.precision && dist <= dest.precision_max)
+                    if (dist >= ring_dest.precision && dist <= ring_dest.precision_max)
                     {
                         best_dest = dest_pos;
                         break;
@@ -1163,10 +1192,10 @@ namespace Nav
                 if (best_dest.IsZero())
                     best_dest = furthest_dest;
 
-                SetDestination(new destination(best_dest, dest.type, DefaultPrecision * 0.8f, 0, true, dest.user_data) { is_ring = true/*, shift = true*/ });
+                SetDestination(new destination(best_dest, ring_dest.type, DefaultPrecision * 0.8f, 0, true, ring_dest.user_data) { is_ring = true/*, shift = true*/ });
             }
             else
-                SetDestination(new destination(current_pos, dest.type, DefaultPrecision * 0.8f, 0, true, dest.user_data) { is_ring = true });
+                SetDestination(new destination(current_pos, ring_dest.type, DefaultPrecision * 0.8f, 0, true, ring_dest.user_data) { is_ring = true });
         }
 
         private void UpdateThreatAvoidance()
@@ -1180,11 +1209,14 @@ namespace Nav
 
                 bool was_in_threat = IsInThreat;
                 IsInThreat = current_threats.Any();
+                Threat = IsInThreat ? current_threats.Select(x => is_already_avoiding ? Math.Abs(x.Threat) : x.Threat).Max() : 0;
 
                 if (IsInThreat)
                 {
                     m_AvoidanceDestination = new destination(Destination.pos, DestType.RunAway, DefaultPrecision * 0.3f);
                     IsThreatAhead = false; // don't make user stop
+                    if (!was_in_threat)
+                        RequestPathUpdate();
                 }
                 else
                 {
@@ -1223,6 +1255,7 @@ namespace Nav
             {
                 m_AvoidanceDestination = default(destination);
                 IsInThreat = false;
+                Threat = 0;
                 IsThreatAhead = false;
             }
         }
@@ -1570,9 +1603,8 @@ namespace Nav
                 w.Write(Path.Count);
                 foreach (Vec3 p in Path)
                     p.Serialize(w);
-                m_PathDestination.pos.Serialize(w);
-                w.Write((int)m_PathDestination.type);
-
+                m_PathDestination.Serialize(w);
+                
                 w.Write(m_DestinationsHistory.Count);
                 foreach (Vec3 p in m_DestinationsHistory)
                     p.Serialize(w);
@@ -1587,8 +1619,8 @@ namespace Nav
                     w.Write(d);
 
                 m_CurrentPos.Serialize(w);
-                m_Destination.pos.Serialize(w);
-                w.Write((int)m_Destination.type);
+                m_Destination.Serialize(w);
+                m_RingDestination.Serialize(w);
 
                 w.Write(PathRecalcTriggerPrecision);
                 PathRecalcTriggerPosition.Serialize(w);
@@ -1601,6 +1633,8 @@ namespace Nav
                 w.Write(AllowRoughPath);
                 w.Write(PathSmoothingDistance);
                 w.Write(PathSmoothingPrecision);
+                w.Write(EnableAntiStuck);
+                w.Write(EnableThreatAvoidance);
             }
         }
 
@@ -1631,9 +1665,8 @@ namespace Nav
                 int path_count = r.ReadInt32();
                 for (int i = 0; i < path_count; ++i)
                     Path.Add(new Vec3(r));
-                m_PathDestination.pos = new Vec3(r);
-                m_PathDestination.type = (DestType)r.ReadInt32();
-
+                m_PathDestination.Deserialize(r);
+                
                 int destination_history_count = r.ReadInt32();
                 for (int i = 0; i < destination_history_count; ++i)
                     m_DestinationsHistory.Add(new Vec3(r));
@@ -1648,8 +1681,8 @@ namespace Nav
                     m_DestinationGridsId.Add(r.ReadInt32());
 
                 m_CurrentPos = new Vec3(r);
-                m_Destination.pos = new Vec3(r);
-                m_Destination.type = (DestType)r.ReadInt32();
+                m_Destination.Deserialize(r);
+                m_RingDestination.Deserialize(r);
 
                 PathRecalcTriggerPrecision = r.ReadSingle();
                 PathRecalcTriggerPosition = new Vec3(r);
@@ -1662,6 +1695,8 @@ namespace Nav
                 AllowRoughPath = r.ReadBoolean();
                 PathSmoothingDistance = r.ReadSingle();
                 PathSmoothingPrecision = r.ReadSingle();
+                EnableAntiStuck = r.ReadBoolean();
+                EnableThreatAvoidance = r.ReadBoolean();
             }
 
             Vec3 curr_pos = CurrentPos;
