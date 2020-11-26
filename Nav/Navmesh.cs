@@ -456,6 +456,7 @@ namespace Nav
 
                 List<int> no_longer_overlapped_cells_ids = new List<int>();
                 bool nav_data_changed = false;
+                bool anyReplacementCellWithMovementCost = false; // different than 1
 
                 // we need to go over every 'original' cell that is overlapped by at least one region and perform its 'rectangulation'
                 foreach (var item in CellsOverlappedByRegions)
@@ -554,6 +555,8 @@ namespace Nav
                             // try to manually (without using GridCell methods) connect new replacement cells with potential neighbors
                             foreach (Cell replacement_cell in cell_data.replacement_cells)
                             {
+                                anyReplacementCellWithMovementCost |= replacement_cell.MovementCostMult != 1;
+
                                 Vec3 border_point = default(Vec3);
 
                                 foreach (Cell potential_neighbor in potential_neighbors)
@@ -587,7 +590,8 @@ namespace Nav
                     LastBlockers = blockers;
                 }
 
-                if (nav_data_changed)
+                //only when movement costs are affected
+                if (nav_data_changed && anyReplacementCellWithMovementCost)
                 {
                     //Trace.WriteLine($"{DateTime.Now.ToString("HH:mm:ss:ffff")} regions nav data changed");
                     NotifyOnNavDataChanged(affected_area);
@@ -1019,6 +1023,25 @@ namespace Nav
                     Vec3 pos = GetRandomPos();
                     float size = approx_size + (float)rng.NextDouble() * (approx_size * 0.5f);
                     regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), move_cost_mult, threat));
+                }
+            }
+
+            Regions = regions;
+        }
+
+        public void dbg_GenerateBlockOfAvoidAreas(int area_size, int grid_size, int threat_min = 0, int threat_max = 20)
+        {
+            Random rng = new Random();
+            List<Region> regions = new List<Region>();
+
+            using (new ReadLock(DataLock))
+            {
+                Vec3 pos = GetRandomPos();
+
+                for (int x = 0; x < grid_size; ++x)
+                for (int y = 0; y < grid_size; ++y)
+                {
+                    regions.Add(new Region(new AABB(pos + new Vec3(x * area_size, y * area_size, 0), pos + new Vec3((x+1) * area_size, (y+1) * area_size, 0)), 2, rng.Next(threat_min, threat_max)));
                 }
             }
 
