@@ -520,6 +520,7 @@ namespace Nav
 
         private void Add(ExploreCell explore_cell)
         {
+            using (m_Navmesh.AcquireReadDataLock())
             using (new WriteLock(DataLock))
             {
                 foreach (ExploreCell e_cell in m_ExploreCells)
