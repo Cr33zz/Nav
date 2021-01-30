@@ -286,6 +286,60 @@ namespace Nav
             return length + ((path.Count > 0 && !pos.IsZero()) ? path[0].Distance2D(pos) : 0);
         }
 
+        public static void ProjectAndMovePosOnPath(Vec3 pos, List<Vec3> path, float move_distance, out Vec3 projection, out Vec3 moved_projection, out int projection_segment_start_idx, out float scalar_projection)
+        {
+            projection = ProjectPosOnPath(pos, path, out projection_segment_start_idx, out scalar_projection);
+            float dist = pos.Distance2D(projection);
+
+            moved_projection = projection;
+            float move_dist_remaining = move_distance - dist; // if we are far away from path, we care mostly about getting close to it first
+            int current_segment_start_idx = projection_segment_start_idx;
+
+            while (move_dist_remaining > 0 && current_segment_start_idx < path.Count - 1)
+            {
+                float dist_to_segment_end = moved_projection.Distance2D(path[current_segment_start_idx + 1]);
+
+                if (dist_to_segment_end > move_dist_remaining)
+                {
+                    var move_dir = path[current_segment_start_idx + 1] - path[current_segment_start_idx];
+                    move_dir.Normalize2D();
+
+                    moved_projection += move_dir * move_dist_remaining;
+                    break;
+                }
+
+                moved_projection = path[current_segment_start_idx + 1];
+                move_dist_remaining -= dist_to_segment_end;
+
+                ++current_segment_start_idx;
+            }
+        }
+
+        public static Vec3 ProjectPosOnPath(Vec3 pos, List<Vec3> path, out int projection_segment_start_idx, out float scalar_projection)
+        {
+            Vec3 projection = path[0];
+            projection_segment_start_idx = 0;
+            scalar_projection = 0;
+            float dist = pos.Distance2D(projection);
+
+            // find closest pos projection on path
+            for (int i = 0; i < path.Count - 1; ++i)
+            {
+                var p = Vec3.ProjectPointOnSegment(path[i], path[i + 1], pos, out var sp, true);
+                var d = pos.Distance2D(p);
+
+                if (d < dist)
+                {
+                    projection = p;
+                    dist = d;
+                    projection_segment_start_idx = i;
+                    scalar_projection = sp;
+                }
+            }
+
+            return projection;
+        }
+
         public static Cell GetCellAt(IEnumerable<Cell> cells, Vec3 p, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
         {
             if (p.IsZero())
@@ -324,6 +378,28 @@ namespace Nav
             }
 
             return result_cells;
+        }
+
+        public static T GetNearestCell<T>(IEnumerable<T> cells, Vec3 p) where T : Cell
+        {
+            float min_dist = float.MaxValue;
+            T nearest_cell = null;
+
+            foreach (T cell in cells)
+            {
+                if (cell.Disabled)
+                    continue;
+
+                float dist = cell.Distance(p);
+
+                if (dist < min_dist)
+                {
+                    min_dist = dist;
+                    nearest_cell = cell;
+                }
+            }
+
+            return nearest_cell;
         }
 
         private static NodeInfo GetNodeInfoFromList(Cell node, Vec3 leading_point, List<NodeInfo> list)

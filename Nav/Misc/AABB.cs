@@ -192,17 +192,14 @@ namespace Nav
             return new AABB(Min - value, Max + value);
         }
 
-        public void Extend(AABB aabb)
+        public AABB Extend(AABB aabb)
         {
             if (IsZero())
             {
-                Min = new Vec3(aabb.Min);
-                Max = new Vec3(aabb.Max);
-                return;
+                return aabb;
             }
 
-            Min = Vec3.Min(Min, aabb.Min);
-            Max = Vec3.Max(Max, aabb.Max);
+            return new AABB(Vec3.Min(Min, aabb.Min), Vec3.Max(Max, aabb.Max));
         }
 
         public static AABB Maximum(AABB aabb1, AABB aabb2)

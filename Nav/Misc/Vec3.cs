@@ -134,6 +134,21 @@ namespace Nav
             return new Vec3(v1.X / v2.X, v1.Y / v2.Y, v1.Z / v2.Z);
         }
 
+        // Angle may be clipped so we don't overshoot the target
+        public static Vec3 RotateTowards(Vec3 v, Vec3 target_v, float angle)
+        {
+            if (v.Equals(target_v, 0.001f))
+                return target_v;
+
+            const float RAD_2_DEG = 57.295779513f;
+            var axis = v.Cross(target_v);
+            axis.Normalize();
+            float max_angle = (float)Math.Acos(v.Dot2DNorm(target_v)) * RAD_2_DEG;
+            //clip angle so we don't overshoot
+            angle = Math.Min(max_angle, angle);
+            return Rotate(v, angle, axis);
+        }
+
         public static Vec3 Rotate(Vec3 v, float angle, Vec3 axis)
         {
             if (angle.Equals(0))
@@ -237,6 +252,16 @@ namespace Nav
             return new Vec3(X / len, Y / len, 0);
         }
 
+        public float Max()
+        {
+            return Math.Max(Math.Max(X, Y), Z);
+        }
+
+        public float Min()
+        {
+            return Math.Min(Math.Min(X, Y), Z);
+        }
+
         public Vec3 Cross(Vec3 v2)
         {
             return new Vec3(Y * v2.Z - Z * v2.Y, Z * v2.X - X * v2.Z, X * v2.Y - Y * v2.X);
@@ -320,22 +345,34 @@ namespace Nav
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////
-        public static Vec3 ProjectPointOnLine(Vec3 origin, Vec3 dir, Vec3 point)
+        public static Vec3 ProjectPointOnSegment(Vec3 start, Vec3 end, Vec3 point, out float scalar_projection, bool check_2d = false)
         {
-            ProjectPointOnLine(origin, dir, point, out Vec3 result);
+            var dir = end - start;
+            scalar_projection = ProjectPointOnLine(start, dir, point, out Vec3 result, check_2d);
+
+            if (scalar_projection < 0)
+                result = start;
+            else if (scalar_projection > dir.Length())
+                result = end;
             return result;
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////
-        public static float ProjectPointOnLine(Vec3 origin, Vec3 dir, Vec3 point, out Vec3 result)
+        public static Vec3 ProjectPointOnLine(Vec3 origin, Vec3 dir, Vec3 point, bool check_2d = false)
         {
-            float dir_len = dir.Length();
+            ProjectPointOnLine(origin, dir, point, out Vec3 result, check_2d);
+            return result;
+        }
 
-            if (dir_len != 0.0f)
-                dir *= (1.0f / dir_len);
+        ///////////////////////////////////////////////////////////////////////////////////////////////////
+        public static float ProjectPointOnLine(Vec3 origin, Vec3 dir, Vec3 point, out Vec3 result, bool check_2d = false)
+        {
+            float dir_len = check_2d ? dir.Normalize2D() : dir.Normalize();
 
             Vec3 dir_to_point = point - origin;
-            float proj_len = dir_to_point.Dot(dir);
+            if (check_2d)
+                dir_to_point.Z = 0;
+            float proj_len = check_2d ? dir_to_point.Dot2D(dir) : dir_to_point.Dot(dir);
 
             result = origin + dir * proj_len;
 
