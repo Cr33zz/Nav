@@ -7,7 +7,7 @@ namespace Nav
 {
     internal class TestBot : INavigationObserver
     {
-        public TestBot(Navmesh navmesh, NavigationEngine navigator, ExplorationEngine explorer, Vec3 pos, float speed, bool enableExplorer = true)
+        public TestBot(Navmesh navmesh, NavigationEngine navigator, ExplorationEngine explorer, Vec3 pos, float speed, float angular_speed, bool enableExplorer = true)
         {
             m_Navmesh = navmesh;
             m_Navmesh.Verbose = true;
@@ -31,6 +31,7 @@ namespace Nav
                 m_Explorer.Enabled = true;
 
             m_Speed = speed;
+            m_AngularSpeed = angular_speed;
 
             SimulateStuck = false;
             Paused = false;
@@ -53,37 +54,38 @@ namespace Nav
         
         public void Update(float dt)
         {
-            if (m_GotoPosUpdateTimer.ElapsedMilliseconds > GOTO_POS_UPDATE_INTERVAL)
-            {
-                m_LastGotoPos = m_Navigator.GoToPosition.pos;
-                m_GotoPosUpdateTimer.Restart();
-            }
-
             if (!m_Destination.IsZero())
                 m_Navigator.Destination = new destination(m_Destination);
+
+            m_LastGotoPos = m_Navigator.GoToPosition.pos;
 
             if (m_LastGotoPos.IsZero())
                 return;
 
-            Vec3 dir = Vec3.ZERO;
+            Vec3 wanted_dir = Vec3.ZERO;
             float dist = 0;
 
             if (!Paused && !SimulateStuck && !m_LastGotoPos.Equals(m_Navigator.CurrentPos))
             {
-                dir = m_LastGotoPos - m_Navigator.CurrentPos;
-                dist = dir.Length();
-                dir.Normalize();
+                wanted_dir = m_LastGotoPos - m_Navigator.CurrentPos;
+                dist = wanted_dir.Length();
+                wanted_dir.Normalize();
             }
 
             m_Navigator.IsStandingOnPurpose = m_Navigator.IsThreatAhead;
 
+            //turn
+            m_Direction = Vec3.RotateTowards(m_Direction, wanted_dir, m_AngularSpeed * dt);
+
+            //move
             if (!m_Navigator.IsThreatAhead)
-                m_Navigator.CurrentPos = m_Navigator.CurrentPos + dir * Math.Min(m_Speed * dt, dist);
+                m_Navigator.CurrentPos = m_Navigator.CurrentPos + m_Direction * Math.Min(m_Speed * dt, dist);
         }
 
         public void Render(Graphics g, PointF trans)
         {
-            RenderHelper.DrawCircle(g, m_Navigator.IsInThreat ? Pens.DarkRed : Pens.Blue, trans, m_Navigator.CurrentPos, 4);
+            RenderHelper.DrawCircle(g, m_Navigator.IsInThreat ? Pens.DarkRed : Pens.Blue, trans, m_Navigator.CurrentPos, 6);
+            RenderHelper.DrawLine(g, Pens.DarkMagenta, trans, m_Navigator.CurrentPos, m_Navigator.CurrentPos + m_Direction * 12);
             if (m_Navigator.IsThreatAhead)
                 RenderHelper.DrawCircle(g, Pens.IndianRed, trans, m_Navigator.CurrentPos, 3);
         }
@@ -111,10 +113,12 @@ namespace Nav
         private Navmesh m_Navmesh = null;
         private NavigationEngine m_Navigator = null;
         private ExplorationEngine m_Explorer = null;
+        private Vec3 m_Direction = new Vec3(1, 0, 0);
         private Vec3 m_LastGotoPos = Vec3.ZERO;
         private Vec3 m_Destination = Vec3.ZERO;
         private Stopwatch m_GotoPosUpdateTimer = new Stopwatch();
         private float m_Speed = 10;
+        private float m_AngularSpeed = 30; // degrees/second
         private const int GOTO_POS_UPDATE_INTERVAL = 25;
     }
 }

@@ -176,7 +176,7 @@ namespace Nav
                     if (grid_cell.Contains2D(p))
                     {
                         var cells = grid_cell.GetCellsAt(p, test_2d, z_tolerance);
-                        foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (exclude_cells == null || !exclude_cells.Contains(x)) && x.HasFlags(flags)))
+                        foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (exclude_cells == null || !exclude_cells.Contains(x)) && x.HasFlags(flags) && x.MovementCostMult != -1))
                         {
                             result_cell = cell;
 
@@ -186,7 +186,7 @@ namespace Nav
 
                     if (nearest)
                     {
-                        var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags));
+                        var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags) && x.MovementCostMult != -1);
 
                         foreach (Cell cell in cells)
                         {
@@ -432,7 +432,7 @@ namespace Nav
                     // update cells overlapped by avoid areas
                     foreach (Region region in regions_copy)
                     {
-                        affected_area.Extend(region.Area);
+                        affected_area = affected_area.Extend(region.Area);
                         var grid_cells = m_GridCells.Where(x => x.AABB.Overlaps2D(region.Area));
 
                         // do not ignore disabled cells on purpose so we don't have to iterate separately over
@@ -859,7 +859,7 @@ namespace Nav
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
-                    if (neighbour.cell.Disabled || (neighbour.connection_flags & flags) != flags || (neighbour.cell.MovementCostMult > max_movement_cost_mult))
+                    if (neighbour.cell.Disabled || (neighbour.connection_flags & flags) == 0 || (neighbour.cell.MovementCostMult > max_movement_cost_mult))
                         continue;
 
                     Cell neighbour_cell = neighbour.cell;
@@ -946,6 +946,29 @@ namespace Nav
 
                     pos1_on_navmesh = pos1_nearest_cell.AABB.Align(pos1);
                     pos2_on_navmesh = pos2_nearest_cell.AABB.Align(pos2);
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        public bool SnapToNavmesh(Vec3 pos, float tolerance, MovementFlag flags, out Vec3 snapped_pos)
+        {
+            snapped_pos = pos;
+
+            using (new ReadLock(DataLock))
+            {
+                foreach (var patch in m_CellsPatches)
+                {
+                    var pos_cells = patch.GetCellsWithin(pos, tolerance, flags);
+
+                    if (pos_cells.Count == 0)
+                        continue;
+
+                    var pos_nearest_cell = pos_cells.OrderBy(x => pos.Distance2DSqr(x.AABB.Align(pos))).First();
+
+                    snapped_pos = pos_nearest_cell.AABB.Align(pos);
                     return true;
                 }
 
@@ -1296,28 +1319,6 @@ namespace Nav
                 DateTime d = DateTime.Now;
                 Trace.WriteLine(d.Hour.ToString().PadLeft(2, '0') + ":" + d.Minute.ToString().PadLeft(2, '0') + ":" + d.Second.ToString().PadLeft(2, '0') + ":" + d.Millisecond.ToString().PadLeft(3, '0') + " " + msg);
             }
-        }
-
-        internal T GetNearestCell<T>(IEnumerable<T> cells, Vec3 p) where T : Cell
-        {
-            float min_dist = float.MaxValue;
-            T nearest_cell = null;
-
-            foreach (T cell in cells)
-            {
-                if (cell.Disabled)
-                    continue;
-
-                float dist = cell.Distance(p);
-
-                if (dist < min_dist)
-                {
-                    min_dist = dist;
-                    nearest_cell = cell;
-                }
-            }
-
-            return nearest_cell;
         }
 
         internal IEnumerable<T> GetCellsOverlappedByCircle<T>(HashSet<T> cells, Vec3 circle_center, float radius) where T : Cell

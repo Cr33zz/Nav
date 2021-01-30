@@ -78,7 +78,7 @@ namespace Nav
         protected virtual void CreateNavigation()
         {
             m_Navmesh = new Navmesh();
-            m_Navigator = new NavigationEngine(m_Navmesh);
+            m_Navigator = new NavigationEngine(m_Navmesh, new SimplePathFollow());
             m_Explorer = new ExploreEngine.Nearest(m_Navmesh, m_Navigator);
             m_Explorer.Enabled = false;
         }
@@ -185,7 +185,7 @@ namespace Nav
                             RenderHelper.Render(explore_cell, m_Explorer.ExploreDestPrecision, m_RenderCenter, e, m_RenderConnections, m_RenderIds);
 
                             if (m_RenderExploreArea)
-                                RenderHelper.DrawString(e.Graphics, explore_cell.Small ? Brushes.DarkRed : Brushes.Black, m_RenderCenter, explore_cell.Position, explore_cell.CellsArea().ToString(), 12);
+                                RenderHelper.DrawString(e.Graphics, explore_cell.Small ? Brushes.DarkRed : Brushes.Black, m_RenderCenter, explore_cell.Position, explore_cell.CellsArea.ToString(), 12);
                         }
                     }
                 }
@@ -236,8 +236,8 @@ namespace Nav
                         m_LastPath.Insert(0, m_Navigator.CurrentPos);
                     RenderHelper.DrawLines(e.Graphics, RenderHelper.PATH_PEN, m_RenderCenter, m_LastPath, 1, true);
 
-                    if (!m_Navigator.PathRecalcTriggerPosition.IsZero())
-                        RenderHelper.DrawCircle(e.Graphics, Pens.DarkRed, m_RenderCenter, m_Navigator.PathRecalcTriggerPosition, m_Navigator.PathRecalcTriggerPrecision);
+                    if (!m_Navigator.m_Path.path_recalc_trigger_pos.IsZero())
+                        RenderHelper.DrawCircle(e.Graphics, Pens.DarkRed, m_RenderCenter, m_Navigator.m_Path.path_recalc_trigger_pos, m_Navigator.m_Path.path_recalc_trigger_precision);
                 }
 
                 if (m_RenderBacktrackPath)
@@ -275,7 +275,7 @@ namespace Nav
                     if (m_RenderOriginalPath)
                     {
                         List<Vec3> path = new List<Vec3>();
-                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_precision, -1, false, false, 0, false, 0, smoothen_distance: 0);
+                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_precision, out var unused, -1, false, false, 0, false, 0, smoothen_distance: 0);
                         path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
                     }
@@ -364,7 +364,8 @@ namespace Nav
 
         protected virtual void OnRenderPos(PaintEventArgs e)
         {
-            e.Graphics.DrawString("[" + m_RenderCenter.X + ", " + m_RenderCenter.Y + "]", STATS_FONT, Brushes.Black, 10, Height - 55);
+            e.Graphics.DrawString(m_Navigator.CurrentPos.ToString(), STATS_FONT, Brushes.Black, 10, Height - 55);
+            e.Graphics.DrawString("[" + m_RenderCenter.X + ", " + m_RenderCenter.Y + "]", STATS_FONT, Brushes.Black, Width - 120, 5);
         }
 
         protected virtual void OnRefresh(int interval)
@@ -448,7 +449,7 @@ namespace Nav
                         result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
                     }
 
-                    m_Navigator.Destination = new destination(result, DestType.Custom, m_Navigator.DefaultPrecision, m_Navigator.DefaultPrecision * 2);
+                    m_Navigator.Destination = new destination(result, DestType.Custom, 400, 700);
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.L)
@@ -559,14 +560,18 @@ namespace Nav
                     //Thread t = new Thread(dbg_ContiniousSerialize);
                     //t.Start();
 
-                    Thread t = new Thread(() => dbg_MovingRegions(200));
+                    Thread t = new Thread(() => dbg_GenerateGrids());
                     t.Start();
 
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.F11)
                 {
-                    m_Navmesh.dbg_GenerateRandomAvoidAreas(100, -1, 300, 2);
+                    //m_Navmesh.dbg_GenerateRandomAvoidAreas(100, -1, 300, 2);
+                    //m_Navmesh.dbg_GenerateBlockOfAvoidAreas(50, 30);
+
+                    Thread t = new Thread(() => dbg_MovingRegions(200));
+                    t.Start();
 
                     e.Handled = true;
                 }
@@ -584,7 +589,7 @@ namespace Nav
                     else
                         result = m_Navigator.CurrentPos;
 
-                    m_Bot = new TestBot(m_Navmesh, m_Navigator, m_Explorer, result, m_BotSpeed);
+                    m_Bot = new TestBot(m_Navmesh, m_Navigator, m_Explorer, result, m_BotSpeed, m_BotAngularSpeed);
                     e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.C)
@@ -761,6 +766,29 @@ namespace Nav
             }
         }
 
+        private void dbg_GenerateGrids()
+        {
+            Random rng = new Random();
+
+            const float connectionLength = 200;
+            const float connectionWidth = 45;
+
+            for (int i = 0; i < 10; ++i)
+            {
+                var connectorPos = m_Navmesh.GetRandomPos(rng);
+
+                connectorPos.Z = 0;
+
+                GridCell gCell = new GridCell(connectorPos - new Vec3(1, 1, 0) * connectionLength * 0.5f, connectorPos + new Vec3(1, 1, 0) * connectionLength * 0.5f);
+
+                // add cross connector
+                gCell.Add(new Nav.Cell(connectorPos - new Vec3(connectionLength * 0.5f, connectionWidth * 0.5f, 0), connectorPos + new Vec3(connectionLength * 0.5f, connectionWidth * 0.5f, 0), MovementFlag.All));
+                gCell.Add(new Nav.Cell(connectorPos - new Vec3(connectionWidth * 0.5f, connectionLength * 0.5f, 0), connectorPos + new Vec3(connectionWidth * 0.5f, connectionLength * 0.5f, 0), MovementFlag.All));
+
+                m_Navmesh.Add(gCell, true);
+            }
+        }
+
         private void refresh_timer_Tick(object sender, EventArgs e)
         {
             OnRefresh(RefreshTimer.Interval);
@@ -854,6 +882,7 @@ namespace Nav
         protected Nav.NavigationEngine m_Navigator = null;
         protected Nav.ExplorationEngine m_Explorer = null;
         protected float m_BotSpeed = 10;
+        protected float m_BotAngularSpeed = 180;
         protected PointF m_RenderCenter = new PointF(200, 350);
         protected float m_RenderScale = 1.0f;
         protected float m_Zoom = 1000.0f;
@@ -970,7 +999,8 @@ namespace Nav
 
         public static void Render(Nav.ExploreCell cell, float radius, PointF trans, PaintEventArgs e, bool draw_connections, bool draw_id)
         {
-            DrawRectangle(e.Graphics, Pens.Magenta, trans, cell.Min, cell.Max);
+            //DrawRectangle(e.Graphics, Pens.Magenta, trans, cell.Min, cell.Max);
+            DrawRectangle(e.Graphics, Pens.Purple, trans, cell.CellsAABB.Min, cell.CellsAABB.Max);
 
             //DrawString(e.Graphics, Brushes.Black, trans, cell.Position, Math.Round(cell.CellsArea()).ToString(), 14);
 
@@ -978,7 +1008,11 @@ namespace Nav
             {
                 //DrawLine(e.Graphics, explored_pen, trans, cell.Min, cell.Max);
                 //DrawLine(e.Graphics, explored_pen, trans, new Vec3(cell.Min.X, cell.Max.Y), new Vec3(cell.Max.X, cell.Min.Y));
-                FillRectangle(e.Graphics, explored_brush, trans, cell.Min, cell.Max);
+                FillRectangle(e.Graphics, explored_brush, trans, cell.CellsAABB.Min, cell.CellsAABB.Max);
+            }
+            else if (cell.Small)
+            {
+                FillRectangle(e.Graphics, small_brush, trans, cell.CellsAABB.Min, cell.CellsAABB.Max);
             }
 
             //DrawCircle(e.Graphics, Pens.Red, trans, cell.Position, radius);
@@ -1072,5 +1106,6 @@ namespace Nav
         public static readonly Pen EXPLORE_PATH_PEN = new Pen(Color.Black, 5);
         public static readonly Pen PATH_PEN = new Pen(Color.Black, 1.5f);
         private static Brush explored_brush = new SolidBrush(Color.FromArgb(128, 50, 50, 50));
+        private static Brush small_brush = new SolidBrush(Color.FromArgb(128, 255, 192, 203));
     }
 }
