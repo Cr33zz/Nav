@@ -31,7 +31,8 @@ namespace Nav
         // called every update when heading towards an explore cell. parameters are destination explore cell and current position
         public Func<ExploreCell, Vec3, bool> AlternativeExploredCondition { get; set; }
 
-        public float MaxAreaToMarkAsSmall { get; set; } = 50 * 50;
+        public float MaxAreaToMarkAsSmall { get; set; } = 0 * 0;
+        public float MaxDimensionToMarkAsSmall { get; set; } = 0;
 
         // precision with explore destination will be accepted as reached
         public float ExploreDestPrecision { get; set; } = 20;
@@ -584,28 +585,14 @@ namespace Nav
                         if (cell_aabb.Intersect(c.AABB, ref intersection))
                         {
                             intersections.Add(intersection);
-                            intersections_aabb.Extend(intersection);
+                            intersections_aabb = intersections_aabb.Extend(intersection);
                         }
                     }
 
-                    Vec3 nearest_intersection_center = Vec3.ZERO;
-                    float nearest_intersection_dist = float.MaxValue;
-
-                    foreach (AABB inter_aabb in intersections)
-                    {
-                        float dist = inter_aabb.Center.Distance2D(intersections_aabb.Center);
-
-                        if (dist < nearest_intersection_dist)
-                        {
-                            nearest_intersection_center = inter_aabb.Center;
-                            nearest_intersection_dist = dist;
-                        }
-                    }
-
-                    ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, nearest_intersection_center, m_LastExploreCellId++);
+                    ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, m_LastExploreCellId++);
                     Add(ex_cell);
 
-                    ex_cell.Small = (ex_cell.CellsArea() < MaxAreaToMarkAsSmall);
+                    ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall);
 
                     cells_copy.RemoveWhere(x => visited.Contains(x));
                 }

@@ -14,13 +14,26 @@ namespace Nav
             GridCellsId = new List<int>();
         }
 
-        public ExploreCell(AABB aabb, List<Cell> cells, List<int> grid_cells_id, Vec3 position, int id = -1)
+        public ExploreCell(AABB aabb, List<Cell> cells, List<int> grid_cells_id, int id = -1)
             : base(aabb.Min.X, aabb.Min.Y, 0, aabb.Max.X, aabb.Max.Y, 0, MovementFlag.None, id)
         {
             InitExploreCell();
-            Position = position;
+
             Cells = cells;
             GridCellsId = grid_cells_id;
+
+            foreach (Cell c in Cells)
+            {
+                CellsArea += c.AABB.Area;
+                CellsAABB = CellsAABB.Extend(c.AABB);
+            }
+
+            AABB clampedCellsAABB = default(AABB);
+            CellsAABB.Intersect(this.AABB, ref clampedCellsAABB);
+            CellsAABB = clampedCellsAABB;
+
+            var nearest_cell = cells.OrderBy(x => CellsAABB.Center.Distance2DSqr(x.AABB.Align(CellsAABB.Center))).First();
+            Position = nearest_cell.AABB.Align(CellsAABB.Center);
         }
 
         private void InitExploreCell()
@@ -66,6 +79,8 @@ namespace Nav
             w.Write(Delayed);
             w.Write(Small);
             Position.Serialize(w);
+            CellsAABB.Serialize(w);
+            w.Write(CellsArea);
 
             w.Write(Cells.Count);
             foreach (Cell cell in Cells)
@@ -84,6 +99,8 @@ namespace Nav
             Delayed = r.ReadBoolean();
             Small = r.ReadBoolean();
             Position = new Vec3(r);
+            CellsAABB = new AABB(r);
+            CellsArea = r.ReadSingle();
 
             int cells_count = r.ReadInt32();
             for (int i = 0; i < cells_count; ++i)
@@ -108,19 +125,12 @@ namespace Nav
             return Cells.Exists(c => c.Contains2D(p));
         }
 
-        public float CellsArea()
-        {
-            float area = 0;
-            foreach (Cell c in Cells)
-                area += c.AABB.Area;
-
-            return area;
-        }
-
         public List<Cell> Cells { get; private set; }
         public List<int> GridCellsId { get; private set; }
         public Vec3 Position { get; private set; }
         public override Vec3 Center { get { return Position; } }
+        public AABB CellsAABB { get; private set; }
+        public float CellsArea { get; private set; }
 
         public bool Explored { get; set; }
 
