@@ -120,7 +120,7 @@ namespace Nav
     {
         public abstract goto_data GetGoTo(Vec3 current_pos, List<Vec3> path, destination path_destination);
         public abstract void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination);
-        public abstract bool IsThreatAhead(Vec3 current_pos, List<Vec3> path);
+        public abstract float ThreatAhead(Vec3 current_pos, List<Vec3> path);
         public abstract bool IncludePathStart();
         public virtual void OnPathReset() { }
 
@@ -162,9 +162,9 @@ namespace Nav
             }
         }
 
-        public override bool IsThreatAhead(Vec3 current_pos, List<Vec3> path)
+        public override float ThreatAhead(Vec3 current_pos, List<Vec3> path)
         {
-            return m_Owner.IsThreatAhead;
+            return m_Owner.ThreatAhead;
         }
 
         public override bool IncludePathStart()
@@ -343,7 +343,21 @@ namespace Nav
             return false;
         }
 
-        public bool IsThreatAhead { get; private set; } = false;
+        public float ThreatBetween(Vec3 start, Vec3 end)
+        {
+            Vec3 threat_pos = default(Vec3);
+            float threat = 0;
+
+            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat > ThreatThreshold).ToList())
+            {
+                if (t.Area.SegmentTest2D(start, end, ref threat_pos))
+                    threat = Math.Max(threat, t.Threat);
+            }
+
+            return threat;
+        }
+
+        public float ThreatAhead { get; private set; } = 0;
 
         // when not in threat but path leads through threats IsThreatAhead will be turned when agent is closer than ThreatDetectionRange from a threat ahead
         public float ThreatDetectionRange { get; set; } = 10;
@@ -1382,29 +1396,17 @@ namespace Nav
                 Vec3 current_pos = CurrentPos;
                 bool is_already_avoiding = m_AvoidanceDestination.type == DestType.RunAway;
                 var threats = m_Navmesh.Regions.Where(x => (is_already_avoiding ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold).ToList();
-                IEnumerable<Region> current_threats;
-
-                //if (ThreatDetectionRange <= 0)
-                {
-                    current_threats = threats.Where(x => x.Area.Contains2D(current_pos));
-                }
-                //else
-                //{
-                //    AABB area = new AABB(current_pos - new Vec3(ThreatDetectionRange, ThreatDetectionRange, 0), current_pos + new Vec3(ThreatDetectionRange, ThreatDetectionRange, 0));
-                //    AABB output = default(AABB);
-                //    current_threats = threats.Where(x => x.Area.Intersect2D(area, ref output));
-                //}
-
+                IEnumerable<Region> current_threats = threats.Where(x => x.Area.Contains2D(current_pos));
+                
                 bool was_in_threat = IsInThreat;
+                var dest = Destination;
                 IsInThreat = current_threats.Any();
                 Threat = IsInThreat ? current_threats.Select(x => is_already_avoiding ? Math.Abs(x.Threat) : x.Threat).Max() : 0;
-
-                if (IsInThreat)
+                
+                if (IsInThreat && (dest.pos.IsZero() || IsThreatAt(dest.pos)))
                 {
-                    var dest = Destination;
-                    //var isThreatAtDest = !dest.pos.IsZero() && IsThreatAt(dest.pos, DefaultPrecision);
-                    m_AvoidanceDestination = new destination(Destination.pos, DestType.RunAway, DefaultPrecision * 0.3f);
-                    IsThreatAhead = false; // don't make user stop
+                    m_AvoidanceDestination = new destination(dest.pos, DestType.RunAway, DefaultPrecision * 0.3f);
+                    ThreatAhead = 0; // don't make user stop
                     if (!was_in_threat)
                         RequestPathUpdate();
                 }
@@ -1424,21 +1426,20 @@ namespace Nav
                     if (!go_to_pos.IsZero())
                     {
                         Vec3 threat_pos = default(Vec3);
-                        bool threat_ahead = false;
+                        float threat_ahead = 0;
                         
                         // since often times we will be traveling along the regions we need to test with slightly minimized region
                         foreach (var t in threats)
                         {
                             if (t.Area.Resized(-ThreatDetectionPrecision).SegmentTest2D(current_pos, go_to_pos, ref threat_pos))
                             {
-                                threat_ahead = current_pos.Distance2D(threat_pos) <= ThreatDetectionRange;
+                                if (current_pos.Distance2D(threat_pos) <= ThreatDetectionRange)
+                                    threat_ahead = Math.Max(t.Threat, threat_ahead);
 
-                                if (threat_ahead)
-                                    break;
                             }
                         }
 
-                        IsThreatAhead = threat_ahead;
+                        ThreatAhead = threat_ahead;
                     }
                 }
             }
@@ -1447,7 +1448,7 @@ namespace Nav
                 m_AvoidanceDestination = default(destination);
                 IsInThreat = false;
                 Threat = 0;
-                IsThreatAhead = false;
+                ThreatAhead = 0;
             }
         }
 

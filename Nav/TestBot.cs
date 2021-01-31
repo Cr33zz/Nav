@@ -72,13 +72,13 @@ namespace Nav
                 wanted_dir.Normalize();
             }
 
-            m_Navigator.IsStandingOnPurpose = m_Navigator.IsThreatAhead;
+            m_Navigator.IsStandingOnPurpose = m_Navigator.ThreatAhead > 0;
 
             //turn
             m_Direction = Vec3.RotateTowards(m_Direction, wanted_dir, m_AngularSpeed * dt);
 
             //move
-            if (!m_Navigator.IsThreatAhead)
+            if (m_Navigator.ThreatAhead == 0)
                 m_Navigator.CurrentPos = m_Navigator.CurrentPos + m_Direction * Math.Min(m_Speed * dt, dist);
         }
 
@@ -86,7 +86,7 @@ namespace Nav
         {
             RenderHelper.DrawCircle(g, m_Navigator.IsInThreat ? Pens.DarkRed : Pens.Blue, trans, m_Navigator.CurrentPos, 6);
             RenderHelper.DrawLine(g, Pens.DarkMagenta, trans, m_Navigator.CurrentPos, m_Navigator.CurrentPos + m_Direction * 12);
-            if (m_Navigator.IsThreatAhead)
+            if (m_Navigator.ThreatAhead > 0)
                 RenderHelper.DrawCircle(g, Pens.IndianRed, trans, m_Navigator.CurrentPos, 3);
         }
 
