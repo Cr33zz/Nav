@@ -956,6 +956,7 @@ namespace Nav
         public bool SnapToNavmesh(Vec3 pos, float tolerance, MovementFlag flags, out Vec3 snapped_pos)
         {
             snapped_pos = pos;
+            float snapped_pos_dist = -1;
 
             using (new ReadLock(DataLock))
             {
@@ -968,11 +969,17 @@ namespace Nav
 
                     var pos_nearest_cell = pos_cells.OrderBy(x => pos.Distance2DSqr(x.AABB.Align(pos))).First();
 
-                    snapped_pos = pos_nearest_cell.AABB.Align(pos);
-                    return true;
+                    var aligned_pos = pos_nearest_cell.AABB.Align(pos);
+                    var dist = pos.Distance2DSqr(aligned_pos);
+
+                    if (snapped_pos_dist < 0 || dist < snapped_pos_dist)
+                    {
+                        snapped_pos = aligned_pos;
+                        snapped_pos_dist = dist;
+                    }
                 }
 
-                return false;
+                return snapped_pos_dist >= 0;
             }
         }
 
