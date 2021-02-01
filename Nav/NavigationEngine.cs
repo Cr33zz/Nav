@@ -315,14 +315,22 @@ namespace Nav
         public bool IsInThreat { get; private set; } = false;
         public float Threat { get; private set; } = 0;
 
-        public bool IsThreatAt(Vec3 pos, float radius = 0, bool considerFutureThreats = false)
+        public bool IsThreatAt(Vec3 pos, float radius = 0, bool considerFutureThreats = false, List<Region> regions_cache = null)
         {
+            regions_cache = regions_cache ?? m_Navmesh.Regions;
+
             if (radius <= 0)
-                return m_Navmesh.Regions.Any(x => (considerFutureThreats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Contains2D(pos));
+                return regions_cache.Any(x => (considerFutureThreats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Contains2D(pos));
 
             AABB area = new AABB(pos - new Vec3(radius, radius, 0), pos + new Vec3(radius, radius, 0));
             AABB output = default(AABB);
-            return m_Navmesh.Regions.Any(x => (considerFutureThreats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Intersect2D(area, ref output));
+            return regions_cache.Any(x => (considerFutureThreats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Intersect2D(area, ref output));
+        }
+
+        public List<Region> GetRegions(AABB area)
+        {
+            AABB output = default(AABB);
+            return m_Navmesh.Regions.Where(x => x.Area.Intersect2D(area, ref output)).ToList();
         }
 
         public float GetThreatAt(Vec3 pos)
@@ -1406,7 +1414,6 @@ namespace Nav
                 if (IsInThreat && (dest.pos.IsZero() || IsThreatAt(dest.pos)))
                 {
                     m_AvoidanceDestination = new destination(dest.pos, DestType.RunAway, DefaultPrecision * 0.3f);
-                    ThreatAhead = 0; // don't make user stop
                     if (!was_in_threat)
                         RequestPathUpdate();
                 }
@@ -1442,6 +1449,9 @@ namespace Nav
                         ThreatAhead = threat_ahead;
                     }
                 }
+
+                if (IsInThreat)
+                    ThreatAhead = 0; // don't make user stop
             }
             else
             {
