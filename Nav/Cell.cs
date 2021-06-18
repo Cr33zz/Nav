@@ -302,8 +302,7 @@ namespace Nav
             AlignPlaneDirty = true;
         }
 
-        // Try to add given cell as neighbour. Returns true when actually added.
-        public bool AddNeighbour(Cell cell, ref Vec3 border_point)
+        public bool ShouldBecomeNeighbours(Cell cell, ref Vec3 border_point)
         {
             // should not happen - removed due to performance impact - deep down it only checks global ID matching
             if (cell.Equals(this))
@@ -316,15 +315,33 @@ namespace Nav
                 if (Neighbours.Exists(x => x.cell.GlobalId == cell.GlobalId))
                     return false;
 
-                AddNeighbour(cell, intersection.Center);
-                cell.AddNeighbour(this, intersection.Center);
-
                 border_point = new Vec3(intersection.Center);
-                
+
                 return true;
             }
 
             return false;
+        }
+
+        // Try to add given cell as neighbour. Returns true when actually added.
+        public bool TryAddNeighbour(Cell cell, ref Vec3 border_point)
+        {
+            if (ShouldBecomeNeighbours(cell, ref border_point))
+            {
+                MakeNeighbours(cell, border_point, force: true);
+                return true;
+            }
+
+            return false;
+        }
+
+        internal void MakeNeighbours(Cell cell, Vec3 border_point, bool force = false)
+        {
+            if (!force && Neighbours.Exists(x => x.cell.GlobalId == cell.GlobalId))
+                return;
+
+            AddNeighbour(cell, border_point);
+            cell.AddNeighbour(this, border_point);
         }
 
         bool GetBorderSegmentWith(AABB aabb, ref Vec3 v1, ref Vec3 v2)

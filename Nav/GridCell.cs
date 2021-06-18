@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Threading;
+using System.Diagnostics;
 
 namespace Nav
 {
@@ -42,7 +43,7 @@ namespace Nav
             Vec3 border_point = default(Vec3);
 
             foreach (Cell our_cell in Cells)
-                our_cell.AddNeighbour(cell, ref border_point);
+                our_cell.TryAddNeighbour(cell, ref border_point);
 
             cell.ParentAABB = AABB;
             Cells.AddFirst(cell);
@@ -67,10 +68,6 @@ namespace Nav
             if (GlobalId == grid_cell.GlobalId || !AABB.Overlaps2D(grid_cell.AABB, true))
                 return;
 
-            // this is removed to properly handle merging
-            //if (Neighbours.Exists(x => x.cell.Equals(grid_cell)))
-            //    return;
-
             bool any_cells_connected = false;
             MovementFlag connection_flags = MovementFlag.None;
 
@@ -79,7 +76,7 @@ namespace Nav
                 foreach (Cell other_cell in grid_cell.Cells)
                 {
                     Vec3 border_point = default(Vec3);
-                    bool cells_connected = our_cell.AddNeighbour(other_cell, ref border_point);
+                    bool cells_connected = our_cell.TryAddNeighbour(other_cell, ref border_point);
 
                     if (cells_connected)
                     {
@@ -111,6 +108,37 @@ namespace Nav
                     n2.connection_flags = connection_flags;
                 }
             }
+        }
+
+        // This function will return list of cells pairs that should be connected
+        public List<(Cell, Cell, Vec3)> CheckNeighbour(GridCell grid_cell, out MovementFlag connection_flags)
+        {
+            var result = new List<(Cell, Cell, Vec3)>();
+            connection_flags = MovementFlag.None;
+
+            if (GlobalId == grid_cell.GlobalId || !AABB.Overlaps2D(grid_cell.AABB, true))
+                return result;
+
+            foreach (Cell our_cell in Cells)
+            {
+                foreach (Cell other_cell in grid_cell.Cells)
+                {
+                    Vec3 border_point = default(Vec3);
+                    bool should_be_connected = our_cell.ShouldBecomeNeighbours(other_cell, ref border_point);
+
+                    if (should_be_connected)
+                    {
+                        result.Add((our_cell, other_cell, border_point));
+
+                        MovementFlag flags = our_cell.Flags & other_cell.Flags;
+
+                        if (flags > connection_flags)
+                            connection_flags = flags;
+                    }
+                }
+            }
+
+            return result;
         }
 
         internal override void Serialize(BinaryWriter w)
@@ -147,12 +175,12 @@ namespace Nav
 
         public List<Cell> GetCells(Func<Cell, bool> predicate, bool allow_replacement_cells = true)
         {
-            var result = Cells.Where(predicate);
-                
-            if (allow_replacement_cells)
-                result = result.Concat(ReplacementCells.Where(predicate));
+            var result = Cells.Where(predicate).ToList();
 
-            return result.ToList();
+            if (allow_replacement_cells)
+                result.AddRange(ReplacementCells.Where(predicate));
+            
+            return result;
         }
 
         public IEnumerable<Cell> GetCellsAt(Vec3 pos, bool test_2d, float z_tolerance)

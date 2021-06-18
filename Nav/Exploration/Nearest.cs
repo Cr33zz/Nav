@@ -79,27 +79,28 @@ namespace Nav.ExploreEngine
             private Nearest explorer;
         }
 
-        internal override ExploreCell GetDestinationCell()
+        internal override ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
         {
-            ExploreCell dest_cell = base.GetDestinationCell();
+            ExploreCell dest_cell = base.GetDestinationCell(curr_explore_cell);
 
             if (dest_cell != null)
                 return dest_cell;
 
-            ExploreCell current_explore_cell = GetCurrentExploreCell();
+            if (curr_explore_cell == null)
+                curr_explore_cell = GetCurrentExploreCell();
 
-            if (current_explore_cell == null)
-                return current_explore_cell;
+            if (curr_explore_cell == null)
+                return curr_explore_cell;
 
-            if (!current_explore_cell.Explored)
-                return current_explore_cell;
+            if (!curr_explore_cell.Explored)
+                return curr_explore_cell;
 
-            HashSet<ExploreCell> unexplored_cells = GetUnexploredCells(current_explore_cell);
+            HashSet<ExploreCell> unexplored_cells = GetUnexploredCells(curr_explore_cell);
 
             ExploreCellSelector selector = CreateExploreCellSelector();
 
             using (new ReadLock(DataLock))
-                Algorihms.VisitBreadth(current_explore_cell, MovementFlag.None, -1, unexplored_cells, selector);
+                Algorihms.VisitBreadth(curr_explore_cell, MovementFlag.None, -1, unexplored_cells, selector);
 
             if (selector.dest_cell != null)
                 return selector.dest_cell;

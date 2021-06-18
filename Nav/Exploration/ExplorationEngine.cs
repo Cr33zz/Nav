@@ -178,7 +178,7 @@ namespace Nav
             RequestReevaluation();
         }
 
-        internal virtual ExploreCell GetDestinationCell()
+        internal virtual ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
         {
             return null;
         }
@@ -237,18 +237,28 @@ namespace Nav
 
             ExploreCell dest_cell = dest.user_data as ExploreCell;
 
+            //Trace.WriteLine($"marking explore cell id {dest_cell?.GlobalId ?? -1} as explored");
+
             if (dest_cell != null)
                 OnCellExplored(dest_cell);
 
-            SelectNewDestinationCell();
+            SelectNewDestinationCell(dest_cell);
         }
 
-        private void SelectNewDestinationCell()
+        private void SelectNewDestinationCell(ExploreCell curr_explore_cell)
         {
-            m_DestCell = GetDestinationCell();
-            m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false));
-            // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
-            m_ValidateDestCell = true;
+            //using (new Profiler("SelectNewDestinationCell [%t]"))
+            {
+                //using (new Profiler("get dest explore cell [%t]"))
+                    m_DestCell = GetDestinationCell(curr_explore_cell);
+
+                //Trace.WriteLine($"dest explore cell id {m_DestCell?.GlobalId ?? -1} pos {GetDestinationCellPosition()}");
+
+                //using (new Profiler("set explore cell pos as dest [%t]"))
+                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false));
+                // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
+                m_ValidateDestCell = true;
+            }
         }
 
         public void OnDestinationReachFailed(destination dest)
@@ -500,7 +510,7 @@ namespace Nav
             {
                 if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
                 {
-                    SelectNewDestinationCell();
+                    SelectNewDestinationCell(null);
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
 
