@@ -659,7 +659,7 @@ namespace Nav
             get
             {
                 //using (new ReadLock(DataLock))
-                    return m_GridCells.Any();
+                    return m_GridCells.Count > 0;
             }
         }
 
