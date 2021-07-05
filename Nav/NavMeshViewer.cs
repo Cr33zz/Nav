@@ -65,6 +65,8 @@ namespace Nav
                 m_Navigator.Deserialize(file);
                 m_Explorer.Deserialize(file);
 
+                OnDeserialize(file);
+
                 Vec3 initial_pos = m_Navigator.CurrentPos;
                 if (initial_pos.IsZero())
                     initial_pos = m_Navmesh.GetCenter();
@@ -73,6 +75,11 @@ namespace Nav
             }
 
             InitializeComponents();
+        }
+
+        protected virtual void OnDeserialize(string file)
+        {
+
         }
 
         protected virtual void CreateNavigation()
