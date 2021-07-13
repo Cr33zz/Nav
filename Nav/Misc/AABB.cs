@@ -192,6 +192,11 @@ namespace Nav
             return new AABB(Min - value, Max + value);
         }
 
+        public AABB ResizedByFactor(float factor)
+        {
+            return new AABB(Center + (Min - Center) * factor, Center + (Max - Center) * factor);
+        }
+
         public AABB Extend(AABB aabb)
         {
             if (IsZero())
