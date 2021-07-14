@@ -215,6 +215,11 @@ namespace Nav
             ReplacementCells.Remove(cell);
         }
 
+        internal void ResetReplacementCells()
+        {
+            ReplacementCells.Clear();
+        }
+
         private LinkedList<Cell> Cells = new LinkedList<Cell>();
         private List<Cell> ReplacementCells  = new List<Cell>();
         public int AreaId { get; private set; }

@@ -577,7 +577,8 @@ namespace Nav
                     //m_Navmesh.dbg_GenerateRandomAvoidAreas(100, -1, 300, 2);
                     //m_Navmesh.dbg_GenerateBlockOfAvoidAreas(50, 30);
 
-                    Thread t = new Thread(() => dbg_MovingRegions(200));
+                    //Thread t = new Thread(() => dbg_MovingRegions(200));
+                    Thread t = new Thread(() => dbg_RandomRegions(200));
                     t.Start();
 
                     e.Handled = true;
@@ -768,6 +769,29 @@ namespace Nav
 
                     regions[i] = new Region(region.Area.Translated(dir * approx_size * ((float)dt / 1000)), region.MoveCostMult, region.Threat);
                 }
+
+                Thread.Sleep(dt);
+            }
+        }
+
+        private void dbg_RandomRegions(int approx_size)
+        {
+            Random rng = new Random();
+
+            const int dt = 50;
+
+            while (true)
+            {
+                var regions = new List<Region>();
+
+                for (int i = 0; i < 20; ++i)
+                {
+                    Vec3 pos = m_Navmesh.GetRandomPos(rng);
+                    float size = approx_size + (float)rng.NextDouble() * (approx_size * 0.5f);
+                    regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2, -5));
+                }
+
+                m_Navmesh.Regions = regions;
 
                 Thread.Sleep(dt);
             }

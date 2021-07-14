@@ -694,7 +694,7 @@ namespace Nav
             }
         }
 
-        private class PatchVisitor : Algorihms.IVisitor<Cell>
+        internal class PatchVisitor : Algorihms.IVisitor<Cell>
         {
             public void Visit(Cell cell)
             {
@@ -709,32 +709,6 @@ namespace Nav
 
             public HashSet<Cell> cells = new HashSet<Cell>();
             public Dictionary<AABB, List<Cell>> cellsGrid = new Dictionary<AABB, List<Cell>>();
-        }
-
-        public static HashSet<CellsPatch> GenerateCellsPatches(IEnumerable<Cell> cells, MovementFlag movement_flags, bool skip_disabled = false)
-        {
-            var patches = new HashSet<CellsPatch>();
-
-            //create cells patch for each interconnected group of cells
-            var cells_copy = new HashSet<Cell>(cells.Where(x => x.HasFlags(movement_flags) && (!skip_disabled || !x.Disabled)));
-
-            while (cells_copy.Count > 0)
-            {
-                var start_cell = cells_copy.FirstOrDefault();
-
-                if (start_cell == null)
-                    break;
-
-                PatchVisitor patchVisitor = new PatchVisitor();
-                HashSet<Cell> visited = new HashSet<Cell>();
-
-                Algorihms.Visit(start_cell, ref visited, movement_flags, !skip_disabled, visitor: patchVisitor);
-
-                patches.Add(new CellsPatch(patchVisitor.cells, patchVisitor.cellsGrid, movement_flags));
-                cells_copy.ExceptWith(visited);
-            }
-
-            return patches;
         }
     }
 }

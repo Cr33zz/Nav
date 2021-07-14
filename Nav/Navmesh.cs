@@ -441,7 +441,31 @@ namespace Nav
                 using (new ReadLock(DataLock))
                 using (new Profiler($"[Nav] Updating cell patches took %t", 30))
                 {
-                    cells_patches = Algorihms.GenerateCellsPatches(m_AllCells, MovementFlag.Walk, skip_disabled: true);
+                    var cells_copy = new HashSet<Cell>();
+
+                    foreach (var cell in m_AllCells)
+                    {
+                        if (cell.Disabled || (cell.Flags & MovementFlag.Walk) == 0 || cell.MovementCostMult < 0)
+                            continue;
+
+                        cells_copy.Add(cell);
+                    }
+
+                    while (cells_copy.Count > 0)
+                    {
+                        var start_cell = cells_copy.FirstOrDefault();
+
+                        if (start_cell == null)
+                            break;
+
+                        var patchVisitor = new Algorihms.PatchVisitor();
+                        HashSet<Cell> visited = new HashSet<Cell>();
+
+                        Algorihms.Visit(start_cell, ref visited, MovementFlag.Walk, visit_disabled: false, allowed_cells: cells_copy, visitor: patchVisitor);
+
+                        cells_patches.Add(new CellsPatch(patchVisitor.cells, patchVisitor.cellsGrid, MovementFlag.Walk));
+                        cells_copy.ExceptWith(patchVisitor.cells);
+                    }
                 }
 
                 using (new WriteLock(DataLock))
@@ -463,7 +487,28 @@ namespace Nav
             AABB affected_area = AABB.ZERO;
             var blockers = new HashSet<AABB>();
 
-            //using (new WriteLock(DataLock))
+            bool force_rebuild = false;
+            if (force_rebuild)
+            {
+                using (new WriteLock(DataLock))
+                {
+                    foreach (var cell in m_AllCells.Where(x => x.Replacement).ToList())
+                    {
+                        cell.Detach();
+                        m_AllCells.Remove(cell);
+                    }
+
+                    foreach (var cell in m_AllCells)
+                        cell.Disabled = false;
+
+                    foreach (var g_cell in m_GridCells)
+                        g_cell.ResetReplacementCells();
+
+                    CellsOverlappedByRegions.Clear();
+                    ForcePatchesUpdate = true;
+                }
+            }
+
             using (new ReadLock(DataLock))
             //using (new Profiler($"update cells overlapped by regions %t"))
             {
@@ -501,6 +546,12 @@ namespace Nav
             List<int> no_longer_overlapped_cells_ids = new List<int>();
             bool nav_data_changed = false;
             bool anyReplacementCellWithMovementCost = false; // different than 1
+
+
+            //DEBUG
+            //var orphanedReplacementCellsBefore = new List<Cell>();
+            //using (new ReadLock(DataLock))
+            //    orphanedReplacementCellsBefore = m_AllCells.Where(x => x.Replacement).Where(x => !CellsOverlappedByRegions.Values.Any(r => r.replacement_cells.Any(y => y.GlobalId == x.GlobalId))).ToList();
 
             if (CellsOverlappedByRegions.Any())
             {
@@ -651,6 +702,14 @@ namespace Nav
                 // remove inactive data
                 foreach (int key in no_longer_overlapped_cells_ids)
                     CellsOverlappedByRegions.Remove(key);
+
+                //DEBUG
+                //var orphanedReplacementCellsAfter = new List<Cell>();
+                //using (new ReadLock(DataLock))
+                //    orphanedReplacementCellsAfter = m_AllCells.Where(x => x.Replacement).Where(x => !CellsOverlappedByRegions.Values.Any(r => r.replacement_cells.Any(y => y.GlobalId == x.GlobalId))).ToList();
+
+                //if (orphanedReplacementCellsAfter.Count > orphanedReplacementCellsBefore.Count)
+                //    Trace.WriteLine($"{orphanedReplacementCellsAfter.Count - orphanedReplacementCellsBefore.Count} orphaned replacement cells detected!");
             }
         }
 
@@ -1205,10 +1264,6 @@ namespace Nav
             using (new ReadLock(DataLock))
             using (new ReadLock(InputLock))
             {
-                // cell patches may contain old cells that are no longer in all cells (this is becuase patches only refresh when nav blockers change)
-                // a workaround fix it to add all these cells to all cells for serialization
-                m_AllCells.UnionWith(m_CellsPatches.SelectMany(x => x.Cells));
-
                 var all_cells_ids = new HashSet<int>();
 
                 // write all cells global IDs
@@ -1221,7 +1276,19 @@ namespace Nav
                         all_cells_ids.Add(cell.GlobalId);
                 }
 
-                foreach (Cell cell in m_AllCells)
+                // cell patches may contain old cells that are no longer in all cells (this is becuase patches only refresh when nav blockers change)
+                // write all patch-only cells global IDs
+                var patch_cells = m_CellsPatches.SelectMany(x => x.Cells).Except(m_AllCells).ToList();
+                w.Write(patch_cells.Count);
+                foreach (Cell cell in patch_cells)
+                {
+                    w.Write(cell.GlobalId);
+
+                    if (Verbose)
+                        all_cells_ids.Add(cell.GlobalId);
+                }
+
+                foreach (Cell cell in m_AllCells.Concat(patch_cells))
                 {
                     cell.Serialize(w);
 
@@ -1312,8 +1379,24 @@ namespace Nav
                         m_AllCells.Add(cell);
                     }
 
+                    int patch_cells_count = r.ReadInt32();
+                    var patch_cells = new HashSet<Cell>();
+
+                    // pre-allocate patch-only cells
+                    for (int i = 0; i < patch_cells_count; ++i)
+                    {
+                        Cell cell = new Cell(0, 0, 0, 0, 0, 0, MovementFlag.None);
+                        cell.GlobalId = r.ReadInt32();
+                        id_to_cell[cell.GlobalId] = cell;
+                        patch_cells.Add(cell);
+                    }
+
                     foreach (Cell cell in m_AllCells)
                         cell.Deserialize(m_AllCells, id_to_cell, r);
+
+                    var patch_and_all_cells = m_AllCells.Union(patch_cells).ToHashSet();
+                    foreach (Cell cell in patch_cells)
+                        cell.Deserialize(patch_and_all_cells, id_to_cell, r);
 
                     Cell.LastCellGlobalId = r.ReadInt32();
 
