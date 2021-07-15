@@ -122,7 +122,10 @@ namespace Nav
         public abstract void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination);
         public abstract (Vec3, float) UpdateThreatAhead(Vec3 current_pos, IEnumerable<Region> threats);
         public abstract bool IncludePathStart();
-        public virtual void OnPathReset() { }
+        public virtual void OnPathReset()
+        {
+            m_Path?.Clear();
+        }
         
         public virtual void GetPath(out List<Vec3> path, out destination path_dest)
         {
@@ -339,6 +342,7 @@ namespace Nav
         public float Threat { get; private set; } = 0;
         public bool IsAvoidingFutureThreats { get; private set; } = false;
 
+        // this function is using ThreatThreshold
         public bool IsThreatAt(Vec3 pos, float radius = 0, bool consider_future_threats = false, IEnumerable<Region> regions_cache = null)
         {
             regions_cache = regions_cache ?? m_Navmesh.Regions;
@@ -395,6 +399,7 @@ namespace Nav
             return threat_ahead;
         }
 
+        // this function is using ThreatThreshold
         public bool IsThreatBetween(Vec3 start, Vec3 end)
         {
             Vec3 threat_pos = default(Vec3);
