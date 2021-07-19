@@ -460,16 +460,17 @@ namespace Nav
             }
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path, float randomCoeff = 0, float nodesShiftDist = 0)
+        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path, float random_coeff = 0, float nodes_shift_dist = 0, float smoothen_distance = float.MaxValue)
         {
-            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, randomCoeff, m_PathBounce, nodesShiftDist, false, PathSmoothingDistance, AllowRoughPath);
+            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, random_coeff, m_PathBounce, nodes_shift_dist, false, smoothen_distance, allow_rought_path);
         }
 
         public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, out Vec3 rough_path_destination, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false)
         {
+            using (new Profiler("Path finding (incl. lock) took %t", 100))
             using (new ReadLock(m_Navmesh.DataLock))
             //using (new ReadLock(m_Navmesh.DataLock, context: "FindPath"))
-            //using (new Profiler("[Nav] Path finding took %t", 20))
+            using (new Profiler("Path finding took %t", 100))
             {
                 path_recalc_trigger_position = Vec3.ZERO;
                 path_recalc_trigger_precision = 0;

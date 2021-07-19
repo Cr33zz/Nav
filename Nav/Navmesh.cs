@@ -1037,10 +1037,17 @@ namespace Nav
 
         public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh)
         {
-            //using (new Profiler("Navmesh AreConnected (incl. lock) took %t", 5))
+            return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out pos1_on_navmesh, out pos2_on_navmesh, false, out var is_pos1_near_navmesh, out var is_pos2_near_navmesh);
+        }
+
+        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh, bool check_near_navmesh, out bool is_pos1_near_navmesh, out bool is_pos2_near_navmesh)
+        {
+            is_pos2_near_navmesh  = is_pos1_near_navmesh = false;
+            
+            using (new Profiler("AreConnected (incl. lock) took %t", 100))
             using (new ReadLock(DataLock))
             //using (new ReadLock(DataLock, context: "AreConnected"))
-            using (new Profiler("Navmesh AreConnected took %t", 5))
+            using (new Profiler("AreConnected took %t", 5))
             {
                 pos1_on_navmesh = pos1;
                 pos2_on_navmesh = pos2;
@@ -1050,11 +1057,21 @@ namespace Nav
                     var pos1_cells = patch.GetCellsWithin(pos1, nearest_tolerance_pos1, flags);
 
                     if (pos1_cells.Count == 0)
-                        continue;
+                    {
+                        if (!check_near_navmesh)
+                            continue;
+                    }
+                    else
+                        is_pos1_near_navmesh = true;
 
                     var pos2_cells = patch.GetCellsWithin(pos2, nearest_tolerance_pos2, flags);
 
                     if (pos2_cells.Count == 0)
+                        continue;
+                    else
+                        is_pos2_near_navmesh = true;
+
+                    if (check_near_navmesh && pos1_cells.Count == 0)
                         continue;
 
                     var pos1_nearest_cell = pos1_cells.OrderBy(x => pos1.Distance2DSqr(x.AABB.Align(pos1))).First();
