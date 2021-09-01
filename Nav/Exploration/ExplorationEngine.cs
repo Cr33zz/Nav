@@ -305,8 +305,8 @@ namespace Nav
                     }
                 }
 
-                if (explore_cells_generated > 0)
-                    m_Navmesh.Log("[Nav] " + explore_cells_generated + " explore cell(s) generated");
+                //if (explore_cells_generated > 0)
+                //    m_Navmesh.Log("[Nav] " + explore_cells_generated + " explore cell(s) generated");
             }
         }
 

@@ -61,6 +61,8 @@ namespace Nav
             if (m_Params.HasParam("deserialize"))
             {
                 m_Params.GetParam("deserialize", out string file);
+                var filename = Path.GetFileNameWithoutExtension(file);
+                file = Path.Combine(Path.GetDirectoryName(file), filename);
                 m_Navmesh.Deserialize(file);
                 m_Navigator.Deserialize(file);
                 m_Explorer.Deserialize(file);
@@ -199,7 +201,7 @@ namespace Nav
 
                 if (m_RenderPatches)
                 {
-                    using (m_Navmesh.AcquireReadDataLock())
+                    using (new ReadLock(m_Navmesh.PatchesDataLock))
                     {
                         int id = 0;
                         foreach (var patch in m_Navmesh.m_CellsPatches)

@@ -129,10 +129,10 @@ namespace Nav
                 {
                     base_grid_cell.Add(incoming_cells);
                     g_cell = base_grid_cell;
-                    Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.GetCellsCount() + " cell(s) merged with grid cell (" + base_grid_cell.Id + " " + base_grid_cell.Min + ")");
+                    //Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.GetCellsCount() + " cell(s) merged with grid cell (" + base_grid_cell.Id + " " + base_grid_cell.Min + ")");
                 }
-                else
-                    Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.GetCellsCount() + " cell(s) added");
+                //else
+                //    Log("[Nav] Grid cell (" + g_cell.Id + " " + g_cell.Min + ") with " + g_cell.GetCellsCount() + " cell(s) added");
 
                 m_GridCells.Add(g_cell);
             }
@@ -438,8 +438,9 @@ namespace Nav
             {
                 var cells_patches = new HashSet<CellsPatch>();
 
+                using (new Profiler($"Updating cell patches (incl. lock) took %t", 50))
                 using (new ReadLock(DataLock))
-                using (new Profiler($"[Nav] Updating cell patches took %t", 30))
+                using (new Profiler($"Updating cell patches took %t", 50))
                 {
                     var cells_copy = new HashSet<Cell>();
 
@@ -468,7 +469,7 @@ namespace Nav
                     }
                 }
 
-                using (new WriteLock(DataLock))
+                using (new WriteLock(PatchesDataLock))
                     m_CellsPatches = cells_patches;
 
                 ForcePatchesUpdate = false;
@@ -725,6 +726,7 @@ namespace Nav
         public virtual void Clear()
         {
             using (new WriteLock(DataLock))
+            using (new WriteLock(PatchesDataLock))
             using (new WriteLock(InputLock))
             {
                 m_CellsCache.Clear();
@@ -1045,7 +1047,7 @@ namespace Nav
             is_pos2_near_navmesh  = is_pos1_near_navmesh = false;
             
             using (new Profiler("AreConnected (incl. lock) took %t", 100))
-            using (new ReadLock(DataLock))
+            using (new ReadLock(PatchesDataLock))
             //using (new ReadLock(DataLock, context: "AreConnected"))
             using (new Profiler("AreConnected took %t", 5))
             {
@@ -1091,7 +1093,7 @@ namespace Nav
             snapped_pos = pos;
             float snapped_pos_dist = -1;
 
-            using (new ReadLock(DataLock))
+            using (new ReadLock(PatchesDataLock))
             {
                 foreach (var patch in m_CellsPatches)
                 {
@@ -1279,6 +1281,7 @@ namespace Nav
         protected virtual void OnSerialize(BinaryWriter w)
         {
             using (new ReadLock(DataLock))
+            using (new ReadLock(PatchesDataLock))
             using (new ReadLock(InputLock))
             {
                 var all_cells_ids = new HashSet<int>();
@@ -1372,6 +1375,7 @@ namespace Nav
         protected virtual void OnDeserialize(BinaryReader r)
         {
             using (new WriteLock(DataLock))
+            using (new WriteLock(PatchesDataLock))
             using (new WriteLock(InputLock))
             {
                 //using (new Profiler("Navmesh deserialization took %t"))
@@ -1541,6 +1545,7 @@ namespace Nav
         private Thread UpdatesThread = null;
 
         internal ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+        internal ReaderWriterLockSlim PatchesDataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         public ReadLock AcquireReadDataLock()
@@ -1551,7 +1556,7 @@ namespace Nav
         
         internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
         // cell patches are interconnected groups of cells allowing ultra fast connection checks
-        internal HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ DataLock
+        internal HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ PatchesDataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
         private List<Region> m_Regions = new List<Region>(); //@ InputLock        
         private List<INavmeshObserver> m_Observers = new List<INavmeshObserver>(); //@ InputLock

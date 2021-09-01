@@ -1231,8 +1231,8 @@ namespace Nav
             if (needToUpdatePath)
             {
                 LastPathUpdateTime = time;
-                UpdatePath();
                 ForcePathUpdate = false;
+                UpdatePath();
             }
 
             //using (new Profiler("update anti stuck [%t]"))
