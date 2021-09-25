@@ -65,6 +65,18 @@ namespace Nav
             }
         }
 
+        public void ResetExploration()
+        {
+            using (new WriteLock(DataLock))
+            using (new WriteLock(InputLock))
+            {
+                foreach (var ex_cell in m_ExploreCells)
+                    ex_cell.Explored = false;
+                m_ExploredCellsCount = 0;
+                m_CellsToExploreCount = 0;
+            }
+        }
+
         public virtual void Reset()
         {
             Clear();
@@ -255,6 +267,7 @@ namespace Nav
                 //Trace.WriteLine($"dest explore cell id {m_DestCell?.GlobalId ?? -1} pos {GetDestinationCellPosition()}");
 
                 //using (new Profiler("set explore cell pos as dest [%t]"))
+                if (Enabled)
                     m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false));
                 // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
                 m_ValidateDestCell = true;
@@ -439,7 +452,7 @@ namespace Nav
             {
                 long time = timer.ElapsedMilliseconds;
 
-                if (Enabled && (m_ForceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || m_Navigator.GetDestinationType() < DestType.Explore))
+                if (m_ForceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || m_Navigator.GetDestinationType() < DestType.Explore)
                 {
                     last_update_time = time;
                     
