@@ -199,7 +199,7 @@ namespace Nav
         internal static List<Cell> m_CellsCache = new List<Cell>();
 
         // Returns true when position is on navmesh. Acquires DataLock (read)
-        internal protected bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
+        internal protected bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool allow_replacement = true, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
         {
             using (new ReadLock(DataLock))
             //using (new ReadLock(DataLock, context: "GetCellAt"))
@@ -215,8 +215,8 @@ namespace Nav
                 {
                     if (grid_cell.Contains2D(p))
                     {
-                        var cells = grid_cell.GetCellsAt(p, test_2d, z_tolerance);
-                        foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (exclude_cells == null || !exclude_cells.Contains(x)) && x.HasFlags(flags) && x.MovementCostMult != -1))
+                        var cells = grid_cell.GetCellsAt(p, test_2d, z_tolerance, allow_replacement);
+                        foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (allow_replacement || !x.Replacement) && (exclude_cells == null || !exclude_cells.Contains(x)) && x.HasFlags(flags) && x.MovementCostMult != -1))
                         {
                             result_cell = cell;
 
@@ -226,7 +226,7 @@ namespace Nav
 
                     if (nearest)
                     {
-                        var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && x.HasFlags(flags) && x.MovementCostMult != -1);
+                        var cells = grid_cell.GetCells(x => (allow_disabled || !x.Disabled) && (allow_replacement || !x.Replacement) && x.HasFlags(flags) && x.MovementCostMult != -1);
 
                         foreach (Cell cell in cells)
                         {
@@ -937,13 +937,60 @@ namespace Nav
             return RayCast(from, from_cell, to, flags, true, max_movement_cost_mult, ref ignored_cells);
         }
 
+        private RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, float max_movement_cost_mult, ref HashSet<Cell> ignored_cells)
+        {
+            bool force_failed = false;
+
+            // when we don't care about regions, we can run ray cast on unmodified navmesh and clamp end position to nearest intersected nav blocker
+            if (max_movement_cost_mult == float.MaxValue)
+            {
+                using (new ReadLock(DataLock))
+                {
+                    float dist_to_nearest_intersection = -1;
+                    Vec3 nearest_intersection = to;
+                    Vec3 intersection = Vec3.ZERO;
+                    foreach (var blocker in LastBlockers)
+                    {
+                        bool success;
+                        if (test_2d)
+                            success = blocker.SegmentTest2D(from, to, ref intersection);
+                        else
+                            success = blocker.SegmentTest(from, to, ref intersection);
+
+                        if (success)
+                        {
+                            float dist_to_intersection = from.DistanceSqr(intersection);
+                            if (dist_to_nearest_intersection < 0 || dist_to_intersection < dist_to_nearest_intersection)
+                            {
+                                nearest_intersection = intersection;
+                                dist_to_nearest_intersection = dist_to_intersection;
+                            }
+                        }
+                    }
+
+                    if (dist_to_nearest_intersection >= 0)
+                    {
+                        to = nearest_intersection;
+                        force_failed = true;
+                    }
+                }
+            }
+
+            var result = RayCastInternal(from, from_cell, to, flags, test_2d, max_movement_cost_mult, ref ignored_cells);
+            result.Successful &= !force_failed;
+            return result;
+        }
+
         // Aquires DataLock (read); returns true when there is no obstacle
-        private RayCastResult RayCast(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, float max_movement_cost_mult, ref HashSet<Cell> ignored_cells, bool tryLock = false)
+        private RayCastResult RayCastInternal(Vec3 from, Cell from_cell, Vec3 to, MovementFlag flags, bool test_2d, float max_movement_cost_mult, ref HashSet<Cell> ignored_cells)
         {
             using (new ReadLock(DataLock))
             //using (new ReadLock(DataLock, context: "RayCast"))
             {
-                if (from_cell == null && !GetCellAt(from, out from_cell, flags, false, false, -1, test_2d, 2, ignored_cells))
+                // when we don't care about movement cost mult we can greatly improve cast when there is lots of regions by running it on base navmesh and doing extra check against nav blockers (regions with negative movement cost mult)
+                bool check_non_replacement_only = max_movement_cost_mult == float.MaxValue;
+
+                if (from_cell == null && !GetCellAt(from, out from_cell, flags, check_non_replacement_only, !check_non_replacement_only, false, -1, test_2d, 2, ignored_cells))
                 {
                     return new RayCastResult { Successful = false, End = from, EndCell = null };
                 }
@@ -970,8 +1017,19 @@ namespace Nav
                 // check if intersection in
                 foreach (Cell.Neighbour neighbour in from_cell.Neighbours)
                 {
-                    if (neighbour.cell.Disabled || (neighbour.connection_flags & flags) == 0 || (neighbour.cell.MovementCostMult > max_movement_cost_mult))
+                    if ((neighbour.connection_flags & flags) == 0)
                         continue;
+
+                    if (check_non_replacement_only)
+                    {
+                        if (neighbour.cell.Replacement)
+                            continue;
+                    }
+                    else
+                    {
+                        if (neighbour.cell.Disabled || (neighbour.cell.MovementCostMult > max_movement_cost_mult))
+                            continue;
+                    }
 
                     Cell neighbour_cell = neighbour.cell;
 
@@ -1000,7 +1058,7 @@ namespace Nav
 
                             if (accepted)
                             {
-                                result = RayCast(intersection, neighbour_cell, to, flags, test_2d, max_movement_cost_mult, ref ignored_cells);
+                                result = RayCastInternal(intersection, neighbour_cell, to, flags, test_2d, max_movement_cost_mult, ref ignored_cells);
 
                                 if (result.Successful)
                                     return result;

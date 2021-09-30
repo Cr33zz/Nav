@@ -173,27 +173,30 @@ namespace Nav
             }
         }
 
-        public List<Cell> GetCells(Func<Cell, bool> predicate, bool allow_replacement_cells = true)
+        public List<Cell> GetCells(Func<Cell, bool> predicate, bool include_replacement = true)
         {
             var result = Cells.Where(predicate).ToList();
 
-            if (allow_replacement_cells)
+            if (include_replacement)
                 result.AddRange(ReplacementCells.Where(predicate));
             
             return result;
         }
 
-        public IEnumerable<Cell> GetCellsAt(Vec3 pos, bool test_2d, float z_tolerance)
+        public IEnumerable<Cell> GetCellsAt(Vec3 pos, bool test_2d, float z_tolerance, bool include_replacement = true)
         {
-            return Cells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance))).
-                   Concat(ReplacementCells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance))));
+            var cells = Cells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance)));
+
+            if (include_replacement)
+                return cells.Concat(ReplacementCells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance))));
+            return cells;
         }
 
-        public List<Cell> GetCells(bool allow_replacement_cells = true)
+        public List<Cell> GetCells(bool include_replacement = true)
         {
             IEnumerable<Cell> result = Cells;
 
-            if (allow_replacement_cells)
+            if (include_replacement)
                 result = result.Concat(ReplacementCells);
 
             return result.ToList();

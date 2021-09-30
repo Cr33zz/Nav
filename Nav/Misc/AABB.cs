@@ -321,6 +321,11 @@ namespace Nav
             return i == 0 ? Min : Max;
         }
 
+        //private bool InternalRayTestFast(Vec3 ray_origin, Vec3 ray_dir, int num_dim)
+        //{
+
+        //}
+
         private bool InternalRayTest(Vec3 ray_origin, Vec3 ray_dir, ref Vec3 result, int num_dim)
         {
             // implementation based upon https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection

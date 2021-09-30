@@ -479,8 +479,8 @@ namespace Nav
                 if (from.IsZero() || to.IsZero())
                     return false;
 
-                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, as_close_as_possible);
-                bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, as_close_as_possible);
+                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, true, as_close_as_possible);
+                bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, true, as_close_as_possible);
 
                 // align to position to closest cell
                 if (!end_on_nav_mesh)
@@ -509,7 +509,7 @@ namespace Nav
                     rought_path.Add(to);
 
                     to = current_path.rough_path_destination;
-                    m_Navmesh.GetCellAt(to, out end, flags, false, as_close_as_possible);
+                    m_Navmesh.GetCellAt(to, out end, flags, false, true, as_close_as_possible);
 
                     rough_path_destination = current_path.rough_path_destination;
                     path_recalc_trigger_position = current_path.rough_path_destination;
@@ -522,7 +522,7 @@ namespace Nav
                     rought_path.Add(to);
 
                     to = rough_path_destination;
-                    m_Navmesh.GetCellAt(to, out end, flags, false, as_close_as_possible);
+                    m_Navmesh.GetCellAt(to, out end, flags, false, true, as_close_as_possible);
 
                     // ideally this point should be set somewhere along the path to rough path node (but it would required going over the path to find it afterwards)
                     path_recalc_trigger_position = to;
@@ -537,7 +537,7 @@ namespace Nav
                 {
                     Vec3 bounce_dir = start.AABB.GetBounceDir2D(from);
                     Vec3 new_from = from + bounce_dir * BounceDist;
-                    m_Navmesh.GetCellAt(new_from, out start, flags, false, as_close_as_possible);
+                    m_Navmesh.GetCellAt(new_from, out start, flags, false, true, as_close_as_possible);
 
                     if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, true))
                         return false;
@@ -574,7 +574,7 @@ namespace Nav
                 if (from.IsZero())
                     return false;
 
-                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, true);
+                bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, true, true);
 
                 if (!start_on_nav_mesh)
                 {
@@ -1497,7 +1497,7 @@ namespace Nav
                 {
                     m_AvoidanceDestination = default(destination);
 
-                    if (was_in_threat)
+                    if (!IsInThreat && was_in_threat)
                     {
                         RequestPathUpdate();
                         //m_Navmesh.Log("no longer in threat");
