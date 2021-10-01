@@ -451,7 +451,7 @@ namespace Nav
             where T : Cell
         {
             public virtual bool IsValid() { return true; }
-            public abstract float GetMinDistance(Vec3 from);
+            public abstract float GetMinDistance(T cell);
             public virtual Vec3 GetDestination() { return Vec3.ZERO;  } // center of cell
             public virtual bool UseFinalCellEntranceAsDestination() { return false; }
             public abstract bool IsDestCell(T cell);
@@ -464,7 +464,7 @@ namespace Nav
             public DestinationPathFindStrategy(Vec3 dest, T dest_cell) { Dest = dest; DestCell = dest_cell; FinalDestCell = dest_cell; }
 
             public override bool IsValid() { return DestCell != null; }
-            public override float GetMinDistance(Vec3 from) { return from.Distance(Dest); }
+            public override float GetMinDistance(T cell) { return cell.AABB.Distance2D(Dest); }
             public override Vec3 GetDestination() { return Dest; }
             public override bool IsDestCell(T cell) { return cell == DestCell; }
 
@@ -481,7 +481,7 @@ namespace Nav
                 HintPos = hint_pos;
             }
 
-            public override float GetMinDistance(Vec3 from) { return HintPos.IsZero() ? 0 : from.Distance(HintPos); }
+            public override float GetMinDistance(T cell) { return HintPos.IsZero() ? 0 : cell.AABB.Distance2D(HintPos); }
             // while path finding consider future threat regions (those with negative threat) as actual threats
             public override bool IsDestCell(T cell) { return Math.Abs(cell.Threat) <= MaxAllowedThreat; }
             public override bool UseFinalCellEntranceAsDestination() { return true; }
@@ -507,7 +507,7 @@ namespace Nav
             if (start == null || !strategy.IsValid())
                 return false;
 
-            NodeInfo s = new NodeInfo(start, from, null, 0, strategy.GetMinDistance(from));
+            NodeInfo s = new NodeInfo(start, from, null, 0, strategy.GetMinDistance(start));
             open.Add(s);
 
             while (open.Count > 0)
@@ -548,7 +548,7 @@ namespace Nav
                     float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
 
                     float new_g = current_node.g + current_node.leading_point.Distance(leading_point) * (1 + random_dist_mod) * current_node.cell.MovementCostMult;
-                    float new_h = strategy.GetMinDistance(leading_point);
+                    float new_h = strategy.GetMinDistance((T)neighbour.cell);
 
                     neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, open);
 
@@ -570,11 +570,14 @@ namespace Nav
 
             if (allow_disconnected && closed.Count > 0)
             {
-                float min_total_cost = closed.Min(x => x.h);
-                NodeInfo best = closed.Find(x => x.h.Equals(min_total_cost));
+                var dest = strategy.GetDestination();
+                NodeInfo best = closed.OrderBy(x => x.h).First();
                 strategy.FinalDestCell = (T)best.cell;
 
-                BuildPath(start, best.cell, from, strategy.UseFinalCellEntranceAsDestination() ? best.leading_point : strategy.GetDestination(), best, ref path, use_cell_centers);
+                Vec3 nearest_to_dest = best.cell.Center;
+                best.cell.AABB.SegmentTest(dest, best.leading_point, ref nearest_to_dest);
+
+                BuildPath(start, best.cell, from, strategy.UseFinalCellEntranceAsDestination() ? best.leading_point : nearest_to_dest, best, ref path, use_cell_centers);
                 return true;
             }
 
