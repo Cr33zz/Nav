@@ -830,8 +830,9 @@ namespace Nav
                         return true;
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    Trace.WriteLine($"{ex.Message}");
                 }
 
                 Log("[Nav] Navmesh load failed!");
@@ -1319,7 +1320,7 @@ namespace Nav
                 }
 
                 foreach (Region region in Regions)
-                    file.WriteLine("r {0} {1} {2} {3} {4} {5} {6}", region.Area.Min.X, region.Area.Min.Y, region.Area.Min.Z, region.Area.Max.X, region.Area.Max.Y, region.Area.Max.Z, region.MoveCostMult);
+                    file.WriteLine("r {0} {1} {2} {3} {4} {5} {6} {7}", region.Area.Min.X, region.Area.Min.Y, region.Area.Min.Z, region.Area.Max.X, region.Area.Max.Y, region.Area.Max.Z, region.MoveCostMult, region.Threat);
             }
 
             file.Close();
