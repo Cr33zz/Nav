@@ -490,7 +490,7 @@ namespace Nav
             private Vec3 HintPos;
         }
 
-        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false, bool use_cell_centers = false)
+        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false, bool use_cell_centers = false, bool ignore_movement_cost = false)
             where T : Cell
             where S : PathFindStrategy<T>
         {
@@ -547,7 +547,7 @@ namespace Nav
 
                     float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
 
-                    float new_g = current_node.g + current_node.leading_point.Distance(leading_point) * (1 + random_dist_mod) * current_node.cell.MovementCostMult;
+                    float new_g = current_node.g + current_node.leading_point.Distance(leading_point) * (1 + random_dist_mod) * (ignore_movement_cost ? 1 : current_node.cell.MovementCostMult);
                     float new_h = strategy.GetMinDistance((T)neighbour.cell);
 
                     neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, open);

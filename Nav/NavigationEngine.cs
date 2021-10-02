@@ -460,12 +460,12 @@ namespace Nav
             }
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path, float random_coeff = 0, float nodes_shift_dist = 0, float smoothen_distance = float.MaxValue)
+        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path, float random_coeff = 0, float nodes_shift_dist = 0, float smoothen_distance = float.MaxValue, bool ignore_movement_cost = false)
         {
-            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, random_coeff, m_PathBounce, nodes_shift_dist, false, smoothen_distance, allow_rought_path);
+            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, random_coeff, m_PathBounce, nodes_shift_dist, false, smoothen_distance, allow_rought_path, ignore_movement_cost);
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, out Vec3 rough_path_destination, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false)
+        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, out Vec3 rough_path_destination, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false, bool ignore_movement_cost = false)
         {
             using (new Profiler("Path finding (incl. lock) took %t", 100))
             using (new ReadLock(m_Navmesh.DataLock))
@@ -539,14 +539,14 @@ namespace Nav
                     Vec3 new_from = from + bounce_dir * BounceDist;
                     m_Navmesh.GetCellAt(new_from, out start, flags, false, true, as_close_as_possible);
 
-                    if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, true))
+                    if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, allow_disconnected: true, ignore_movement_cost: ignore_movement_cost))
                         return false;
 
                     tmp_path.Insert(0, new path_pos(start.AABB.Align(from), start));
                 }
                 else
                 {
-                    if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, true))
+                    if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, allow_disconnected: true, ignore_movement_cost: ignore_movement_cost))
                         return false;
                 }
 
