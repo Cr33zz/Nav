@@ -174,6 +174,9 @@ namespace Nav
                             {
                                 foreach (Nav.Cell cell in grid_cell.GetCells())
                                 {
+                                    if (m_RenderRegionsMode == RegionsRenderMode.BlockerReplacement && !cell.BlockerReplacement)
+                                        continue;
+
                                     RenderHelper.Render(cell, m_RenderCenter, e, m_RenderConnections, m_RenderIds, m_RenderRegionsMode == RegionsRenderMode.MoveCostMult, m_RenderRegionsMode == RegionsRenderMode.Threat);
                                 }
 
@@ -905,6 +908,7 @@ namespace Nav
         {
             None,
             MoveCostMult,
+            BlockerReplacement, // display only blocker replacement cells
             Threat,
             Outline,
             Count

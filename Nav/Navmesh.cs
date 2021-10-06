@@ -37,6 +37,8 @@ namespace Nav
         // threat level is used by avoidance to find safe spot
         public float Threat;
 
+        public bool IsNavBlocker => MoveCostMult < 0;
+
         public override bool Equals(Object obj)
         {
             if (obj == null)
@@ -647,6 +649,7 @@ namespace Nav
 
                                                 Cell r_cell = new Cell(extracted[k], cell_data.replaced_cell.Flags, movement_cost_mult) { ParentAABB = cell_data.replaced_cell.ParentAABB };
                                                 r_cell.Replacement = true;
+                                                r_cell.BlockerReplacement = c.BlockerReplacement || region.IsNavBlocker;
                                                 r_cell.Threat = threat;
                                                 cell_data.replacement_cells.Add(r_cell);
                                             }
@@ -1440,6 +1443,7 @@ namespace Nav
                 //using (new Profiler("Navmesh deserialization took %t"))
                 {
                     m_AllCells.Clear();
+                    m_IdToCell.Clear();
                     m_GridCells.Clear();
                     m_Regions.Clear();
                     CellsOverlappedByRegions.Clear();
@@ -1448,14 +1452,12 @@ namespace Nav
 
                     int all_cells_count = r.ReadInt32();
 
-                    var id_to_cell = new Dictionary<int, Cell>();
-
                     // pre-allocate cells
                     for (int i = 0; i < all_cells_count; ++i)
                     {
                         Cell cell = new Cell(0, 0, 0, 0, 0, 0, MovementFlag.None);
                         cell.GlobalId = r.ReadInt32();
-                        id_to_cell[cell.GlobalId] = cell;
+                        m_IdToCell[cell.GlobalId] = cell;
                         m_AllCells.Add(cell);
                     }
 
@@ -1467,16 +1469,16 @@ namespace Nav
                     {
                         Cell cell = new Cell(0, 0, 0, 0, 0, 0, MovementFlag.None);
                         cell.GlobalId = r.ReadInt32();
-                        id_to_cell[cell.GlobalId] = cell;
+                        m_IdToCell[cell.GlobalId] = cell;
                         patch_cells.Add(cell);
                     }
 
                     foreach (Cell cell in m_AllCells)
-                        cell.Deserialize(m_AllCells, id_to_cell, r);
+                        cell.Deserialize(m_AllCells, m_IdToCell, r);
 
                     var patch_and_all_cells = m_AllCells.Union(patch_cells).ToHashSet();
                     foreach (Cell cell in patch_cells)
-                        cell.Deserialize(patch_and_all_cells, id_to_cell, r);
+                        cell.Deserialize(patch_and_all_cells, m_IdToCell, r);
 
                     Cell.LastCellGlobalId = r.ReadInt32();
 
@@ -1491,7 +1493,7 @@ namespace Nav
                     }
 
                     foreach (GridCell grid_cell in m_GridCells)
-                        grid_cell.Deserialize(m_GridCells, m_AllCells, id_to_cell, r);
+                        grid_cell.Deserialize(m_GridCells, m_AllCells, m_IdToCell, r);
 
                     GridCell.LastGridCellGlobalId = r.ReadInt32();
 
@@ -1507,7 +1509,7 @@ namespace Nav
                     }
 
                     foreach (CellsPatch patch in patches)
-                        patch.Deserialize(m_AllCells, id_to_cell, r);
+                        patch.Deserialize(m_AllCells, m_IdToCell, r);
 
                     m_CellsPatches = new HashSet<CellsPatch>(patches);
 
@@ -1614,6 +1616,7 @@ namespace Nav
         }
         
         internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
+        internal Dictionary<int, Cell> m_IdToCell = new Dictionary<int, Cell>(); //@ DataLock
         // cell patches are interconnected groups of cells allowing ultra fast connection checks
         internal HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ PatchesDataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock

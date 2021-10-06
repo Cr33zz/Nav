@@ -91,7 +91,7 @@ namespace Nav
                 w.Write(g_cell_id);
         }
 
-        internal void Deserialize(HashSet<ExploreCell> explore_cells, HashSet<Cell> all_cells, BinaryReader r)
+        internal void Deserialize(HashSet<ExploreCell> explore_cells, HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
             base.Deserialize(explore_cells, null, r);
 
@@ -106,7 +106,8 @@ namespace Nav
             for (int i = 0; i < cells_count; ++i)
             {
                 int cell_global_id = r.ReadInt32();
-                Cells.Add(all_cells.First(x => x.GlobalId == cell_global_id));
+                var cell = id_to_cell != null ? id_to_cell[cell_global_id] : all_cells.FirstOrDefault(x => x.GlobalId == cell_global_id);
+                Cells.Add(cell);
             }
 
             int grid_cells_id_count = r.ReadInt32();
@@ -132,13 +133,13 @@ namespace Nav
         public AABB CellsAABB { get; private set; }
         public float CellsArea { get; private set; }
 
-        public bool Explored { get; set; }
+        public bool Explored;
 
         // Exploration of this cell has been delayed until all non-small unexplored cells has been visited
-        public bool Delayed { get; set; }
+        public bool Delayed;
 
         // Small explore cells will be visited as last
-        public bool Small { get; set; }
+        public bool Small;
 
         internal static int LastExploreCellGlobalId = 0;
     }

@@ -146,11 +146,11 @@ namespace Nav
             using (BinaryReader r = new BinaryReader(File.OpenRead(name + ".explorer")))
             using (m_Navmesh.AcquireReadDataLock())
             {                
-                OnDeserialize(m_Navmesh.m_AllCells, r);
+                OnDeserialize(m_Navmesh.m_AllCells, m_Navmesh.m_IdToCell, r);
             }
         }
 
-        protected virtual void OnDeserialize(HashSet<Cell> all_cells, BinaryReader r)
+        protected virtual void OnDeserialize(HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
             using (new WriteLock(DataLock))
             using (new WriteLock(InputLock))
@@ -170,7 +170,7 @@ namespace Nav
                 }
 
                 foreach (ExploreCell explore_cell in m_ExploreCells)
-                    explore_cell.Deserialize(m_ExploreCells, all_cells, r);
+                    explore_cell.Deserialize(m_ExploreCells, all_cells, id_to_cell, r);
 
                 var dest_cell_global_id = r.ReadInt32();
                 if (dest_cell_global_id >= 0)
@@ -261,16 +261,17 @@ namespace Nav
         {
             //using (new Profiler("SelectNewDestinationCell [%t]"))
             {
-                //using (new Profiler("get dest explore cell [%t]"))
-                    m_DestCell = GetDestinationCell(curr_explore_cell);
+                var prev_dest_cell = m_DestCell;
+                m_DestCell = GetDestinationCell(curr_explore_cell);
 
                 //Trace.WriteLine($"dest explore cell id {m_DestCell?.GlobalId ?? -1} pos {GetDestinationCellPosition()}");
 
                 //using (new Profiler("set explore cell pos as dest [%t]"))
                 if (Enabled)
                     m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false));
+
                 // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
-                m_ValidateDestCell = true;
+                m_ValidateDestCell = m_DestCell != prev_dest_cell;
             }
         }
 
@@ -349,15 +350,7 @@ namespace Nav
                 if (!IsDataAvailable)
                     return false;
 
-                ExploreCell current_explore_cell = GetCurrentExploreCell();
-
-                if (current_explore_cell == null)
-                    return true;
-
-                if (!current_explore_cell.Explored)
-                    return false;
-
-                return GetUnexploredCells(current_explore_cell).Count == 0;
+                return GetExploredPercent() >= 100;
             }
         }
 

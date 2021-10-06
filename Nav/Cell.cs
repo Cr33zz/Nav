@@ -429,6 +429,7 @@ namespace Nav
         public int Id { get; private set; }
         public MovementFlag Flags { get; protected set; }
         public bool Replacement { get; set; }
+        public bool BlockerReplacement { get; set; }
         public bool Disabled { get; set; }
         public float MovementCostMult { get; set; }
         public float Threat { get; set; }
@@ -479,6 +480,7 @@ namespace Nav
             ParentAABB.Serialize(w);
             w.Write((int)Flags);
             w.Write(Replacement);
+            w.Write(BlockerReplacement);
             w.Write(Disabled);
             w.Write(MovementCostMult);
             w.Write(Threat);
@@ -500,6 +502,7 @@ namespace Nav
             ParentAABB = new AABB(r);
             Flags = (MovementFlag)r.ReadInt32();
             Replacement = r.ReadBoolean();
+            BlockerReplacement = r.ReadBoolean();
             Disabled = r.ReadBoolean();
             MovementCostMult = r.ReadSingle();
             Threat = r.ReadSingle();
