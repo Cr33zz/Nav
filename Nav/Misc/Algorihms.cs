@@ -475,18 +475,18 @@ namespace Nav
         public class AvoidancePathFindStrategy<T> : PathFindStrategy<T>
             where T : Cell
         {
-            public AvoidancePathFindStrategy(float max_allowed_threat, Vec3 hint_pos = default(Vec3))
+            public AvoidancePathFindStrategy(float threat_threshold, Vec3 hint_pos = default(Vec3))
             {
-                MaxAllowedThreat = max_allowed_threat;
+                ThreatThreshold = threat_threshold;
                 HintPos = hint_pos;
             }
 
             public override float GetMinDistance(T cell) { return HintPos.IsZero() ? 0 : cell.AABB.Distance2D(HintPos); }
             // while path finding consider future threat regions (those with negative threat) as actual threats
-            public override bool IsDestCell(T cell) { return Math.Abs(cell.Threat) <= MaxAllowedThreat; }
+            public override bool IsDestCell(T cell) { return Math.Abs(cell.Threat) < ThreatThreshold; }
             public override bool UseFinalCellEntranceAsDestination() { return true; }
 
-            private float MaxAllowedThreat;
+            private float ThreatThreshold;
             private Vec3 HintPos;
         }
 

@@ -348,11 +348,11 @@ namespace Nav
             regions_cache = regions_cache ?? m_Navmesh.Regions;
 
             if (radius <= 0)
-                return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Contains2D(pos));
+                return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Contains2D(pos));
 
             AABB area = new AABB(pos - new Vec3(radius, radius, 0), pos + new Vec3(radius, radius, 0));
             AABB output = default(AABB);
-            return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) > ThreatThreshold && x.Area.Intersect2D(area, ref output));
+            return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Intersect2D(area, ref output));
         }
 
         public List<Region> GetRegions(AABB area)
@@ -404,7 +404,7 @@ namespace Nav
         {
             Vec3 threat_pos = default(Vec3);
 
-            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat > ThreatThreshold).ToList())
+            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat >= ThreatThreshold).ToList())
             {
                 if (t.Area.SegmentTest2D(start, end, ref threat_pos))
                     return true;
@@ -418,7 +418,7 @@ namespace Nav
             Vec3 threat_pos = default(Vec3);
             float threat = 0;
 
-            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat > ThreatThreshold).ToList())
+            foreach (var t in m_Navmesh.Regions.Where(x => x.Threat >= ThreatThreshold).ToList())
             {
                 if (t.Area.SegmentTest2D(start, end, ref threat_pos))
                     threat = Math.Max(threat, t.Threat);
@@ -567,7 +567,7 @@ namespace Nav
             }
         }
 
-        public bool FindAvoidancePath(Vec3 from, float max_allowed_threat, MovementFlag flags, ref List<Vec3> path, Vec3 hint_pos = default(Vec3), bool include_from = false, float shift_nodes_distance = 0, float smoothen_distance = float.MaxValue)
+        public bool FindAvoidancePath(Vec3 from, float threat_threshold, MovementFlag flags, ref List<Vec3> path, Vec3 hint_pos = default(Vec3), bool include_from = false, float shift_nodes_distance = 0, float smoothen_distance = float.MaxValue)
         {
             using (m_Navmesh.AcquireReadDataLock())
             {
@@ -586,7 +586,7 @@ namespace Nav
 
                 List<path_pos> tmp_path = new List<path_pos>();
 
-                if (!Algorihms.FindPath(start, from, new Algorihms.AvoidancePathFindStrategy<Cell>(max_allowed_threat, hint_pos), flags, ref tmp_path))
+                if (!Algorihms.FindPath(start, from, new Algorihms.AvoidancePathFindStrategy<Cell>(threat_threshold, hint_pos), flags, ref tmp_path))
                     return false;
 
                 //m_Navmesh.Log($"original path has {tmp_path.Count} nodes");
@@ -1466,7 +1466,7 @@ namespace Nav
             if (EnableThreatAvoidance)
             {
                 Vec3 current_pos = CurrentPos;
-                var threats = m_Navmesh.Regions.Where(x => Math.Abs(x.Threat) > ThreatThreshold).ToList();
+                var threats = m_Navmesh.Regions.Where(x => Math.Abs(x.Threat) >= ThreatThreshold).ToList();
                 var threats_at_current_pos = threats.Where(x => x.Area.Contains2D(current_pos));
                 var current_threats = threats_at_current_pos.Where(x => x.Threat > 0);
 
