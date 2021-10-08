@@ -92,6 +92,16 @@ namespace Nav
 
         public virtual float GetExploredPercent()
         {
+            if (!Enabled) // need to run expensive version when exploration is disabled because numbers used are not refreshed then
+            {
+                ExploreCell current_explore_cell = GetCurrentExploreCell();
+
+                if (current_explore_cell == null)
+                    return 100;
+
+                GetUnexploredCells(current_explore_cell);
+            }
+
             return m_CellsToExploreCount > 0 ? (float)Math.Round(m_ExploredCellsCount / (float)m_CellsToExploreCount * 100, 1) : 0;
         }
 
