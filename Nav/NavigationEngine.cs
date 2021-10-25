@@ -966,8 +966,7 @@ namespace Nav
         {
             get
             {
-                using (new ReadLock(InputLock))
-                    return new Vec3(m_CurrentPos);
+                return m_CurrentPos;
             }
 
             set

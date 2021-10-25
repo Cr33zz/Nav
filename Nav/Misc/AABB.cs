@@ -27,6 +27,12 @@ namespace Nav
             Max = new Vec3(aabb.Max);
         }
 
+        public AABB(Vec3 center, float radius)
+        {
+            Min = new Vec3(center.X - radius, center.Y - radius, center.Z - radius);
+            Max = new Vec3(center.X + radius, center.Y + radius, center.Z + radius);
+        }
+
         public AABB(BinaryReader r) : this()
         {
             Deserialize(r);
@@ -205,6 +211,11 @@ namespace Nav
             }
 
             return new AABB(Vec3.Min(Min, aabb.Min), Vec3.Max(Max, aabb.Max));
+        }
+
+        public AABB Extend(Vec3 point)
+        {
+            return new AABB(Vec3.Min(Min, point), Vec3.Max(Max, point));
         }
 
         public static AABB Maximum(AABB aabb1, AABB aabb2)

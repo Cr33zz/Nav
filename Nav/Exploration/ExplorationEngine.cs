@@ -92,16 +92,21 @@ namespace Nav
 
         public virtual float GetExploredPercent()
         {
-            if (!Enabled) // need to run expensive version when exploration is disabled because numbers used are not refreshed then
+            // need to run expensive version when exploration is disabled and number of explore cells has changed (because numbers used are not refreshed then)
+            if (!Enabled && m_ForceRefreshExploredPercent)
             {
-                ExploreCell current_explore_cell = GetCurrentExploreCell();
+                m_ForceRefreshExploredPercent = false;
+
+                ExploreCell current_explore_cell;
+                using (new ReadLock(DataLock))
+                    current_explore_cell = GetCurrentExploreCell();
 
                 if (current_explore_cell == null)
                     return 100;
 
                 GetUnexploredCells(current_explore_cell);
             }
-
+        
             return m_CellsToExploreCount > 0 ? (float)Math.Round(m_ExploredCellsCount / (float)m_CellsToExploreCount * 100, 1) : 0;
         }
 
@@ -262,7 +267,10 @@ namespace Nav
             //Trace.WriteLine($"marking explore cell id {dest_cell?.GlobalId ?? -1} as explored");
 
             if (dest_cell != null)
+            {
+                Trace.WriteLine($"Explore cell GID {m_DestCell.GlobalId} considered explored because it was reached.");
                 OnCellExplored(dest_cell);
+            }
 
             SelectNewDestinationCell(dest_cell);
         }
@@ -355,13 +363,10 @@ namespace Nav
 
         public virtual bool IsExplored()
         {
-            using (new ReadLock(DataLock))
-            {
-                if (!IsDataAvailable)
-                    return false;
+            if (!IsDataAvailable)
+                return false;
 
-                return GetExploredPercent() >= 100;
-            }
+            return GetExploredPercent() >= 100;
         }
 
         protected ExploreCell GetCurrentExploreCell()
@@ -455,7 +460,7 @@ namespace Nav
             {
                 long time = timer.ElapsedMilliseconds;
 
-                if (m_ForceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || m_Navigator.GetDestinationType() < DestType.Explore)
+                if (m_ForceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || (Enabled && m_Navigator.GetDestinationType() < DestType.Explore))
                 {
                     last_update_time = time;
                     
@@ -519,12 +524,15 @@ namespace Nav
                 mark_dest_cell_as_explored |= AlternativeExploredCondition?.Invoke(m_DestCell, current_pos) ?? false;
 
                 if (mark_dest_cell_as_explored)
+                {
+                    Trace.WriteLine($"Explore cell GID {m_DestCell.GlobalId} considered explored by external logic.");
                     OnCellExplored(m_DestCell);
+                }
             }
 
             using (new ReadLock(DataLock, true))
             {
-                if (m_Navigator.GetDestinationType() < DestType.Explore || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
+                if ((Enabled && m_Navigator.GetDestinationType() < DestType.Explore) || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
                 {
                     SelectNewDestinationCell(null);
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
@@ -534,7 +542,10 @@ namespace Nav
                 ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => !x.Explored && x.Position.Distance2D(current_pos) < ExploreDestPrecision);
 
                 if (current_explore_cell != null)
+                {
+                    Trace.WriteLine($"Explore cell GID {current_explore_cell.GlobalId} considered explored because of passing by.");
                     OnCellExplored(current_explore_cell);
+                }
 
                 OnUpdateExploration();
             }
@@ -556,6 +567,7 @@ namespace Nav
                 }
 
                 m_ExploreCells.Add(explore_cell);
+                m_ForceRefreshExploredPercent = true;
             }
         }
 
@@ -708,7 +720,9 @@ namespace Nav
         protected HashSet<ExploreCell> m_ExploreCells = new HashSet<ExploreCell>(); //@ DataLock
         protected int m_ExploredCellsCount = 0;
         protected int m_CellsToExploreCount = 0;
-        
+        private bool m_ForceRefreshExploredPercent = true;
+
+
         private Thread UpdatesThread = null;        
 
         private volatile bool m_ForceReevaluation = false;
