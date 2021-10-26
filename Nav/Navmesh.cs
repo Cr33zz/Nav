@@ -512,11 +512,17 @@ namespace Nav
                 }
             }
 
-            using (new ReadLock(DataLock))
+            using (new ReadLock(DataLock, true))
             //using (new Profiler($"update cells overlapped by regions %t"))
             {
-                foreach (var data in CellsOverlappedByRegions)
-                    data.Value.overlapping_regions.Clear();
+                if (CellsOverlappedByRegions.Count > 0)
+                {
+                    using (new WriteLock(DataLock))
+                    {
+                        foreach (var data in CellsOverlappedByRegions)
+                            data.Value.overlapping_regions.Clear();
+                    }
+                }
 
                 if (RegionsEnabled)
                 {
@@ -532,12 +538,19 @@ namespace Nav
                             // we only care about overlapping 'original' cells (ignore replacements)
                             var overlapped_cells = g_cell.GetCells(x => x.HasFlags(MovementFlag.Walk) && x.AABB.Overlaps2D(region.Area), false);
 
-                            foreach (Cell cell in overlapped_cells)
+                            if (overlapped_cells.Count > 0)
                             {
-                                if (!CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out overlapped_cell_data data))
-                                    CellsOverlappedByRegions[cell.GlobalId] = data = new overlapped_cell_data(cell, g_cell);
+                                using (new WriteLock(DataLock))
+                                {
+                                    foreach (Cell cell in overlapped_cells)
+                                    {
+                                        // this requires write lock!
+                                        if (!CellsOverlappedByRegions.TryGetValue(cell.GlobalId, out overlapped_cell_data data))
+                                            CellsOverlappedByRegions[cell.GlobalId] = data = new overlapped_cell_data(cell, g_cell);
 
-                                data.overlapping_regions.Add(new Region(region));
+                                        data.overlapping_regions.Add(new Region(region));
+                                    }
+                                }
                             }
                         }
                     }
@@ -549,7 +562,6 @@ namespace Nav
             List<int> no_longer_overlapped_cells_ids = new List<int>();
             bool nav_data_changed = false;
             bool anyReplacementCellWithMovementCost = false; // different than 1
-
 
             //DEBUG
             //var orphanedReplacementCellsBefore = new List<Cell>();
