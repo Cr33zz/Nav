@@ -843,13 +843,13 @@ namespace Nav
 
             set
             {
-                SetDestination(new destination(value.pos, value.type, value.precision < 0 ? DefaultPrecision : value.precision, value.precision_max, value.stop, value.user_data));
+                SetDestination(new destination(value.pos, value.type, value.precision <= 0 ? DefaultPrecision : value.precision, value.precision_max, value.stop, value.user_data));
             }
         }
 
         public void SetDestination(Vec3 pos, float precision, float precision_max = -1, bool stop = false, Object user_data = null)
         {
-            SetDestination(new destination(pos, DestType.User, precision < 0 ? DefaultPrecision : precision, precision_max, stop, user_data));
+            SetDestination(new destination(pos, DestType.User, precision <= 0 ? DefaultPrecision : precision, precision_max, stop, user_data));
         }
 
         public void ClearRingDestinations()
@@ -1169,7 +1169,7 @@ namespace Nav
             {
                 m_Destination.user_data = dest.user_data;
 
-                if ((m_Destination.pos.Equals(dest.pos) && m_Destination.type == dest.type) || (!m_Destination.pos.IsZero() && m_Destination.type > dest.type))
+                if ((m_Destination.pos.Equals(dest.pos) && m_Destination.precision == dest.precision && m_Destination.type == dest.type) || (!m_Destination.pos.IsZero() && m_Destination.type > dest.type))
                     return;
 
                 if (dest.precision_max > 0)
@@ -1485,8 +1485,9 @@ namespace Nav
                 var dest = Destination;
                 IsInThreat = IsAvoidingFutureThreats ? threats_at_current_pos.Any() : current_threats.Any();
                 Threat = IsInThreat ? threats_at_current_pos.Select(x => IsAvoidingFutureThreats ? Math.Abs(x.Threat) : x.Threat).Max() : 0;
-                
-                if (IsInThreat && (dest.pos.IsZero() || IsThreatAt(dest.pos, consider_future_threats: IsAvoidingFutureThreats)))
+
+                //if (IsInThreat && (dest.pos.IsZero() || IsThreatAt(dest.pos, consider_future_threats: IsAvoidingFutureThreats)))
+                if (IsInThreat && dest.pos.IsZero()) // only run away when not going anywhere, when there is threat at destination it doesn't mean it is one huge danger area
                 {
                     m_AvoidanceDestination = new destination(dest.pos, DestType.RunAway, DefaultPrecision * 0.3f);
                     if (!was_in_threat)
@@ -1497,10 +1498,7 @@ namespace Nav
                     m_AvoidanceDestination = default(destination);
 
                     if (!IsInThreat && was_in_threat)
-                    {
                         RequestPathUpdate();
-                        //m_Navmesh.Log("no longer in threat");
-                    }
 
                     Vec3 go_to_pos = GoToPosition.pos;
 
