@@ -12,7 +12,7 @@ namespace Nav
         public ExplorationEngine(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90)
         {
             ExploreCellSize = explore_cell_size;
-            
+
             m_Navmesh = navmesh;
             m_Navmesh.AddObserver(this);
 
@@ -40,6 +40,25 @@ namespace Nav
         // change it via ChangeExploreCellSize function
         public int ExploreCellSize { get; private set; }
 
+        public AABB ExploreConstraint
+        {
+            get
+            {
+                return m_ExploreConstraint;
+            }
+            set
+            {
+                if (m_ExploreConstraint.Equals(value))
+                    return;
+
+                m_ExploreConstraint = value;
+                lock (UpdateLocker)
+                {
+                    UpdateExploration(true);
+                }
+            }
+        }
+
         public void ChangeExploreCellSize(int size)
         {
             if (size <= 0)
@@ -65,15 +84,28 @@ namespace Nav
             }
         }
 
-        public void ResetExploration()
+        public void ResetExploration(AABB area = default)
         {
             using (new WriteLock(DataLock))
             using (new WriteLock(InputLock))
             {
-                foreach (var ex_cell in m_ExploreCells)
-                    ex_cell.Explored = false;
-                m_ExploredCellsCount = 0;
-                m_CellsToExploreCount = 0;
+                if (!area.IsZero())
+                {
+                    foreach (var ex_cell in m_ExploreCells)
+                        ex_cell.Explored = false;
+                    m_ExploredCellsCount = 0;
+                    m_CellsToExploreCount = 0;
+                }
+                else
+                {
+                    var exploreCellsInArea = m_ExploreCells.Where(x => x.AABB.Overlaps2D(area)).ToList();
+                    var alreadyExploredCellsCount = exploreCellsInArea.Count(x => x.Explored);
+                    m_ExploredCellsCount -= alreadyExploredCellsCount;
+                    m_CellsToExploreCount += alreadyExploredCellsCount;
+
+                    foreach (var ex_cell in exploreCellsInArea)
+                        ex_cell.Explored = false;
+                }
             }
         }
 
@@ -151,6 +183,9 @@ namespace Nav
                 w.Write(m_ExploredCellsCount);
                 w.Write(m_CellsToExploreCount);
 
+                ExploreConstraint.Serialize(w);
+                //w.Write(IsContraintExplored);
+
                 m_HintPos.Serialize(w);
             }
         }
@@ -196,6 +231,9 @@ namespace Nav
                 m_ExploredCellsCount = r.ReadInt32();
                 m_CellsToExploreCount = r.ReadInt32();
 
+                ExploreConstraint.Deserialize(r);
+                //IsContraintExplored = r.ReadBoolean();
+
                 m_HintPos = new Vec3(r);
             }
         }
@@ -203,6 +241,7 @@ namespace Nav
         public virtual void OnHugeCurrentPosChange()
         {
             RequestReevaluation();
+            m_ForceRefreshExploredPercent = true;
         }
 
         internal virtual ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
@@ -410,14 +449,23 @@ namespace Nav
 
         private class UnexploredSelector : Algorihms.IVisitor<ExploreCell>
         {
+            public UnexploredSelector(AABB contraint)
+            {
+                this.constraint = contraint;
+            }
+
             public void Visit(ExploreCell cell)
             {
+                if (!constraint.IsZero() && !cell.AABB.Overlaps2D(constraint))
+                    return;
+
                 ++all_cells_count;
 
                 if (!cell.Explored)
                     unexplored_cells.Add(cell);
             }
 
+            public AABB constraint;
             public int all_cells_count = 0;
             public HashSet<ExploreCell> unexplored_cells = new HashSet<ExploreCell>();
         }
@@ -426,7 +474,7 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                UnexploredSelector selector = new UnexploredSelector();
+                UnexploredSelector selector = new UnexploredSelector(ExploreConstraint);
                 Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
 
                 m_CellsToExploreCount = selector.all_cells_count;
@@ -463,9 +511,12 @@ namespace Nav
                 if (m_ForceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || (Enabled && m_Navigator.GetDestinationType() < DestType.Explore))
                 {
                     last_update_time = time;
-                    
-                    //using (new Profiler("[Nav] Nav updated [%t]"))
-                    UpdateExploration();
+
+                    lock (UpdateLocker)
+                    {
+                        //using (new Profiler("[Nav] Nav updated [%t]"))
+                        UpdateExploration(false);
+                    }
 
                     m_ForceReevaluation = false;
                 }
@@ -474,10 +525,12 @@ namespace Nav
             }
         }
 
+        private object UpdateLocker = new object();
+
         // Controls updated thread execution
         private volatile bool m_ShouldStopUpdates = false;
 
-        private void UpdateExploration()
+        private void UpdateExploration(bool ignore_explored)
         {
             Vec3 current_pos = m_Navigator.CurrentPos;
 
@@ -490,7 +543,7 @@ namespace Nav
                 return;
             }
 
-            if (IsExplored())
+            if (!ignore_explored && IsExplored())
             {
                 m_Navmesh.Log("[Nav] Exploration finished!");
                 m_Navigator.ClearDestination(DestType.Explore);
@@ -711,7 +764,16 @@ namespace Nav
 
         public Vec3 GetDestinationCellPosition()
         {
-            return m_DestCell != null ? m_DestCell.Position : Vec3.ZERO;
+            var dest_cell = m_DestCell;
+            if (dest_cell != null)
+            {
+                var constraint = m_ExploreConstraint;
+                if (constraint.IsZero())
+                    return dest_cell.Position;
+                var pos_in_contraint = constraint.Align(dest_cell.Position);
+                return new Vec3(pos_in_contraint.X, pos_in_contraint.Y, dest_cell.Position.Z);
+            }
+            return Vec3.ZERO;
         }
 
         private bool m_Enabled = true;
@@ -721,7 +783,7 @@ namespace Nav
         protected int m_ExploredCellsCount = 0;
         protected int m_CellsToExploreCount = 0;
         private bool m_ForceRefreshExploredPercent = true;
-
+        private AABB m_ExploreConstraint = default;
 
         private Thread UpdatesThread = null;        
 

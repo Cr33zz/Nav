@@ -348,6 +348,8 @@ namespace Nav
         public static Vec3 ProjectPointOnSegment(Vec3 start, Vec3 end, Vec3 point, out float scalar_projection, bool check_2d = false)
         {
             var dir = end - start;
+            if (check_2d)
+                dir.Z = 0;
             scalar_projection = ProjectPointOnLine(start, dir, point, out Vec3 result, check_2d);
 
             if (scalar_projection < 0)

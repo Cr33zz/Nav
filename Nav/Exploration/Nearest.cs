@@ -97,14 +97,17 @@ namespace Nav.ExploreEngine
 
             HashSet<ExploreCell> unexplored_cells = GetUnexploredCells(curr_explore_cell);
 
-            ExploreCellSelector selector = CreateExploreCellSelector();
+            if (unexplored_cells.Count > 0)
+            {
+                ExploreCellSelector selector = CreateExploreCellSelector();
 
-            using (new ReadLock(DataLock))
-                Algorihms.VisitBreadth(curr_explore_cell, MovementFlag.None, -1, unexplored_cells, selector);
+                using (new ReadLock(DataLock))
+                    Algorihms.VisitBreadth(curr_explore_cell, MovementFlag.None, -1, unexplored_cells, selector);
 
-            if (selector.dest_cell != null)
-                return selector.dest_cell;
-
+                if (selector.dest_cell != null)
+                    return selector.dest_cell;
+            }
+            
             return null;
         }
 

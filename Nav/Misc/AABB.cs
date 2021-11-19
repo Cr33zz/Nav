@@ -27,10 +27,10 @@ namespace Nav
             Max = new Vec3(aabb.Max);
         }
 
-        public AABB(Vec3 center, float radius)
+        public AABB(Vec3 center, float radius, bool use_2d = false)
         {
-            Min = new Vec3(center.X - radius, center.Y - radius, center.Z - radius);
-            Max = new Vec3(center.X + radius, center.Y + radius, center.Z + radius);
+            Min = new Vec3(center.X - radius, center.Y - radius, use_2d ? 0 : (center.Z - radius));
+            Max = new Vec3(center.X + radius, center.Y + radius, use_2d ? 0 : (center.Z + radius));
         }
 
         public AABB(BinaryReader r) : this()
