@@ -1194,7 +1194,7 @@ namespace Nav
         public void RequestPathUpdate()
         {
             //m_Navmesh.Log("Path update requested!");
-            ForcePathUpdate = true;
+            Interlocked.Exchange(ref ForcePathUpdate, 1);
         }
 
         private void Updates()
@@ -1223,14 +1223,13 @@ namespace Nav
 
             int update_path_interval = m_UpdatePathIntervalOverride > 0 ? m_UpdatePathIntervalOverride : UpdatePathInterval;
 
-            bool needToUpdatePath = ForcePathUpdate || (update_path_interval > 0 && (time - LastPathUpdateTime) > update_path_interval);
+            bool needToUpdatePath = Interlocked.CompareExchange(ref ForcePathUpdate, 0, 1) == 1 || (update_path_interval > 0 && (time - LastPathUpdateTime) > update_path_interval);
 
             //Trace.WriteLine($"navigator on update [need update path - {needToUpdatePath}]");
 
             if (needToUpdatePath)
             {
                 LastPathUpdateTime = time;
-                ForcePathUpdate = false;
                 UpdatePath();
             }
 
@@ -1987,7 +1986,7 @@ namespace Nav
         private float PATH_NODES_MERGE_DISTANCE = -1;
 
         private Thread UpdatesThread = null;
-        private volatile bool ForcePathUpdate = false;
+        private int ForcePathUpdate = 0;
 
         private ReaderWriterLockSlim PathLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);

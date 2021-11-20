@@ -14,8 +14,7 @@ namespace Nav
 
         public float GetDistance(int cell_id_1, int cell_id_2)
         {
-            float dist = -1;
-            Distances.TryGetValue(new CellIdPair(cell_id_1, cell_id_2), out dist);
+            Distances.TryGetValue(new CellIdPair(cell_id_1, cell_id_2), out var dist);
             return dist;
         }
 

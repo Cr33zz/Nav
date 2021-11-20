@@ -184,7 +184,7 @@ namespace Nav
                 }
 
                 m_AllCells.UnionWith(incoming_cells);
-                ForcePatchesUpdate = true;
+                Interlocked.Exchange(ref ForcePatchesUpdate , 1);                
             }
 
             NotifyOnGridCellAdded(g_cell);
@@ -430,14 +430,16 @@ namespace Nav
             }
         }
 
-        public uint UpdatePatchesInterval { get; set; } = 500;
+        public uint UpdatePatchesInterval { get; set; } = 300;
         private Int64 LastUpdatePatchesTime = 0;
-        internal bool ForcePatchesUpdate = false;
+
+        internal int ForcePatchesUpdate = 0;
         
         private void UpdatePatches()
         {
-            if (ForcePatchesUpdate)
+            if (Interlocked.CompareExchange(ref ForcePatchesUpdate, 0, 1) == 1)
             {
+                //Console.WriteLine("patches update start");
                 var cells_patches = new HashSet<CellsPatch>();
 
                 using (new Profiler($"Updating cell patches (incl. lock) took %t", 50))
@@ -474,7 +476,7 @@ namespace Nav
                 using (new WriteLock(PatchesDataLock))
                     m_CellsPatches = cells_patches;
 
-                ForcePatchesUpdate = false;
+                //Console.WriteLine("patches update end");
             }
         }
 
@@ -508,7 +510,7 @@ namespace Nav
                         g_cell.ResetReplacementCells();
 
                     CellsOverlappedByRegions.Clear();
-                    ForcePatchesUpdate = true;
+                    Interlocked.Exchange(ref ForcePatchesUpdate, 1);
                 }
             }
 
@@ -696,16 +698,20 @@ namespace Nav
                             m_CellsCache.Clear();
 
                             // request patches update at the earliest convenience when regions changed
-                            ForcePatchesUpdate = true;
+                            Interlocked.Exchange(ref ForcePatchesUpdate, 1);
+                            //Console.WriteLine("regions changed!");
                         }
                     }
                 }
 
                 // if regions disabling navigation has changed we have to completely rebuild patches as some areas can be disconnected/reconnected
+                bool blockersChanged = false;
                 if (!blockers.SetEquals(LastBlockers))
                 {
-                    ForcePatchesUpdate = true;
                     LastBlockers = blockers;
+                    Interlocked.Exchange(ref ForcePatchesUpdate, 1);
+                    //Console.WriteLine("blockers changed!");
+                    blockersChanged = true;
                 }
 
                 //only when movement costs are affected
@@ -726,6 +732,9 @@ namespace Nav
 
                 //if (orphanedReplacementCellsAfter.Count > orphanedReplacementCellsBefore.Count)
                 //    Trace.WriteLine($"{orphanedReplacementCellsAfter.Count - orphanedReplacementCellsBefore.Count} orphaned replacement cells detected!");
+
+                //if (blockersChanged)
+                //    Console.WriteLine("regions update done");
             }
         }
 

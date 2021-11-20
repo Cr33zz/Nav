@@ -192,10 +192,12 @@ namespace Nav
                     {
                         var explore_cells = m_Explorer.dbg_GetExploreCells();
 
-                        var contraint = m_Explorer.ExploreConstraint;
+                        var contraints = m_Explorer.ExploreConstraints;
 
-                        if (!contraint.IsZero())
-                            RenderHelper.DrawRectangle(e.Graphics, Pens.DarkMagenta, m_RenderCenter, contraint.Min, contraint.Max);
+                        var constraintPen = new Pen(Color.Magenta, 8);
+
+                        foreach (var contraint in contraints)
+                            RenderHelper.DrawRectangle(e.Graphics, constraintPen, m_RenderCenter, contraint.Min, contraint.Max);
 
                         foreach (Nav.ExploreCell explore_cell in explore_cells)
                         {

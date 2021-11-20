@@ -40,21 +40,29 @@ namespace Nav
         // change it via ChangeExploreCellSize function
         public int ExploreCellSize { get; private set; }
 
-        public AABB ExploreConstraint
+        public List<AABB> ExploreConstraints
         {
             get
             {
-                return m_ExploreConstraint;
+                using (new ReadLock(InputLock))
+                    return m_ExploreConstraints?.ToList();
             }
             set
             {
-                if (m_ExploreConstraint.Equals(value))
+                if (m_ExploreConstraints == null && value == null)
                     return;
 
-                m_ExploreConstraint = value;
-                lock (UpdateLocker)
+                if ((m_ExploreConstraints != null && value == null) ||
+                    (m_ExploreConstraints == null && value != null) ||
+                    m_ExploreConstraints.Intersect(value).Count() != m_ExploreConstraints.Count)
                 {
-                    UpdateExploration(true);
+                    using (new WriteLock(InputLock))
+                        m_ExploreConstraints = value != null ? (value.Count > 0 ? value : null) : null;
+
+                    lock (UpdateLocker)
+                    {
+                        UpdateExploration(false, true);
+                    }
                 }
             }
         }
@@ -84,12 +92,12 @@ namespace Nav
             }
         }
 
-        public void ResetExploration(AABB area = default)
+        public void ResetExploration(List<AABB> areas = null)
         {
             using (new WriteLock(DataLock))
             using (new WriteLock(InputLock))
             {
-                if (!area.IsZero())
+                if ((areas?.Count ?? 0) == 0)
                 {
                     foreach (var ex_cell in m_ExploreCells)
                         ex_cell.Explored = false;
@@ -98,12 +106,12 @@ namespace Nav
                 }
                 else
                 {
-                    var exploreCellsInArea = m_ExploreCells.Where(x => x.AABB.Overlaps2D(area)).ToList();
-                    var alreadyExploredCellsCount = exploreCellsInArea.Count(x => x.Explored);
+                    var exploreCellsInAreas = m_ExploreCells.Where(x => areas.Any(a => x.AABB.Overlaps2D(a))).ToList();
+                    var alreadyExploredCellsCount = exploreCellsInAreas.Count(x => x.Explored);
                     m_ExploredCellsCount -= alreadyExploredCellsCount;
                     m_CellsToExploreCount += alreadyExploredCellsCount;
 
-                    foreach (var ex_cell in exploreCellsInArea)
+                    foreach (var ex_cell in exploreCellsInAreas)
                         ex_cell.Explored = false;
                 }
             }
@@ -125,10 +133,8 @@ namespace Nav
         public virtual float GetExploredPercent()
         {
             // need to run expensive version when exploration is disabled and number of explore cells has changed (because numbers used are not refreshed then)
-            if (!Enabled && m_ForceRefreshExploredPercent)
+            if (!Enabled && Interlocked.CompareExchange(ref m_ForceRefreshExploredPercent, 0, 1) == 1)
             {
-                m_ForceRefreshExploredPercent = false;
-
                 ExploreCell current_explore_cell;
                 using (new ReadLock(DataLock))
                     current_explore_cell = GetCurrentExploreCell();
@@ -183,8 +189,12 @@ namespace Nav
                 w.Write(m_ExploredCellsCount);
                 w.Write(m_CellsToExploreCount);
 
-                ExploreConstraint.Serialize(w);
-                //w.Write(IsContraintExplored);
+                w.Write(m_ExploreConstraints?.Count ?? 0);
+                if (m_ExploreConstraints != null)
+                {
+                    foreach (var constraint in m_ExploreConstraints)
+                        constraint.Serialize(w);
+                }
 
                 m_HintPos.Serialize(w);
             }
@@ -231,8 +241,13 @@ namespace Nav
                 m_ExploredCellsCount = r.ReadInt32();
                 m_CellsToExploreCount = r.ReadInt32();
 
-                ExploreConstraint.Deserialize(r);
-                //IsContraintExplored = r.ReadBoolean();
+                var explore_constraints_count = r.ReadInt32();
+                m_ExploreConstraints = explore_constraints_count > 0 ? new List<AABB>() : null;
+                if (m_ExploreConstraints != null)
+                {
+                    for (int i = 0; i < explore_constraints_count; ++i)
+                        m_ExploreConstraints.Add(new AABB(r));
+                }
 
                 m_HintPos = new Vec3(r);
             }
@@ -241,7 +256,7 @@ namespace Nav
         public virtual void OnHugeCurrentPosChange()
         {
             RequestReevaluation();
-            m_ForceRefreshExploredPercent = true;
+            Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
         }
 
         internal virtual ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
@@ -293,7 +308,7 @@ namespace Nav
 
         internal void RequestReevaluation()
         {
-            m_ForceReevaluation = true;
+            Interlocked.Exchange(ref m_ForceReevaluation, 1);
         }
 
         public void OnDestinationReached(destination dest)
@@ -449,14 +464,14 @@ namespace Nav
 
         private class UnexploredSelector : Algorihms.IVisitor<ExploreCell>
         {
-            public UnexploredSelector(AABB contraint)
+            public UnexploredSelector(List<AABB> contraints)
             {
-                this.constraint = contraint;
+                this.constraints = contraints;
             }
 
             public void Visit(ExploreCell cell)
             {
-                if (!constraint.IsZero() && !cell.AABB.Overlaps2D(constraint))
+                if (!(constraints?.Any(x => cell.AABB.Overlaps2D(x)) ?? true))
                     return;
 
                 ++all_cells_count;
@@ -465,7 +480,7 @@ namespace Nav
                     unexplored_cells.Add(cell);
             }
 
-            public AABB constraint;
+            public List<AABB> constraints;
             public int all_cells_count = 0;
             public HashSet<ExploreCell> unexplored_cells = new HashSet<ExploreCell>();
         }
@@ -474,7 +489,7 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                UnexploredSelector selector = new UnexploredSelector(ExploreConstraint);
+                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints);
                 Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
 
                 m_CellsToExploreCount = selector.all_cells_count;
@@ -508,17 +523,16 @@ namespace Nav
             {
                 long time = timer.ElapsedMilliseconds;
 
-                if (m_ForceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || (Enabled && m_Navigator.GetDestinationType() < DestType.Explore))
+                var forceReevaluation = Interlocked.CompareExchange(ref m_ForceReevaluation, 0, 1) == 1;
+                if (forceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || (Enabled && m_Navigator.GetDestinationType() < DestType.Explore))
                 {
                     last_update_time = time;
 
                     lock (UpdateLocker)
                     {
                         //using (new Profiler("[Nav] Nav updated [%t]"))
-                        UpdateExploration(false);
+                        UpdateExploration(forceReevaluation, false);
                     }
-
-                    m_ForceReevaluation = false;
                 }
                 else
                     Thread.Sleep(50);
@@ -530,7 +544,7 @@ namespace Nav
         // Controls updated thread execution
         private volatile bool m_ShouldStopUpdates = false;
 
-        private void UpdateExploration(bool ignore_explored)
+        private void UpdateExploration(bool forceReevaluation, bool ignore_explored)
         {
             Vec3 current_pos = m_Navigator.CurrentPos;
 
@@ -554,7 +568,7 @@ namespace Nav
             {
                 bool mark_dest_cell_as_explored = false;
                 // perform connection check only when reevaluation is forced (usually due to navigation data change)
-                bool is_dest_cell_connected = (!m_ForceReevaluation && !m_ValidateDestCell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, 0, out var unused1, out var unused2);
+                bool is_dest_cell_connected = (!forceReevaluation && !m_ValidateDestCell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, 0, out var unused1, out var unused2);
 
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)
@@ -562,7 +576,7 @@ namespace Nav
                     if (!m_DestCell.Delayed)
                     {
                         m_DestCell.Delayed = true;
-                        m_ForceReevaluation = true; // this is a change to find another un-delayed explore cell
+                        Interlocked.Exchange(ref m_ForceReevaluation, 1); // this is a change to find another un-delayed explore cell
                     }
                     else
                     {
@@ -585,7 +599,7 @@ namespace Nav
 
             using (new ReadLock(DataLock, true))
             {
-                if ((Enabled && m_Navigator.GetDestinationType() < DestType.Explore) || (m_DestCell?.Explored ?? false) || m_ForceReevaluation)
+                if ((Enabled && m_Navigator.GetDestinationType() < DestType.Explore) || (m_DestCell?.Explored ?? false) || forceReevaluation)
                 {
                     SelectNewDestinationCell(null);
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
@@ -620,7 +634,7 @@ namespace Nav
                 }
 
                 m_ExploreCells.Add(explore_cell);
-                m_ForceRefreshExploredPercent = true;
+                Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
             }
         }
 
@@ -767,10 +781,11 @@ namespace Nav
             var dest_cell = m_DestCell;
             if (dest_cell != null)
             {
-                var constraint = m_ExploreConstraint;
-                if (constraint.IsZero())
+                var constraints = ExploreConstraints;
+                if ((constraints?.Count ?? 0) == 0)
                     return dest_cell.Position;
-                var pos_in_contraint = constraint.Align(dest_cell.Position);
+
+                var pos_in_contraint = constraints.Select(x => x.Align(dest_cell.Position)).OrderBy(x => x.Distance2DSqr(dest_cell.Position)).First();
                 return new Vec3(pos_in_contraint.X, pos_in_contraint.Y, dest_cell.Position.Z);
             }
             return Vec3.ZERO;
@@ -782,12 +797,12 @@ namespace Nav
         protected HashSet<ExploreCell> m_ExploreCells = new HashSet<ExploreCell>(); //@ DataLock
         protected int m_ExploredCellsCount = 0;
         protected int m_CellsToExploreCount = 0;
-        private bool m_ForceRefreshExploredPercent = true;
-        private AABB m_ExploreConstraint = default;
+        private int m_ForceRefreshExploredPercent = 1;
+        private List<AABB> m_ExploreConstraints = new List<AABB>();
 
         private Thread UpdatesThread = null;        
 
-        private volatile bool m_ForceReevaluation = false;
+        private volatile int m_ForceReevaluation = 0;
         private bool m_ValidateDestCell = false;
         protected int m_UpdateExplorationInterval = 300;
 
