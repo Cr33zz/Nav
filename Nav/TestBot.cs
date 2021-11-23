@@ -14,6 +14,7 @@ namespace Nav
             //m_Navigator = new NavigationEngine(navmesh);
             m_Navigator = navigator;
             m_Navigator.EnableThreatAvoidance = true;
+            m_Navigator.UpdatePathInterval = -1;
             m_Navigator.AddObserver(this);
             m_Navigator.CurrentPos = pos;
             //m_Navigator.EnableThreatAvoidance = true;
@@ -59,27 +60,31 @@ namespace Nav
 
             m_LastGotoPos = m_Navigator.GoToPosition.pos;
 
-            if (m_LastGotoPos.IsZero())
-                return;
+            var newPos = m_Navigator.CurrentPos;
 
-            Vec3 wanted_dir = Vec3.ZERO;
-            float dist = 0;
-
-            if (!Paused && !SimulateStuck && !m_LastGotoPos.Equals(m_Navigator.CurrentPos))
+            if (!m_LastGotoPos.IsZero())
             {
+                Vec3 wanted_dir = Vec3.ZERO;
+                float dist = 0;
+
                 wanted_dir = m_LastGotoPos - m_Navigator.CurrentPos;
                 dist = wanted_dir.Length();
                 wanted_dir.Normalize();
+
+                //turn
+                if (m_AngularSpeed > 0)
+                    m_Direction = Vec3.RotateTowards(m_Direction, wanted_dir, m_AngularSpeed * dt);
+                else
+                    m_Direction = wanted_dir;
+
+                //move
+                if (m_Navigator.ThreatAhead.Item2 == 0 && !Paused && !SimulateStuck)
+                    newPos += m_Direction * Math.Min(m_Speed * dt, dist);
             }
 
+            m_Navigator.CurrentPos = newPos;
+
             m_Navigator.IsStandingOnPurpose = m_Navigator.ThreatAhead.Item2 > 0;
-
-            //turn
-            m_Direction = Vec3.RotateTowards(m_Direction, wanted_dir, m_AngularSpeed * dt);
-
-            //move
-            if (m_Navigator.ThreatAhead.Item2 == 0)
-                m_Navigator.CurrentPos = m_Navigator.CurrentPos + m_Direction * Math.Min(m_Speed * dt, dist);
         }
 
         public void Render(Graphics g, PointF trans)

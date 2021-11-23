@@ -232,6 +232,9 @@ namespace Nav
                 foreach (ExploreCell explore_cell in m_ExploreCells)
                     explore_cell.Deserialize(m_ExploreCells, all_cells, id_to_cell, r);
 
+                foreach (ExploreCell explore_cell in m_ExploreCells)
+                    OnExploreCellAdded(explore_cell);
+
                 var dest_cell_global_id = r.ReadInt32();
                 if (dest_cell_global_id >= 0)
                     m_DestCell = m_ExploreCells.FirstOrDefault(x => x.GlobalId == dest_cell_global_id);
@@ -259,7 +262,7 @@ namespace Nav
             Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
         }
 
-        internal virtual ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
+        protected virtual ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
         {
             return null;
         }
@@ -322,7 +325,7 @@ namespace Nav
 
             if (dest_cell != null)
             {
-                Trace.WriteLine($"Explore cell GID {m_DestCell.GlobalId} considered explored because it was reached.");
+                Trace.WriteLine($"Explore cell GID {dest_cell.GlobalId} considered explored because it was reached.");
                 OnCellExplored(dest_cell);
             }
 
@@ -340,10 +343,11 @@ namespace Nav
 
                 //using (new Profiler("set explore cell pos as dest [%t]"))
                 if (Enabled)
-                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false));
+                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false, as_close_as_possible: false));
 
                 // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
-                m_ValidateDestCell = m_DestCell != prev_dest_cell;
+                if (m_DestCell != prev_dest_cell)
+                    Interlocked.Exchange(ref m_ValidateDestCell, 1);
             }
         }
 
@@ -364,6 +368,7 @@ namespace Nav
                     foreach (ExploreCell explore_cell in cells_to_validate)
                     {
                         explore_cell.Detach();
+                        OnExploreCellRemoved(explore_cell);
                         m_ExploreCells.Remove(explore_cell);
                     }
                 }
@@ -401,6 +406,11 @@ namespace Nav
             RequestReevaluation();
         }
 
+        public virtual void OnNavBlockersChanged()
+        {
+            RequestReevaluation();
+        }
+
         public virtual void OnNavDataCleared()
         {
             Clear();
@@ -413,6 +423,14 @@ namespace Nav
 
             cell.Explored = true; // this is safe as explore cells cannot be added/removed now
             m_Navmesh.Log("[Nav] Explored cell " + cell.GlobalId + " [progress: " + GetExploredPercent() + "%]!");
+        }
+
+        protected virtual void OnExploreCellAdded(ExploreCell cell)
+        {
+        }
+
+        protected virtual void OnExploreCellRemoved(ExploreCell cell)
+        {
         }
 
         public virtual bool IsExplored()
@@ -464,14 +482,19 @@ namespace Nav
 
         private class UnexploredSelector : Algorihms.IVisitor<ExploreCell>
         {
-            public UnexploredSelector(List<AABB> contraints)
+            public UnexploredSelector(List<AABB> contraints, Vec3 agent_pos, Navmesh navmesh)
             {
                 this.constraints = contraints;
+                this.agent_pos = agent_pos;
+                this.navmesh = navmesh;
             }
 
             public void Visit(ExploreCell cell)
             {
                 if (!(constraints?.Any(x => cell.AABB.Overlaps2D(x)) ?? true))
+                    return;
+
+                if (!navmesh.AreConnected(agent_pos, cell.Position, MovementFlag.Walk, 0, 0))
                     return;
 
                 ++all_cells_count;
@@ -480,16 +503,20 @@ namespace Nav
                     unexplored_cells.Add(cell);
             }
 
-            public List<AABB> constraints;
+            private List<AABB> constraints;
             public int all_cells_count = 0;
             public HashSet<ExploreCell> unexplored_cells = new HashSet<ExploreCell>();
+
+            private readonly Navmesh navmesh;
+            private readonly Vec3 agent_pos;
         }
 
         protected HashSet<ExploreCell> GetUnexploredCells(ExploreCell origin_cell)
         {
             using (new ReadLock(DataLock))
             {
-                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints);
+                var agent_pos = m_Navigator.CurrentPos;
+                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints, agent_pos, m_Navmesh);
                 Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
 
                 m_CellsToExploreCount = selector.all_cells_count;
@@ -566,9 +593,10 @@ namespace Nav
 
             if (m_DestCell != null)
             {
+                bool validate_dest_cell = Interlocked.CompareExchange(ref m_ValidateDestCell, 0, 1) == 1;
                 bool mark_dest_cell_as_explored = false;
                 // perform connection check only when reevaluation is forced (usually due to navigation data change)
-                bool is_dest_cell_connected = (!forceReevaluation && !m_ValidateDestCell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, ExploreDestPrecision, 0, out var unused1, out var unused2);
+                bool is_dest_cell_connected = (!forceReevaluation && !validate_dest_cell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, 0, 0, out var unused1, out var unused2);
 
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)
@@ -584,8 +612,6 @@ namespace Nav
                         mark_dest_cell_as_explored = true;
                     }
                 }
-
-                m_ValidateDestCell = false;
 
                 // mark destination cell as explored when external function says so or destination cell is no longer connected (mostly due to nav blocker)
                 mark_dest_cell_as_explored |= AlternativeExploredCondition?.Invoke(m_DestCell, current_pos) ?? false;
@@ -696,6 +722,7 @@ namespace Nav
 
                     ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, m_LastExploreCellId++);
                     Add(ex_cell);
+                    OnExploreCellAdded(ex_cell);
 
                     ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall);
 
@@ -743,8 +770,10 @@ namespace Nav
             bool start_on_nav_mesh = GetCellAt(from, out ExploreCell start);
             bool end_on_nav_mesh = GetCellAt(to, out ExploreCell end);
 
+            using (new Profiler("Rough path finding (incl. lock) took %t", 50))
             using (new ReadLock(DataLock))
-                Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<ExploreCell>(to, end), MovementFlag.None, ref tmp_path, use_cell_centers: true);
+            using (new Profiler("Rough path finding took %t", 50))
+                Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<ExploreCell>(to, end), MovementFlag.None, ref tmp_path, out var timedOut, use_cell_centers: true);
 
             path = tmp_path.Select(x => x.pos).ToList();
             return true;
@@ -802,8 +831,8 @@ namespace Nav
 
         private Thread UpdatesThread = null;        
 
-        private volatile int m_ForceReevaluation = 0;
-        private bool m_ValidateDestCell = false;
+        private int m_ForceReevaluation = 0;
+        private int m_ValidateDestCell = 0;
         protected int m_UpdateExplorationInterval = 300;
 
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);

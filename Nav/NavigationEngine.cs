@@ -23,7 +23,7 @@ namespace Nav
 
     public struct destination : IEquatable<destination>
     {
-        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, float precision_max = 0, bool stop = false, Object user_data = null)
+        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, float precision_max = 0, bool stop = false, bool as_close_as_possible = true, Object user_data = null)
         {
             this.pos = pos;
             this.type = type;
@@ -31,6 +31,7 @@ namespace Nav
             this.precision_max = precision_max;
             this.stop = stop;
             this.user_data = user_data;
+            this.as_close_as_possible = as_close_as_possible;
 
             is_ring = false;
             shift = false;
@@ -43,12 +44,12 @@ namespace Nav
 
         public bool Equals(destination d)
         {
-            return pos.Equals(d.pos) && type == d.type && precision == d.precision && precision_max == d.precision_max && user_data == d.user_data && is_ring == d.is_ring;
+            return pos.Equals(d.pos) && type == d.type && precision == d.precision && precision_max == d.precision_max && user_data == d.user_data && is_ring == d.is_ring && as_close_as_possible == d.as_close_as_possible;
         }
 
         public override int GetHashCode()
         {
-            return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ is_ring.GetHashCode() ^ precision_max.GetHashCode();
+            return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ is_ring.GetHashCode() ^ precision_max.GetHashCode() ^ as_close_as_possible.GetHashCode();
         }
 
         public void Serialize(BinaryWriter w)
@@ -58,6 +59,7 @@ namespace Nav
             w.Write(precision);
             w.Write(precision_max);
             w.Write(stop);
+            w.Write(as_close_as_possible);
             w.Write(is_ring);
             w.Write(shift);
         }
@@ -69,6 +71,7 @@ namespace Nav
             precision = r.ReadSingle();
             precision_max = r.ReadSingle();
             stop = r.ReadBoolean();
+            as_close_as_possible = r.ReadBoolean();
             is_ring = r.ReadBoolean();
             shift = r.ReadBoolean();
         }
@@ -78,6 +81,7 @@ namespace Nav
         public float precision;
         public float precision_max;
         public bool stop;
+        public bool as_close_as_possible;
         public Object user_data;
         internal bool is_ring;
         internal bool shift;
@@ -85,7 +89,7 @@ namespace Nav
 
     public struct goto_data
     {
-        public goto_data(Vec3 pos, float precision, bool stop = false, destination path_destination = default(destination))
+        public goto_data(Vec3 pos, float precision, bool stop = true, destination path_destination = default(destination))
         {
             this.pos = pos;
             this.precision = precision;
@@ -118,13 +122,14 @@ namespace Nav
 
     public abstract class IPathFollowStrategy
     {
-        public abstract goto_data GetGoTo(Vec3 current_pos, List<Vec3> path, destination path_destination);
         public abstract void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination);
         public abstract (Vec3, float) UpdateThreatAhead(Vec3 current_pos, IEnumerable<Region> threats);
         public abstract bool IncludePathStart();
         public virtual void OnPathReset()
         {
             m_Path?.Clear();
+            m_PathDestination = default(Nav.destination);
+            m_GoToData = new goto_data(Vec3.ZERO, 0);
         }
         
         public virtual void GetPath(out List<Vec3> path, out destination path_dest)
@@ -138,7 +143,7 @@ namespace Nav
             m_Owner = owner;
         }
 
-        protected goto_data m_GoToData;
+        public goto_data m_GoToData { get; protected set; }
         protected List<Vec3> m_Path;
         protected destination m_PathDestination;
         protected NavigationEngine m_Owner;
@@ -146,24 +151,11 @@ namespace Nav
 
     public class SimplePathFollow : IPathFollowStrategy
     {
-        public override goto_data GetGoTo(Vec3 current_pos, List<Vec3> path, destination path_destination)
+        public override void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination)
         {
             m_Path = path;
             m_PathDestination = path_destination;
 
-            if (path.Count > 0)
-            {
-                var pos = path[0];
-                if (m_Owner.AlignGoToPositionToCurrentPosZWhenZero && pos.Z == 0)
-                    pos.Z = current_pos.Z;
-                return m_GoToData = new goto_data(pos, m_Owner.GetPrecision(), stop: path.Count == 1 && path_destination.stop, path_destination: path_destination);
-            }
-
-            return m_GoToData = new goto_data(Vec3.ZERO, 0);
-        }
-
-        public override void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination)
-        {
             while (path.Count > 0)
             {
                 float precision = m_Owner.GetPrecision();
@@ -175,6 +167,16 @@ namespace Nav
 
                 m_Owner.ResetAntiStuckPrecition(current_pos);
             }
+
+            if (path.Count > 0)
+            {
+                var pos = path[0];
+                if (m_Owner.AlignGoToPositionToCurrentPosZWhenZero && pos.Z == 0)
+                    pos.Z = current_pos.Z;
+                m_GoToData = new goto_data(pos, m_Owner.GetPrecision(), stop: path.Count == 1 && path_destination.stop, path_destination: path_destination);
+            }
+            else 
+                m_GoToData = new goto_data(Vec3.ZERO, 0);
         }
 
         public override (Vec3, float) UpdateThreatAhead(Vec3 current_pos, IEnumerable<Region> threats)
@@ -314,6 +316,7 @@ namespace Nav
 
         // path will be automatically recalculated with this interval (milliseconds)
         public int UpdatePathInterval { get; set; } = -1;
+        public Int64 PathFindingTimeLimit { get; set; } = -1;
 
         public bool AllowRoughPath { get; set; } = false;
         public float PathSmoothingDistance { get; set; } = float.MaxValue;
@@ -440,6 +443,8 @@ namespace Nav
         // is current path for currently requested destination type (may be false when destination change has been requested but path is not updated yet)
         public bool IsPathUpToDate => m_Path.path_destination.pos == m_Destination.pos;
 
+        public bool UseCellsCenters { get; set; } = false;
+
         public List<int> DestinationGridsId
         {
             get
@@ -460,21 +465,22 @@ namespace Nav
             }
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, bool as_close_as_possible, bool allow_rought_path, float random_coeff = 0, float nodes_shift_dist = 0, float smoothen_distance = float.MaxValue, bool ignore_movement_cost = false)
+        public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, out bool timedOut, bool as_close_as_possible, bool allow_rought_path, float random_coeff = 0, float nodes_shift_dist = 0, float smoothen_distance = float.MaxValue, bool ignore_movement_cost = false)
         {
-            return FindPath(from, to, MovementFlags, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, random_coeff, m_PathBounce, nodes_shift_dist, false, smoothen_distance, allow_rought_path, ignore_movement_cost);
+            return FindPath(from, to, MovementFlags, ref path, out timedOut, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, random_coeff, m_PathBounce, nodes_shift_dist, false, smoothen_distance, allow_rought_path, ignore_movement_cost);
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, out Vec3 rough_path_destination, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false, bool ignore_movement_cost = false)
+        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, ref List<Vec3> path, out bool timedOut, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, out Vec3 rough_path_destination, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false, bool ignore_movement_cost = false)
         {
             using (new Profiler("Path finding (incl. lock) took %t", 100))
             using (new ReadLock(m_Navmesh.DataLock))
             //using (new ReadLock(m_Navmesh.DataLock, context: "FindPath"))
-            using (new Profiler("Path finding took %t", 100))
+            using (new Profiler($"Path finding took %t [from: {from}, to: {to}]", 100))
             {
                 path_recalc_trigger_position = Vec3.ZERO;
                 path_recalc_trigger_precision = 0;
                 rough_path_destination = Vec3.ZERO;
+                timedOut = false;
 
                 if (from.IsZero() || to.IsZero())
                     return false;
@@ -491,17 +497,33 @@ namespace Nav
                     to = end.AABB.Align(to);
                 }
 
+                int areConnected = -1;
+
+                if (!as_close_as_possible)
+                {
+                    areConnected = m_Navmesh.AreConnected(from, to, MovementFlag.Walk, 0, 0) ? 1 : 0;
+                    if (areConnected == 0)
+                        return false;
+                }
+
                 List<Vec3> rought_path = new List<Vec3>();
 
-                if (m_RoughtPathEstimator != null && allow_rough_path && !m_Navmesh.AreNavBlockersPresent())
-                    m_RoughtPathEstimator.FindRoughPath(from, to, ref rought_path);
+                if (m_RoughtPathEstimator != null && allow_rough_path)
+                {
+                    areConnected = areConnected == -1 ? (m_Navmesh.AreConnected(from, to, MovementFlag.Walk, 0, 0) ? 1 : 0) : areConnected;
+                    if (areConnected == 1)
+                        m_RoughtPathEstimator.FindRoughPath(from, to, ref rought_path);
+                }
 
                 var current_path = m_Path;
+
+                bool use_time_limit = current_path.path_destination.pos == to;
 
                 // check if current rough path destination is still valid
                 // sometimes path is not aligned with rough path and it may lead to some going back and forth stuck
                 // by continue to use already selected rough path destination we can avoid that problem
-                if (current_path.path_destination.pos == to &&
+                if (areConnected == 1 &&
+                    current_path.path_destination.pos == to &&
                     !current_path.rough_path_destination.IsZero() &&
                     CurrentPos.Distance2D(current_path.rough_path_destination) > m_RoughtPathEstimator.GetRoughPathRecalcPrecision())
                 {
@@ -532,22 +554,25 @@ namespace Nav
                     rought_path.Clear();
 
                 List<path_pos> tmp_path = new List<path_pos>();
-
+                
                 if (bounce)
                 {
                     Vec3 bounce_dir = start.AABB.GetBounceDir2D(from);
                     Vec3 new_from = from + bounce_dir * BounceDist;
                     m_Navmesh.GetCellAt(new_from, out start, flags, false, true, as_close_as_possible);
 
-                    if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, allow_disconnected: true, ignore_movement_cost: ignore_movement_cost))
+                    if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timedOut, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
                         return false;
 
                     tmp_path.Insert(0, new path_pos(start.AABB.Align(from), start));
                 }
                 else
                 {
-                    if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, random_coeff, allow_disconnected: true, ignore_movement_cost: ignore_movement_cost))
-                        return false;
+                    using (new Profiler($"Path finding algorithm took %t [rough: {rought_path.Count}, connected: {areConnected}]", 100))
+                    {
+                        if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timedOut, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
+                            return false;
+                    }
                 }
 
                 if (smoothen_distance > 0 && random_coeff == 0)
@@ -586,7 +611,7 @@ namespace Nav
 
                 List<path_pos> tmp_path = new List<path_pos>();
 
-                if (!Algorihms.FindPath(start, from, new Algorihms.AvoidancePathFindStrategy<Cell>(threat_threshold, hint_pos), flags, ref tmp_path))
+                if (!Algorihms.FindPath(start, from, new Algorihms.AvoidancePathFindStrategy<Cell>(threat_threshold, hint_pos), flags, ref tmp_path, out var timedOut))
                     return false;
 
                 //m_Navmesh.Log($"original path has {tmp_path.Count} nodes");
@@ -843,13 +868,13 @@ namespace Nav
 
             set
             {
-                SetDestination(new destination(value.pos, value.type, value.precision <= 0 ? DefaultPrecision : value.precision, value.precision_max, value.stop, value.user_data));
+                SetDestination(new destination(value.pos, value.type, value.precision <= 0 ? DefaultPrecision : value.precision, value.precision_max, value.stop, value.as_close_as_possible, value.user_data));
             }
         }
 
-        public void SetDestination(Vec3 pos, float precision, float precision_max = -1, bool stop = false, Object user_data = null)
+        public void SetDestination(Vec3 pos, float precision, float precision_max = -1, bool stop = false, bool as_close_as_possible = true, Object user_data = null)
         {
-            SetDestination(new destination(pos, DestType.User, precision <= 0 ? DefaultPrecision : precision, precision_max, stop, user_data));
+            SetDestination(new destination(pos, DestType.User, precision <= 0 ? DefaultPrecision : precision, precision_max, stop, as_close_as_possible, user_data));
         }
 
         public void ClearRingDestinations()
@@ -875,9 +900,9 @@ namespace Nav
             ClearDestination(DestType.Grid);
         }
 
-        public void SetCustomDestination(Vec3 pos, float precision = -1, float precision_max = -1, bool stop = false, Object user_data = null)
+        public void SetCustomDestination(Vec3 pos, float precision = -1, float precision_max = -1, bool stop = false, bool as_close_as_possible = true, Object user_data = null)
         {
-            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, precision_max, stop, user_data));
+            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, precision_max, stop, as_close_as_possible, user_data));
         }
 
         public void ClearCustomDestination()
@@ -948,20 +973,8 @@ namespace Nav
             return m_Destination.type;
         }
 
-        public goto_data GoToPosition
-        {
-            get
-            {
-                using (new ReadLock(PathLock))
-                {
-                    if (m_Path.path.Count > 0)
-                        return m_PathFollowStrategy.GetGoTo(CurrentPos, m_Path.path, m_Path.path_destination);
-                    
-                    return new goto_data(Vec3.ZERO, 0);
-                }
-            }
-        }
-
+        public goto_data GoToPosition => m_PathFollowStrategy.m_GoToData;
+        
         public Vec3 CurrentPos
         {
             get
@@ -1016,11 +1029,8 @@ namespace Nav
                 if (was_empty)
                     ReorganizeWaypoints();
 
-                if (!path_empty)
-                {
-                    //using (new Profiler("curr pos [path progress] [%t]", 10))
-                        UpdatePathProgression(value);
-                }
+                //using (new Profiler("curr pos [path progress] [%t]", 10))
+                UpdatePathProgression(value);
             }
         }
 
@@ -1276,13 +1286,17 @@ namespace Nav
             var new_path_recalc_trigger_position = Vec3.ZERO;
             float new_path_recalc_trigger_precision = 0;
             var rough_path_destination = Vec3.ZERO;
+            var timedOut = false;
 
-            //Trace.WriteLine($"update path - starting");
+            //Trace.WriteLine($"pathfinding to {dest.pos}");
 
             if (dest.type == DestType.RunAway)
                 FindAvoidancePath(current_pos, ThreatThreshold, MovementFlags, ref new_path, m_AvoidanceDestination.pos, include_from: m_PathFollowStrategy.IncludePathStart(), shift_nodes_distance: PathNodesShiftDist);
             else
-                FindPath(current_pos, dest.pos, MovementFlags, ref new_path, out new_path_recalc_trigger_position, out new_path_recalc_trigger_precision, out rough_path_destination, PATH_NODES_MERGE_DISTANCE, as_close_as_possible: true, include_from: m_PathFollowStrategy.IncludePathStart(), random_coeff: m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, bounce: m_PathBounce, shift_nodes_distance: PathNodesShiftDist, shift_dest: dest.shift, smoothen_distance: PathSmoothingDistance, allow_rough_path: AllowRoughPath);
+                FindPath(current_pos, dest.pos, MovementFlags, ref new_path, out timedOut, out new_path_recalc_trigger_position, out new_path_recalc_trigger_precision, out rough_path_destination, PATH_NODES_MERGE_DISTANCE, as_close_as_possible: dest.as_close_as_possible, include_from: m_PathFollowStrategy.IncludePathStart(), random_coeff: m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff, bounce: m_PathBounce, shift_nodes_distance: PathNodesShiftDist, shift_dest: dest.shift, smoothen_distance: PathSmoothingDistance, allow_rough_path: AllowRoughPath);
+
+            if (timedOut)
+                return;
 
             if (!m_PathFollowStrategy.IncludePathStart())
             {
@@ -1340,6 +1354,7 @@ namespace Nav
                 //m_Navmesh.Log($"final path has {new_path.Count} nodes");
                 m_Path = new path_data() { path = new_path, path_destination = dest, path_recalc_trigger_pos = new_path_recalc_trigger_position, path_recalc_trigger_precision = new_path_recalc_trigger_precision, rough_path_destination = rough_path_destination };
 
+                //Trace.WriteLine($"path [{new_path.Count}]");
                 //Trace.WriteLine($"path updated");
             }
 
@@ -1453,10 +1468,10 @@ namespace Nav
                 if (best_dest.IsZero())
                     best_dest = furthest_dest;
 
-                SetDestination(new destination(best_dest, ring_dest.type, DefaultPrecision * 0.8f, 0, true, ring_dest.user_data) { is_ring = true/*, shift = true*/ });
+                SetDestination(new destination(best_dest, ring_dest.type, DefaultPrecision * 0.8f, 0, true, true, ring_dest.user_data) { is_ring = true/*, shift = true*/ });
             }
             else
-                SetDestination(new destination(current_pos, ring_dest.type, DefaultPrecision * 0.8f, 0, true, ring_dest.user_data) { is_ring = true });
+                SetDestination(new destination(current_pos, ring_dest.type, DefaultPrecision * 0.8f, 0, true, true, ring_dest.user_data) { is_ring = true });
         }
 
         private void UpdateThreatAvoidance()
@@ -1603,14 +1618,16 @@ namespace Nav
                             m_Path.Clear();
                     }
                 }
+                else
+                    m_PathFollowStrategy.OnPathReset();
             }
-
-            var dest = Destination;
 
             // update destination arrived
             //using (new Profiler("update path prog [dest reached] [%t]", 10))
             if (destination_reached)
             {
+                var dest = Destination;
+
                 if (IsDestinationReached(dest, path_destination, DestType.All))
                 {
                     using (new WriteLock(InputLock))
@@ -1818,6 +1835,11 @@ namespace Nav
         public virtual void OnNavDataChanged(AABB affected_area)
         {
             //m_Navmesh.Log($"[Nav] Request path update OnNavDataChanged.");
+            RequestPathUpdate();
+        }
+
+        public virtual void OnNavBlockersChanged()
+        {
             RequestPathUpdate();
         }
 

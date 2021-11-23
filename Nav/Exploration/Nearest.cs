@@ -79,7 +79,7 @@ namespace Nav.ExploreEngine
             private Nearest explorer;
         }
 
-        internal override ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
+        protected override ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
         {
             ExploreCell dest_cell = base.GetDestinationCell(curr_explore_cell);
 

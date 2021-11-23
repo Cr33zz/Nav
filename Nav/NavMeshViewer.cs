@@ -40,18 +40,6 @@ namespace Nav
                 LoadData(file);
             }
 
-            if (m_Params.HasParam("start"))
-            {
-                m_Params.GetParam("start", out string str);
-                m_Navigator.CurrentPos = new Vec3(str);
-            }
-
-            if (m_Params.HasParam("end"))
-            {
-                m_Params.GetParam("end", out string str);
-                m_Navigator.Destination = new destination(new Vec3(str));
-            }
-
             if (m_Params.HasParam("load_waypoints"))
             {
                 m_Params.GetParam("load_waypoints", out string file);
@@ -74,6 +62,18 @@ namespace Nav
                     initial_pos = m_Navmesh.GetCenter();
                 m_RenderCenter.X = initial_pos.X;
                 m_RenderCenter.Y = initial_pos.Y;
+            }
+
+            if (m_Params.HasParam("start"))
+            {
+                m_Params.GetParam("start", out string str);
+                m_Navigator.CurrentPos = new Vec3(str);
+            }
+
+            if (m_Params.HasParam("end"))
+            {
+                m_Params.GetParam("end", out string str);
+                m_Navigator.Destination = new destination(new Vec3(str));
             }
 
             InitializeComponents();
@@ -194,10 +194,13 @@ namespace Nav
 
                         var contraints = m_Explorer.ExploreConstraints;
 
-                        var constraintPen = new Pen(Color.Magenta, 8);
+                        if (contraints != null)
+                        {
+                            var constraintPen = new Pen(Color.Magenta, 8);
 
-                        foreach (var contraint in contraints)
-                            RenderHelper.DrawRectangle(e.Graphics, constraintPen, m_RenderCenter, contraint.Min, contraint.Max);
+                            foreach (var contraint in contraints)
+                                RenderHelper.DrawRectangle(e.Graphics, constraintPen, m_RenderCenter, contraint.Min, contraint.Max);
+                        }
 
                         foreach (Nav.ExploreCell explore_cell in explore_cells)
                         {
@@ -294,7 +297,7 @@ namespace Nav
                     if (m_RenderOriginalPath)
                     {
                         List<Vec3> path = new List<Vec3>();
-                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var path_recalc_trigger_position, out var path_recalc_trigger_precision, out var unused, -1, false, false, 0, false, 0, smoothen_distance: 0);
+                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var timedOut, out var path_recalc_trigger_position, out var path_recalc_trigger_precision, out var unused, -1, false, false, 0, false, 0, smoothen_distance: 0);
                         path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
                     }
@@ -792,7 +795,7 @@ namespace Nav
 
             const int dt = 50;
 
-            while (true)
+            //while (true)
             {
                 var regions = new List<Region>();
 
@@ -800,7 +803,7 @@ namespace Nav
                 {
                     Vec3 pos = m_Navmesh.GetRandomPos(rng);
                     float size = approx_size + (float)rng.NextDouble() * (approx_size * 0.5f);
-                    regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), 2, -5));
+                    regions.Add(new Region(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)), -1, 0));
                 }
 
                 m_Navmesh.Regions = regions;
@@ -825,8 +828,8 @@ namespace Nav
                 GridCell gCell = new GridCell(connectorPos - new Vec3(1, 1, 0) * connectionLength * 0.5f, connectorPos + new Vec3(1, 1, 0) * connectionLength * 0.5f);
 
                 // add cross connector
-                gCell.Add(new Nav.Cell(connectorPos - new Vec3(connectionLength * 0.5f, connectionWidth * 0.5f, 0), connectorPos + new Vec3(connectionLength * 0.5f, connectionWidth * 0.5f, 0), MovementFlag.All));
-                gCell.Add(new Nav.Cell(connectorPos - new Vec3(connectionWidth * 0.5f, connectionLength * 0.5f, 0), connectorPos + new Vec3(connectionWidth * 0.5f, connectionLength * 0.5f, 0), MovementFlag.All));
+                gCell.Add(new Nav.Cell(connectorPos - new Vec3(connectionLength * 0.5f, connectionWidth * 0.5f, 0), connectorPos + new Vec3(connectionLength * 0.5f, connectionWidth * 0.5f, 0), MovementFlag.All, -1));
+                gCell.Add(new Nav.Cell(connectorPos - new Vec3(connectionWidth * 0.5f, connectionLength * 0.5f, 0), connectorPos + new Vec3(connectionWidth * 0.5f, connectionLength * 0.5f, 0), MovementFlag.All, -1));
 
                 m_Navmesh.Add(gCell, true);
             }
@@ -925,8 +928,8 @@ namespace Nav
         protected Nav.Navmesh m_Navmesh = null;
         protected Nav.NavigationEngine m_Navigator = null;
         protected Nav.ExplorationEngine m_Explorer = null;
-        protected float m_BotSpeed = 10;
-        protected float m_BotAngularSpeed = 180;
+        protected float m_BotSpeed = 1500;
+        protected float m_BotAngularSpeed = -1;
         protected PointF m_RenderCenter = new PointF(200, 350);
         protected float m_RenderScale = 1.0f;
         protected float m_Zoom = 1000.0f;

@@ -4,7 +4,26 @@ using System.Threading;
 
 namespace Nav
 {
-    public class ReadLock : IDisposable
+    public class EmptyLock : IDisposable
+    {
+        ~EmptyLock()
+        {
+            // Finalizer calls Dispose(false)
+            Dispose(false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+        }
+    }
+
+    public class ReadLock : EmptyLock
     {
         public ReadLock(ReaderWriterLockSlim rwl, bool upgradeable = false, string context = null)
         {
@@ -15,7 +34,7 @@ namespace Nav
             if (context != null)
                 Trace.WriteLine($"Wants ReadLock '{context}'");
 
-                Stopwatch timer = null;
+            Stopwatch timer = null;
             if (context != null)
                 timer = Stopwatch.StartNew();
 
@@ -31,15 +50,20 @@ namespace Nav
             }
         }
 
-        public void Dispose()
+        protected override void Dispose(bool disposing)
         {
-            if (upgradeable)
-                rwl.ExitUpgradeableReadLock();
-            else
-                rwl.ExitReadLock();
+            if (disposing)
+            {
+                if (upgradeable)
+                    rwl.ExitUpgradeableReadLock();
+                else
+                    rwl.ExitReadLock();
 
-            if (context != null)
-                Trace.WriteLine($"Exited ReadLock '{context}' lock duration {lockTimer.ElapsedMilliseconds}ms");
+                if (context != null)
+                    Trace.WriteLine($"Exited ReadLock '{context}' lock duration {lockTimer.ElapsedMilliseconds}ms");
+            }
+
+            base.Dispose(disposing);
         }
 
         private ReaderWriterLockSlim rwl;
@@ -48,7 +72,7 @@ namespace Nav
         private Stopwatch lockTimer;
     }
 
-    public class WriteLock : IDisposable
+    public class WriteLock : EmptyLock
     {
         public WriteLock(ReaderWriterLockSlim rwl, string context = null)
         {
@@ -71,12 +95,15 @@ namespace Nav
             }
         }
 
-        public void Dispose()
+        protected override void Dispose(bool disposing)
         {
-            rwl.ExitWriteLock();
+            if (disposing)
+            {
+                rwl.ExitWriteLock();
 
-            if (context != null)
-                Trace.WriteLine($"Exited WriteLock '{context}' lock duration {lockTimer.ElapsedMilliseconds}ms");
+                if (context != null)
+                    Trace.WriteLine($"Exited WriteLock '{context}' lock duration {lockTimer.ElapsedMilliseconds}ms");
+            }
         }
 
         private ReaderWriterLockSlim rwl;

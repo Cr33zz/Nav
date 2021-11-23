@@ -430,20 +430,20 @@ namespace Nav
             }
         }
 
-        public uint UpdatePatchesInterval { get; set; } = 300;
+        public uint UpdatePatchesInterval { get; set; } = 350;
         private Int64 LastUpdatePatchesTime = 0;
 
         internal int ForcePatchesUpdate = 0;
-        
-        private void UpdatePatches()
+
+        private void UpdatePatches(bool force = false, bool is_data_locked = false)
         {
-            if (Interlocked.CompareExchange(ref ForcePatchesUpdate, 0, 1) == 1)
+            if (Interlocked.CompareExchange(ref ForcePatchesUpdate, 0, 1) == 1 || force)
             {
                 //Console.WriteLine("patches update start");
                 var cells_patches = new HashSet<CellsPatch>();
 
                 using (new Profiler($"Updating cell patches (incl. lock) took %t", 50))
-                using (new ReadLock(DataLock))
+                using (is_data_locked ? new EmptyLock() : new ReadLock(DataLock))
                 using (new Profiler($"Updating cell patches took %t", 50))
                 {
                     var cells_copy = new HashSet<Cell>();
@@ -572,6 +572,8 @@ namespace Nav
 
             if (CellsOverlappedByRegions.Any())
             {
+                bool blockersChanged = false;
+
                 using (new WriteLock(DataLock))
                 //using (new WriteLock(DataLock, context: "UpdateRegions"))
                 using (new Profiler($"[Nav] Updating {regions_copy.Count} regions took %t", 50))
@@ -697,23 +699,25 @@ namespace Nav
 
                             m_CellsCache.Clear();
 
-                            // request patches update at the earliest convenience when regions changed
-                            Interlocked.Exchange(ref ForcePatchesUpdate, 1);
+                            // request patches update at the earliest convenience when regions changed [no need for that, as only blockers can change patches]
+                            //Interlocked.Exchange(ref ForcePatchesUpdate, 1);
                             //Console.WriteLine("regions changed!");
                         }
                     }
+
+                    // when blockers changed patches needs to be updated immediately to have consistency between connection checks and path finding
+                    if (!blockers.SetEquals(LastBlockers))
+                    {
+                        blockersChanged = true;
+                        LastBlockers = blockers;
+                        UpdatePatches(true, is_data_locked: true);
+                        //Console.WriteLine("blockers changed!");
+                    }
                 }
 
-                // if regions disabling navigation has changed we have to completely rebuild patches as some areas can be disconnected/reconnected
-                bool blockersChanged = false;
-                if (!blockers.SetEquals(LastBlockers))
-                {
-                    LastBlockers = blockers;
-                    Interlocked.Exchange(ref ForcePatchesUpdate, 1);
-                    //Console.WriteLine("blockers changed!");
-                    blockersChanged = true;
-                }
-
+                if (blockersChanged)
+                    NotifyOnNavBlockersChanged();
+                
                 //only when movement costs are affected
                 if (nav_data_changed && anyReplacementCellWithMovementCost)
                 {
@@ -1607,6 +1611,17 @@ namespace Nav
 
             foreach (INavmeshObserver observer in observers_copy)
                 observer.OnNavDataChanged(affected_area);
+        }
+
+        protected void NotifyOnNavBlockersChanged()
+        {
+            List<INavmeshObserver> observers_copy = null;
+
+            using (new ReadLock(InputLock))
+                observers_copy = m_Observers.ToList();
+
+            foreach (INavmeshObserver observer in observers_copy)
+                observer.OnNavBlockersChanged();
         }
 
         protected void NotifyOnGridCellAdded(GridCell g_cell)

@@ -6,6 +6,7 @@ namespace Nav
     {
         void OnGridCellAdded(GridCell grid_cell);
         void OnNavDataChanged(AABB affected_area);
+        void OnNavBlockersChanged();
         void OnNavDataCleared();
     }
 }
