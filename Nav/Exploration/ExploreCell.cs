@@ -15,7 +15,7 @@ namespace Nav
         }
 
         public ExploreCell(AABB aabb, List<Cell> cells, List<int> grid_cells_id, int id = -1)
-            : base(aabb.Min.X, aabb.Min.Y, 0, aabb.Max.X, aabb.Max.Y, 0, MovementFlag.None, id)
+            : base(aabb.Min.X, aabb.Min.Y, 0, aabb.Max.X, aabb.Max.Y, 0, MovementFlag.None, 1, id)
         {
             InitExploreCell();
 
