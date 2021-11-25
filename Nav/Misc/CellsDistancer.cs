@@ -7,56 +7,39 @@ namespace Nav
 {
     public class CellsDistancer
     {
-        public CellsDistancer()
-        {
-            Distances = new Dictionary<CellIdPair, float>();
-        }
-
         public float GetDistance(int cell_id_1, int cell_id_2)
         {
-            Distances.TryGetValue(new CellIdPair(cell_id_1, cell_id_2), out var dist);
-            return dist;
+            if (Distances.TryGetValue(cell_id_1, out var distance_table) && distance_table.TryGetValue(cell_id_2, out var dist))
+                return dist;
+            return 0;
         }
 
         public void Connect(int cell_id_1, int cell_id_2, float distance)
         {
             UpdateExploreCellsDistances(cell_id_1, cell_id_2, distance);
-            UpdateExploreCellsDistances(cell_id_2, cell_id_1, distance);
-        }
-
-        public int GetNearest(int cell_id, int[] allowed_cell_id = null)
-        {
-            int nearest_id = -1;
-            float nearest_dist = float.MaxValue;
-
-            foreach (var pair in Distances.Where(pair => (pair.Key.Id1 == cell_id || pair.Key.Id2 == cell_id)).ToList())
-            {
-                int other_cell_id = pair.Key.Id1 == cell_id ? pair.Key.Id2 : pair.Key.Id1;
-
-                if (allowed_cell_id != null && !allowed_cell_id.Contains(other_cell_id))
-                    continue;
-                
-                if (pair.Value < nearest_dist)
-                {
-                    nearest_id = other_cell_id;
-                    nearest_dist = pair.Value;
-                }
-            }
-
-            return nearest_id;
         }
 
         public void Disconnect(int cell_id)
         {
-            foreach (var pair in Distances.Where(pair => (pair.Key.Id1 == cell_id || pair.Key.Id2 == cell_id)).ToList())
-                Distances.Remove(pair.Key);
+            if (Distances.TryGetValue(cell_id, out var distance_table))
+            {
+                var distance_table_copy = distance_table.ToDictionary(x => x.Key, x => x.Value);
+
+                // remove cell from all connected distances
+                foreach (var dist_entry in distance_table_copy)
+                    Distances[dist_entry.Key].Remove(cell_id);
+
+                // remove distances for the cell 
+                Distances.Remove(cell_id);
+            }
         }
 
         public List<int> GetConnectedTo(int cell_id)
         {
             List<int> result = new List<int>();
-            foreach (var pair in Distances.Where(pair => (pair.Key.Id1 == cell_id || pair.Key.Id2 == cell_id)).ToList())
-                result.Add(pair.Key.Id1 == cell_id ? pair.Key.Id2 : pair.Key.Id1);
+
+            if (Distances.TryGetValue(cell_id, out var distance_table))
+                result = distance_table.Keys.ToList();
 
             result.Add(cell_id);
             return result;
@@ -69,47 +52,80 @@ namespace Nav
 
         private void UpdateExploreCellsDistances(int cell_id_1, int cell_id_2, float distance)
         {
-            var matching_dists = Distances.Where(p => ((p.Key.Id1 == cell_id_1 || p.Key.Id2 == cell_id_1) && p.Key.Id1 != cell_id_2 && p.Key.Id2 != cell_id_2)).ToList();
+            Distances.TryGetValue(cell_id_1, out var cell_1_distance_table);
+            Distances.TryGetValue(cell_id_2, out var cell_2_distance_table);
 
-            foreach (var pair in matching_dists)
+            //check if we are about to join sub graphs
+            bool is_merging_graphs = false;
+            if (cell_1_distance_table != null && cell_2_distance_table != null && cell_1_distance_table.Keys.Except(cell_2_distance_table.Keys).Any())
+                is_merging_graphs = true;
+
+            // make copies of connections before merging!
+            //if (is_merging_graphs)
             {
-                int other_id = pair.Key.Id1 == cell_id_1 ? pair.Key.Id2 : pair.Key.Id1;
-
-                UpdateDist(cell_id_2, other_id, pair.Value + distance);
-
-                // try connect all new_id related network with other_id
-                var new_dists = Distances.Where(p => ((p.Key.Id1 == cell_id_2 || p.Key.Id2 == cell_id_2) && p.Key.Id1 != other_id && p.Key.Id2 != other_id)).ToList();
-
-                foreach (var pair2 in new_dists)
-                {
-                    int other_id_2 = pair2.Key.Id1 == cell_id_2 ? pair2.Key.Id2 : pair2.Key.Id1;
-
-                    UpdateDist(other_id, other_id_2, pair2.Value + pair.Value + distance);
-                }
+                cell_1_distance_table = cell_1_distance_table?.ToDictionary(x => x.Key, x => x.Value);
+                cell_2_distance_table = cell_2_distance_table?.ToDictionary(x => x.Key, x => x.Value);
             }
 
             UpdateDist(cell_id_1, cell_id_2, distance);
+
+            // we need to update distance for all nodes connected to cell_id_1, because now these are also connected to cell_id_2
+            if (cell_1_distance_table != null)
+            {
+                foreach (var dist_1_entry in cell_1_distance_table)
+                    UpdateDist(dist_1_entry.Key, cell_id_2, dist_1_entry.Value + distance);
+            }
+
+            if (is_merging_graphs)
+            {
+                foreach (var dist_2_entry in cell_2_distance_table)
+                {
+                    UpdateDist(cell_id_1, dist_2_entry.Key, distance + dist_2_entry.Value); // connect to cell 1 (cell 1 may not be in it is own connections)
+
+                    foreach (var dist_1_entry in cell_1_distance_table)
+                        UpdateDist(dist_1_entry.Key, dist_2_entry.Key, dist_1_entry.Value + distance + dist_2_entry.Value);
+                }
+            }
         }
 
         private void UpdateDist(int id_1, int id_2, float dist)
         {
-            CellIdPair p = new CellIdPair(id_1, id_2);
-            float existing_dist = 0;
+            if (id_1 == id_2)
+                dist = 0;
 
-            if (Distances.TryGetValue(p, out existing_dist))
-                Distances[p] = Math.Min(existing_dist, dist);
+            if (!Distances.ContainsKey(id_1))
+                Distances.Add(id_1, new Dictionary<int, float>());
+
+            if (!Distances.ContainsKey(id_2))
+                Distances.Add(id_2, new Dictionary<int, float>());
+
+            Distances.TryGetValue(id_1, out var distance_table_1);
+            Distances.TryGetValue(id_2, out var distance_table_2);
+
+            if (!distance_table_2.TryGetValue(id_1, out var current_dist))
+                distance_table_2.Add(id_1, dist);
             else
-                Distances.Add(p, dist);
+                distance_table_2[id_1] = Math.Min(current_dist, dist);
+
+
+            if (!distance_table_1.TryGetValue(id_2, out current_dist))
+                distance_table_1.Add(id_2, dist);
+            else
+                distance_table_1[id_2] = Math.Min(current_dist, dist);
         }
 
         public void Serialize(BinaryWriter w)
         {
             w.Write(Distances.Count);
-
             foreach (var pair in Distances)
             {
-                pair.Key.Serialize(w);
-                w.Write(pair.Value);
+                w.Write(pair.Key);
+                w.Write(pair.Value.Count);
+                foreach (var pair2 in pair.Value)
+                {
+                    w.Write(pair2.Key);
+                    w.Write(pair2.Value);
+                }
             }
         }
 
@@ -117,11 +133,19 @@ namespace Nav
         {
             Distances.Clear();
             int distances_count = r.ReadInt32();
-
             for (int i = 0; i < distances_count; ++i)
-                Distances.Add(new CellIdPair(r), r.ReadSingle());
+            {
+                int key1 = r.ReadInt32();
+                var distance_table = new Dictionary<int, float>();
+                Distances.Add(key1, distance_table);
+                int distances2_count = r.ReadInt32();
+                for (int j = 0; j < distances2_count; ++j)
+                {
+                    distance_table.Add(r.ReadInt32(), r.ReadSingle());
+                }
+            }
         }
 
-        private Dictionary<CellIdPair, float> Distances { get; set; }
+        private readonly Dictionary<int, Dictionary<int, float>> Distances = new Dictionary<int, Dictionary<int, float>>();
     }
 }
