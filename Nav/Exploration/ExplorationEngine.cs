@@ -42,6 +42,22 @@ namespace Nav
         public int ExploreCellSize { get; private set; }
         public bool IgnoreSmall { get; private set; }
 
+        public Func<ExploreCell, bool> ExploreFilter
+        {
+            get
+            {
+                return m_ExploreFilter;
+            }
+            set
+            {
+                if (m_ExploreFilter != value)
+                {
+                    m_ExploreFilter = value;
+                    OnExploreCriteriaChanged();
+                }
+            }
+        }
+
         public List<AABB> ExploreConstraints
         {
             get
@@ -61,10 +77,7 @@ namespace Nav
                     using (new WriteLock(InputLock))
                         m_ExploreConstraints = value != null ? (value.Count > 0 ? value : null) : null;
 
-                    lock (UpdateLocker)
-                    {
-                        UpdateExploration(true, true);
-                    }
+                    OnExploreCriteriaChanged();
                 }
             }
         }
@@ -404,6 +417,12 @@ namespace Nav
             RequestReevaluation();
         }
 
+        protected virtual void OnExploreCriteriaChanged()
+        {
+            lock (UpdateLocker)
+                UpdateExploration(true, true);
+        }
+
         public virtual void OnNavBlockersChanged()
         {
             RequestReevaluation();
@@ -480,9 +499,10 @@ namespace Nav
 
         private class UnexploredSelector : Algorihms.IVisitor<ExploreCell>
         {
-            public UnexploredSelector(List<AABB> contraints, bool ignore_small, Vec3 agent_pos, Navmesh navmesh)
+            public UnexploredSelector(List<AABB> contraints, Func<ExploreCell, bool> filter, bool ignore_small, Vec3 agent_pos, Navmesh navmesh)
             {
                 this.constraints = contraints;
+                this.filter = filter;
                 this.ignore_small = ignore_small;
                 this.agent_pos = agent_pos;
                 this.navmesh = navmesh;
@@ -491,6 +511,9 @@ namespace Nav
             public void Visit(ExploreCell cell)
             {
                 if (ignore_small && cell.Small)
+                    return;
+
+                if (!(filter?.Invoke(cell) ?? true))
                     return;
 
                 if (!(constraints?.Any(x => cell.AABB.Overlaps2D(x)) ?? true))
@@ -509,6 +532,7 @@ namespace Nav
             public HashSet<ExploreCell> unexplored_cells = new HashSet<ExploreCell>();
 
             private readonly List<AABB> constraints;
+            private readonly Func<ExploreCell, bool> filter;
             private readonly bool ignore_small = false;
             private readonly Vec3 agent_pos;
             private readonly Navmesh navmesh;
@@ -519,7 +543,9 @@ namespace Nav
             using (new ReadLock(DataLock))
             {
                 var agent_pos = m_Navigator.CurrentPos;
-                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints, IgnoreSmall, agent_pos, m_Navmesh);
+
+                // unexplored selector is collecting ALL unexplored cells matching constraints and filter criteria
+                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints, ExploreFilter, IgnoreSmall, agent_pos, m_Navmesh);
                 Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
 
                 m_CellsToExploreCount = selector.all_cells_count;
@@ -843,6 +869,7 @@ namespace Nav
         protected int m_CellsToExploreCount = 0;
         private int m_ForceRefreshExploredPercent = 1;
         private List<AABB> m_ExploreConstraints = new List<AABB>();
+        private Func<ExploreCell, bool> m_ExploreFilter = null;
 
         private Thread UpdatesThread = null;        
 
