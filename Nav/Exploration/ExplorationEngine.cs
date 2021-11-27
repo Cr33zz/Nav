@@ -9,9 +9,10 @@ namespace Nav
 {
     public abstract class ExplorationEngine : IDisposable, INavigationObserver, INavmeshObserver, IRoughPathEstimator
     {
-        public ExplorationEngine(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90)
+        public ExplorationEngine(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90, bool ignore_small = true)
         {
             ExploreCellSize = explore_cell_size;
+            IgnoreSmall = ignore_small;
 
             m_Navmesh = navmesh;
             m_Navmesh.AddObserver(this);
@@ -39,6 +40,7 @@ namespace Nav
 
         // change it via ChangeExploreCellSize function
         public int ExploreCellSize { get; private set; }
+        public bool IgnoreSmall { get; private set; }
 
         public List<AABB> ExploreConstraints
         {
@@ -61,7 +63,7 @@ namespace Nav
 
                     lock (UpdateLocker)
                     {
-                        UpdateExploration(false, true);
+                        UpdateExploration(true, true);
                     }
                 }
             }
@@ -161,6 +163,9 @@ namespace Nav
         public void Serialize(string name)
         {
             using (BinaryWriter w = new BinaryWriter(File.OpenWrite(name + ".explorer")))
+            using (new ReadLock(DataLock))
+            using (new ReadLock(InputLock))
+            using (m_Navmesh.AcquireReadDataLock())
             {
                 OnSerialize(w);
             }
@@ -168,36 +173,31 @@ namespace Nav
 
         protected virtual void OnSerialize(BinaryWriter w)
         {
-            using (new ReadLock(DataLock))
-            using (new ReadLock(InputLock))
-            using (m_Navmesh.AcquireReadDataLock())
+            w.Write(m_Enabled);
+
+            // write all cells global IDs
+            w.Write(m_ExploreCells.Count);
+
+            foreach (ExploreCell explore_cell in m_ExploreCells)
+                w.Write(explore_cell.GlobalId);
+
+            foreach (ExploreCell explore_cell in m_ExploreCells)
+                explore_cell.Serialize(w);
+
+            w.Write(m_DestCell?.GlobalId ?? -1);
+            w.Write(ExploreCell.LastExploreCellGlobalId);
+
+            w.Write(m_ExploredCellsCount);
+            w.Write(m_CellsToExploreCount);
+
+            w.Write(m_ExploreConstraints?.Count ?? 0);
+            if (m_ExploreConstraints != null)
             {
-                w.Write(m_Enabled);
-
-                // write all cells global IDs
-                w.Write(m_ExploreCells.Count);
-
-                foreach (ExploreCell explore_cell in m_ExploreCells)
-                    w.Write(explore_cell.GlobalId);
-
-                foreach (ExploreCell explore_cell in m_ExploreCells)
-                    explore_cell.Serialize(w);
-
-                w.Write(m_DestCell?.GlobalId ?? -1);
-                w.Write(ExploreCell.LastExploreCellGlobalId);
-
-                w.Write(m_ExploredCellsCount);
-                w.Write(m_CellsToExploreCount);
-
-                w.Write(m_ExploreConstraints?.Count ?? 0);
-                if (m_ExploreConstraints != null)
-                {
-                    foreach (var constraint in m_ExploreConstraints)
-                        constraint.Serialize(w);
-                }
-
-                m_HintPos.Serialize(w);
+                foreach (var constraint in m_ExploreConstraints)
+                    constraint.Serialize(w);
             }
+
+            m_HintPos.Serialize(w);
         }
 
         // Extension will be automatically added
@@ -205,6 +205,8 @@ namespace Nav
         {
             using (BinaryReader r = new BinaryReader(File.OpenRead(name + ".explorer")))
             using (m_Navmesh.AcquireReadDataLock())
+            using (new WriteLock(DataLock))
+            using (new WriteLock(InputLock))
             {                
                 OnDeserialize(m_Navmesh.m_AllCells, m_Navmesh.m_IdToCell, r);
             }
@@ -212,48 +214,44 @@ namespace Nav
 
         protected virtual void OnDeserialize(HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
-            using (new WriteLock(DataLock))
-            using (new WriteLock(InputLock))
+            m_ExploreCells.Clear();
+
+            m_Enabled = r.ReadBoolean();
+
+            int explore_cells_count = r.ReadInt32();
+
+            // pre-allocate explore cells
+            for (int i = 0; i < explore_cells_count; ++i)
             {
-                m_ExploreCells.Clear();
-
-                m_Enabled = r.ReadBoolean();
-
-                int explore_cells_count = r.ReadInt32();
-
-                // pre-allocate explore cells
-                for (int i = 0; i < explore_cells_count; ++i)
-                {
-                    ExploreCell explore_cell = new ExploreCell();
-                    explore_cell.GlobalId = r.ReadInt32();
-                    m_ExploreCells.Add(explore_cell);
-                }
-
-                foreach (ExploreCell explore_cell in m_ExploreCells)
-                    explore_cell.Deserialize(m_ExploreCells, all_cells, id_to_cell, r);
-
-                foreach (ExploreCell explore_cell in m_ExploreCells)
-                    OnExploreCellAdded(explore_cell);
-
-                var dest_cell_global_id = r.ReadInt32();
-                if (dest_cell_global_id >= 0)
-                    m_DestCell = m_ExploreCells.FirstOrDefault(x => x.GlobalId == dest_cell_global_id);
-
-                ExploreCell.LastExploreCellGlobalId = r.ReadInt32();
-
-                m_ExploredCellsCount = r.ReadInt32();
-                m_CellsToExploreCount = r.ReadInt32();
-
-                var explore_constraints_count = r.ReadInt32();
-                m_ExploreConstraints = explore_constraints_count > 0 ? new List<AABB>() : null;
-                if (m_ExploreConstraints != null)
-                {
-                    for (int i = 0; i < explore_constraints_count; ++i)
-                        m_ExploreConstraints.Add(new AABB(r));
-                }
-
-                m_HintPos = new Vec3(r);
+                ExploreCell explore_cell = new ExploreCell();
+                explore_cell.GlobalId = r.ReadInt32();
+                m_ExploreCells.Add(explore_cell);
             }
+
+            foreach (ExploreCell explore_cell in m_ExploreCells)
+                explore_cell.Deserialize(m_ExploreCells, all_cells, id_to_cell, r);
+
+            foreach (ExploreCell explore_cell in m_ExploreCells)
+                OnExploreCellAdded(explore_cell);
+
+            var dest_cell_global_id = r.ReadInt32();
+            if (dest_cell_global_id >= 0)
+                m_DestCell = m_ExploreCells.FirstOrDefault(x => x.GlobalId == dest_cell_global_id);
+
+            ExploreCell.LastExploreCellGlobalId = r.ReadInt32();
+
+            m_ExploredCellsCount = r.ReadInt32();
+            m_CellsToExploreCount = r.ReadInt32();
+
+            var explore_constraints_count = r.ReadInt32();
+            m_ExploreConstraints = explore_constraints_count > 0 ? new List<AABB>() : null;
+            if (m_ExploreConstraints != null)
+            {
+                for (int i = 0; i < explore_constraints_count; ++i)
+                    m_ExploreConstraints.Add(new AABB(r));
+            }
+
+            m_HintPos = new Vec3(r);
         }
 
         public virtual void OnHugeCurrentPosChange()
@@ -309,7 +307,7 @@ namespace Nav
         protected Navmesh m_Navmesh;
         protected NavigationEngine m_Navigator;
 
-        internal void RequestReevaluation()
+        public void RequestReevaluation()
         {
             Interlocked.Exchange(ref m_ForceReevaluation, 1);
         }
@@ -482,15 +480,19 @@ namespace Nav
 
         private class UnexploredSelector : Algorihms.IVisitor<ExploreCell>
         {
-            public UnexploredSelector(List<AABB> contraints, Vec3 agent_pos, Navmesh navmesh)
+            public UnexploredSelector(List<AABB> contraints, bool ignore_small, Vec3 agent_pos, Navmesh navmesh)
             {
                 this.constraints = contraints;
+                this.ignore_small = ignore_small;
                 this.agent_pos = agent_pos;
                 this.navmesh = navmesh;
             }
 
             public void Visit(ExploreCell cell)
             {
+                if (ignore_small && cell.Small)
+                    return;
+
                 if (!(constraints?.Any(x => cell.AABB.Overlaps2D(x)) ?? true))
                     return;
 
@@ -503,12 +505,13 @@ namespace Nav
                     unexplored_cells.Add(cell);
             }
 
-            private List<AABB> constraints;
             public int all_cells_count = 0;
             public HashSet<ExploreCell> unexplored_cells = new HashSet<ExploreCell>();
 
-            private readonly Navmesh navmesh;
+            private readonly List<AABB> constraints;
+            private readonly bool ignore_small = false;
             private readonly Vec3 agent_pos;
+            private readonly Navmesh navmesh;
         }
 
         protected HashSet<ExploreCell> GetUnexploredCells(ExploreCell origin_cell)
@@ -516,7 +519,7 @@ namespace Nav
             using (new ReadLock(DataLock))
             {
                 var agent_pos = m_Navigator.CurrentPos;
-                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints, agent_pos, m_Navmesh);
+                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints, IgnoreSmall, agent_pos, m_Navmesh);
                 Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
 
                 m_CellsToExploreCount = selector.all_cells_count;
@@ -597,14 +600,14 @@ namespace Nav
                 bool mark_dest_cell_as_explored = false;
                 // perform connection check only when reevaluation is forced (usually due to navigation data change)
                 bool is_dest_cell_connected = (!forceReevaluation && !validate_dest_cell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, 0, 0, out var unused1, out var unused2);
-
+                
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)
                 {
                     if (!m_DestCell.Delayed)
                     {
                         m_DestCell.Delayed = true;
-                        Interlocked.Exchange(ref m_ForceReevaluation, 1); // this is a change to find another un-delayed explore cell
+                        forceReevaluation = true; // this is a change to find another un-delayed explore cell
                     }
                     else
                     {
@@ -631,21 +634,34 @@ namespace Nav
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
 
-                // mark cells as explored when passing by close enough
-                ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => !x.Explored && x.Position.Distance2D(current_pos) < ExploreDestPrecision);
+                ExploreCell travel_through_explore_cell = m_ExploreCells.FirstOrDefault(x => x.Contains2D(current_pos));
 
-                if (current_explore_cell != null)
+                if (travel_through_explore_cell != null && !travel_through_explore_cell.Explored)
                 {
-                    Trace.WriteLine($"Explore cell GID {current_explore_cell.GlobalId} considered explored because of passing by.");
-                    OnCellExplored(current_explore_cell);
+                    bool mark_explored = false;
+                    if (AlternativeExploredCondition?.Invoke(travel_through_explore_cell, current_pos) ?? false)
+                    {
+                        Trace.WriteLine($"Explore cell GID {travel_through_explore_cell.GlobalId} considered explored by external logic.");
+                        mark_explored = true;
+                    }
+
+                    // mark cells as explored when passing by close enough
+                    if (travel_through_explore_cell.Position.Distance2D(current_pos) < ExploreDestPrecision)
+                    {
+                        Trace.WriteLine($"Explore cell GID {travel_through_explore_cell.GlobalId} considered explored because of passing by.");
+                        mark_explored = true;
+                    }
+
+                    if (mark_explored)
+                        OnCellExplored(travel_through_explore_cell);
                 }
 
-                OnUpdateExploration();
+                OnUpdateExploration(travel_through_explore_cell);
             }
         }
 
         // DataLock is already acquired in read-upgradeable state
-        protected virtual void OnUpdateExploration()
+        protected virtual void OnUpdateExploration(ExploreCell curr_explore_cell)
         {
         }
 
@@ -721,10 +737,9 @@ namespace Nav
                     }
 
                     ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, m_LastExploreCellId++);
+                    ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall);
                     Add(ex_cell);
                     OnExploreCellAdded(ex_cell);
-
-                    ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall);
 
                     cells_copy.RemoveWhere(x => visited.Contains(x));
                 }

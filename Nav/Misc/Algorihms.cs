@@ -57,223 +57,229 @@ namespace Nav
 
         private static void Swap2Opt(ref List<ExploreCell> tour, int i, int k)
         {
-            tour.Reverse(i, k - i + 1); // get from i to k
+            tour.Reverse(i, k - i + 1); // reverse from i to k (inclusive)
         }
 
         private static float Swap2OptDistance(List<ExploreCell> tour, CellsDistancer distances, int i, int k)
         {
+            var tour_indices = tour.Select(x => x.GlobalId).ToList();
+            tour_indices.Reverse(i, k - i + 1);
+
             float travel_distance = 0;
-            for (int n = 0; n < i - 1; ++n)
-                travel_distance += distances.GetDistance(tour[n].GlobalId, tour[n + 1].GlobalId);
-
-            travel_distance += distances.GetDistance(tour[i - 1].GlobalId, tour[k].GlobalId);
-
-            for (int n = k; n > i; --n)
-                travel_distance += distances.GetDistance(tour[n].GlobalId, tour[n - 1].GlobalId);
-
-            if (k + 1 < tour.Count)
+            if (tour_indices.Count > 2)
             {
-                travel_distance += distances.GetDistance(tour[i].GlobalId, tour[k + 1].GlobalId);
-
-                for (int n = k + 1; n < tour.Count - 1; ++n)
-                    travel_distance += distances.GetDistance(tour[n].GlobalId, tour[n + 1].GlobalId);
+                for (int n = 0; n < tour_indices.Count - 1; ++n)
+                    travel_distance += distances.GetDistance(tour_indices[n], tour_indices[n + 1]);
             }
 
             return travel_distance;
         }
 
-        public static void FindExplorePath2Opt(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<Vec3> path)
+        public static void FindExplorePath2Opt(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<ExploreCell> path)
         {
-            path.Clear();
-
-            if (start_cell == null)
-                return;
-
-            List<int> cells_id_in_start_cell_network = distances.GetConnectedTo(start_cell.GlobalId);
-
-            List<ExploreCell> best_tour = explore_cells.FindAll(c => cells_id_in_start_cell_network.Contains(c.GlobalId));
-            best_tour.RemoveAll(c => c.Explored || c.Neighbours.Count == 0);
-            if (start_cell.Explored)
-                best_tour.Insert(0, start_cell);
-
-            if (best_tour.Count == 1)
+            using (new Profiler($"2-Opt %t"))
             {
-                path.Add(best_tour[0].Position);
-                return;
-            }
+                path = path ?? new List<ExploreCell>();
+                path.Clear();
 
-            float best_dist = GetTravelDistance(best_tour, distances);
+                if (start_cell == null)
+                    return;
 
+                //List<int> cells_id_in_start_cell_network = distances.GetConnectedTo(start_cell.GlobalId);
+                //List<ExploreCell> best_tour_old = explore_cells.FindAll(c => cells_id_in_start_cell_network.Contains(c.GlobalId));
 
-            if (best_tour.Count < 90)
-            {
-                // based on http://en.wikipedia.org/wiki/2-opt
+                // reordering cell in breadth-first order seems to help with 2-opt backtracking
+                var collect_cells_visitor = new CollectVisitor();
+                Algorihms.VisitBreadth(start_cell, visitor: collect_cells_visitor);
+                var best_tour = collect_cells_visitor.cells.Select(x => x as ExploreCell).Intersect(explore_cells).ToList();
 
-                while (true)
+                best_tour.RemoveAll(c => c.Explored || c.Neighbours.Count == 0);
+
+                if (start_cell.Explored) // re-insert start cell if needed
+                    best_tour.Insert(0, start_cell);
+
+                if (best_tour.Count == 1)
                 {
-                    bool better_found = false;
+                    path.Add(best_tour[0]);
+                    return;
+                }
 
-                    for (int i = 1; i < best_tour.Count - 1; ++i)
+                float best_dist = GetTravelDistance(best_tour, distances);
+
+
+                if (best_tour.Count < 90)
+                {
+                    // based on http://en.wikipedia.org/wiki/2-opt
+
+                    while (true)
                     {
-                        for (int k = i + 1; k < best_tour.Count; ++k)
+                        bool better_found = false;
+
+                        for (int i = 1; i < best_tour.Count - 1; ++i)
                         {
-                            float new_dist = Swap2OptDistance(best_tour, distances, i, k);
-
-                            if (new_dist < best_dist)
+                            for (int k = i + 1; k < best_tour.Count; ++k)
                             {
-                                Swap2Opt(ref best_tour, i, k);
-                                best_dist = new_dist;
+                                float new_dist = Swap2OptDistance(best_tour, distances, i, k);
 
-                                better_found = true;
-                                break;
+                                if (new_dist < best_dist)
+                                {
+                                    Swap2Opt(ref best_tour, i, k);
+                                    best_dist = new_dist;
+
+                                    better_found = true;
+                                    break;
+                                }
                             }
+
+                            if (better_found)
+                                break;
                         }
 
-                        if (better_found)
+                        if (!better_found)
                             break;
                     }
-
-                    if (!better_found)
-                        break;
                 }
-            }
-            else // greedy
-            {
-                // based on http://on-demand.gputechconf.com/gtc/2014/presentations/S4534-high-speed-2-opt-tsp-solver.pdf
-
-                while (true)
+                else // greedy
                 {
-                    float min_change = 0;
+                    // based on http://on-demand.gputechconf.com/gtc/2014/presentations/S4534-high-speed-2-opt-tsp-solver.pdf
 
-                    int min_i = -1;
-                    int min_j = -1;
-
-                    for (int i = 0; i < best_tour.Count - 2; ++i)
+                    while (true)
                     {
-                        for (int j = i + 2; j < best_tour.Count - 1; ++j)
+                        float min_change = 0;
+
+                        int min_i = -1;
+                        int min_j = -1;
+
+                        for (int i = 0; i < best_tour.Count - 2; ++i)
                         {
-                            int city_a = best_tour[i].GlobalId;
-                            int city_b = best_tour[i + 1].GlobalId;
-                            int city_c = best_tour[j].GlobalId;
-                            int city_d = best_tour[j + 1].GlobalId;
-
-                            float change = (distances.GetDistance(city_a, city_c) + distances.GetDistance(city_b, city_d)) -
-                                           (distances.GetDistance(city_a, city_b) + distances.GetDistance(city_c, city_d));
-
-                            if (change < min_change)
+                            for (int j = i + 2; j < best_tour.Count - 1; ++j)
                             {
-                                min_change = change;
-                                min_i = i + 1;
-                                min_j = j;
+                                int city_a = best_tour[i].GlobalId;
+                                int city_b = best_tour[i + 1].GlobalId;
+                                int city_c = best_tour[j].GlobalId;
+                                int city_d = best_tour[j + 1].GlobalId;
+
+                                float change = (distances.GetDistance(city_a, city_c) + distances.GetDistance(city_b, city_d)) -
+                                               (distances.GetDistance(city_a, city_b) + distances.GetDistance(city_c, city_d));
+
+                                if (change < min_change)
+                                {
+                                    min_change = change;
+                                    min_i = i + 1;
+                                    min_j = j;
+                                }
                             }
+                        }
+
+                        if (min_change >= 0)
+                            break;
+
+                        // apply min_i/min_j move
+                        ExploreCell t = best_tour[min_i];
+                        best_tour[min_i] = best_tour[min_j];
+                        best_tour[min_j] = t;
+                    }
+                }
+
+                Trace.WriteLine("[FindExplorePath 2-Opt] Final solution distance: " + GetTravelDistance(best_tour, distances));
+
+                foreach (ExploreCell cell in best_tour)
+                    path.Add(cell);
+
+                if (start_cell.Explored)
+                    path.RemoveAt(0);
+            }
+        }
+
+        public static void FindExplorePath(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<ExploreCell> path)
+        {
+            using (new Profiler($"Simulated annealing %t"))
+            {
+                //based on http://www.theprojectspot.com/tutorial-post/simulated-annealing-algorithm-for-beginners/6
+                path = path ?? new List<ExploreCell>();
+                path.Clear();
+
+                if (start_cell == null)
+                    return;
+
+                List<int> cells_id_in_start_cell_network = distances.GetConnectedTo(start_cell.GlobalId);
+
+                List<ExploreCell> best_solution = explore_cells.FindAll(c => cells_id_in_start_cell_network.Contains(c.Id));
+                best_solution.RemoveAll(c => (c.Explored || c.Neighbours.Count == 0) && c.GlobalId != start_cell.GlobalId);
+                best_solution.Remove(start_cell);
+                best_solution.Insert(0, start_cell);
+
+                if (best_solution.Count == 1)
+                {
+                    path.Add(best_solution[0]);
+                    return;
+                }
+
+                float best_energy = GetTravelDistance(best_solution, distances);
+
+                List<ExploreCell> current_solution = best_solution;
+                float current_energy = best_energy;
+
+                Random rng = new Random();
+
+                double temp = 10000;
+                double alpha = 0.999;
+                double epsilon = 0.0001;
+                int temp_iterations = 2;
+
+                // Loop until system has cooled
+                while (temp > epsilon)
+                {
+                    for (int iter = 0; iter < temp_iterations; ++iter)
+                    {
+                        // Create new neighbour tour
+                        List<ExploreCell> new_solution = new List<ExploreCell>(current_solution);
+
+                        // Get a random positions in the tour
+                        int tour_pos_1 = rng.Next(1, new_solution.Count);
+                        int tour_pos_2 = rng.Next(1, new_solution.Count);
+
+                        // Swap them
+                        ExploreCell t = new_solution[tour_pos_1];
+                        new_solution[tour_pos_1] = new_solution[tour_pos_2];
+                        new_solution[tour_pos_2] = t;
+
+                        // Get energy of solutions
+                        float new_energy = GetTravelDistance(new_solution, distances);
+
+                        // Decide if we should accept the neighbour
+                        if (AcceptanceProbability(current_energy, new_energy, temp) >= rng.NextDouble())
+                        {
+                            current_solution = new_solution;
+                            current_energy = new_energy;
+                        }
+
+                        // Keep track of the best solution found
+                        if (current_energy < best_energy)
+                        {
+                            best_solution = current_solution;
+                            best_energy = current_energy;
                         }
                     }
 
-                    if (min_change >= 0)
-                        break;
-
-                    // apply min_i/min_j move
-                    ExploreCell t = best_tour[min_i];
-                    best_tour[min_i] = best_tour[min_j];
-                    best_tour[min_j] = t;
-                }
-            }
-
-            //Navmesh.Log("[FindExplorePath 2-Opt] Final solution distance: " + GetTravelDistance(tour, distances));
-
-            foreach (ExploreCell cell in best_tour)
-                path.Add(cell.Position);
-
-            if (start_cell.Explored)
-                path.RemoveAt(0);
-        }
-
-        public static void FindExplorePath(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<Vec3> path)
-        {
-            //based on http://www.theprojectspot.com/tutorial-post/simulated-annealing-algorithm-for-beginners/6
-
-            path.Clear();
-
-            if (start_cell == null)
-                return;
-
-            List<int> cells_id_in_start_cell_network = distances.GetConnectedTo(start_cell.GlobalId);
-
-            List<ExploreCell> best_solution = explore_cells.FindAll(c => cells_id_in_start_cell_network.Contains(c.Id));
-            best_solution.RemoveAll(c => (c.Explored || c.Neighbours.Count == 0) && c.GlobalId != start_cell.GlobalId);
-            best_solution.Remove(start_cell);
-            best_solution.Insert(0, start_cell);
-
-            if (best_solution.Count == 1)
-            {
-                path.Add(best_solution[0].Position);
-                return;
-            }
-
-            float best_energy = GetTravelDistance(best_solution, distances);
-
-            List<ExploreCell> current_solution = best_solution;
-            float current_energy = best_energy;
-
-            Random rng = new Random();
-
-            double temp = 10000;
-            double alpha = 0.999;
-            double epsilon = 0.0001;
-            int temp_iterations = 2;
-
-            // Loop until system has cooled
-            while (temp > epsilon)
-            {
-                for (int iter = 0; iter < temp_iterations; ++iter)
-                {
-                    // Create new neighbour tour
-                    List<ExploreCell> new_solution = new List<ExploreCell>(current_solution);
-
-                    // Get a random positions in the tour
-                    int tour_pos_1 = rng.Next(1, new_solution.Count);
-                    int tour_pos_2 = rng.Next(1, new_solution.Count);
-
-                    // Swap them
-                    ExploreCell t = new_solution[tour_pos_1];
-                    new_solution[tour_pos_1] = new_solution[tour_pos_2];
-                    new_solution[tour_pos_2] = t;
-
-                    // Get energy of solutions
-                    float new_energy = GetTravelDistance(new_solution, distances);
-
-                    // Decide if we should accept the neighbour
-                    if (AcceptanceProbability(current_energy, new_energy, temp) >= rng.NextDouble())
-                    {
-                        current_solution = new_solution;
-                        current_energy = new_energy;
-                    }
-
-                    // Keep track of the best solution found
-                    if (current_energy < best_energy)
-                    {
-                        best_solution = current_solution;
-                        best_energy = current_energy;
-                    }
+                    // Cool system
+                    temp *= alpha;
                 }
 
-                // Cool system
-                temp *= alpha;
+                Trace.WriteLine("[FindExplorePath] Final solution distance: " + GetTravelDistance(best_solution, distances));
+
+                foreach (ExploreCell cell in best_solution)
+                    path.Add(cell);
+
+                if (start_cell.Explored)
+                    path.RemoveAt(0);
             }
-
-            //Navmesh.Log("[FindExplorePath] Final solution distance: " + best_energy);
-
-            foreach (ExploreCell cell in best_solution)
-                path.Add(cell.Position);
-
-            if (start_cell.Explored)
-                path.RemoveAt(0);
         }
 
         public static bool AreConnected<T>(T start, ref T end, MovementFlag flags) where T : Cell
         {
             List<path_pos> path = null;
-            return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end), flags, ref path);
+            return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end), flags, ref path, out var timedOut);
         }
 
         public static float GetPathLength(List<Vec3> path, Vec3 pos)
@@ -490,12 +496,15 @@ namespace Nav
             private Vec3 HintPos;
         }
 
-        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, float random_coeff = 0, bool allow_disconnected = false, bool use_cell_centers = false, bool ignore_movement_cost = false)
+        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, out bool timedOut, float random_coeff = 0, bool allow_disconnected = false, bool use_cell_centers = false, bool ignore_movement_cost = false, Int64 time_limit = -1)
             where T : Cell
             where S : PathFindStrategy<T>
         {
             if (path != null)
                 path.Clear();
+
+            var time_limit_timer = Stopwatch.StartNew();
+            timedOut = false;
 
             //based on http://en.wikipedia.org/wiki/A*_search_algorithm
 
@@ -510,66 +519,78 @@ namespace Nav
             NodeInfo s = new NodeInfo(start, from, null, 0, strategy.GetMinDistance(start));
             open.Add(s);
 
-            while (open.Count > 0)
+            using (new Profiler($"A* %t", 100))
             {
-                //sort by cost
-                float min_total_cost = open.Min(x => x.TotalCost);
-                NodeInfo best = open.Find(x => x.TotalCost.Equals(min_total_cost));
-
-                open.Remove(best);
-
-                //take node with lower cost from open list
-                NodeInfo current_node = best;
-
-                if (strategy.IsDestCell((T)current_node.cell))
+                while (open.Count > 0)
                 {
-                    strategy.FinalDestCell = (T)current_node.cell;
-                    BuildPath(start, current_node.cell, from, strategy.UseFinalCellEntranceAsDestination() ? current_node.leading_point : strategy.GetDestination(), current_node, ref path, use_cell_centers);
-                    return true;
-                }
-
-                closed.Insert(0, current_node);
-
-                foreach (Cell.Neighbour neighbour in current_node.cell.Neighbours)
-                {
-                    Cell cell_neighbour = neighbour.cell;
-
-                    if (cell_neighbour.Disabled || (neighbour.connection_flags & flags) != flags)
-                        continue;
-
-                    Vec3 leading_point = use_cell_centers ? neighbour.cell.Center : neighbour.cell.AABB.Align(current_node.leading_point);
-
-                    NodeInfo neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
-
-                    // if already processed then skip this neighbour
-                    if (neighbour_node != null)
-                        continue;
-
-                    float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
-
-                    float new_g = current_node.g + current_node.leading_point.Distance(leading_point) * (1 + random_dist_mod) * (ignore_movement_cost ? 1 : current_node.cell.MovementCostMult);
-                    float new_h = strategy.GetMinDistance((T)neighbour.cell);
-
-                    neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, open);
-
-                    // if not in open list
-                    if (neighbour_node == null)
+                    if (time_limit > 0 && time_limit_timer.ElapsedMilliseconds > time_limit)
                     {
-                        neighbour_node = new NodeInfo(cell_neighbour, leading_point, current_node, new_g, new_h); // g and h will be set later on
-                        open.Insert(0, neighbour_node);
+                        //Trace.WriteLine("Path finding timed out!");
+                        timedOut = true;
+                        return false;
                     }
-                    else if ((new_g + new_h) < neighbour_node.TotalCost)
+
+                    //sort by cost
+                    float min_total_cost = open.Min(x => x.TotalCost);
+                    NodeInfo best = open.Find(x => x.TotalCost.Equals(min_total_cost));
+
+                    open.Remove(best);
+
+                    //take node with lower cost from open list
+                    NodeInfo current_node = best;
+
+                    if (strategy.IsDestCell((T)current_node.cell))
                     {
-                        neighbour_node.parent = current_node;
-                        neighbour_node.leading_point = leading_point;
-                        neighbour_node.g = new_g;
-                        neighbour_node.h = new_h;
+                        strategy.FinalDestCell = (T)current_node.cell;
+                        BuildPath(start, current_node.cell, from, strategy.UseFinalCellEntranceAsDestination() ? current_node.leading_point : strategy.GetDestination(), current_node, ref path, use_cell_centers);
+                        return true;
+                    }
+
+                    closed.Insert(0, current_node);
+
+                    foreach (Cell.Neighbour neighbour in current_node.cell.Neighbours)
+                    {
+                        Cell cell_neighbour = neighbour.cell;
+
+                        if (cell_neighbour.Disabled || (neighbour.connection_flags & flags) != flags)
+                            continue;
+
+                        Vec3 leading_point = use_cell_centers ? neighbour.cell.Center : neighbour.cell.AABB.Align(current_node.leading_point);
+
+                        NodeInfo neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, closed);
+
+                        // if already processed then skip this neighbour
+                        if (neighbour_node != null)
+                            continue;
+
+                        float random_dist_mod = -random_coeff + (2 * random_coeff) * (float)rng.NextDouble();
+
+                        float new_g = current_node.g + current_node.leading_point.Distance(leading_point) * (1 + random_dist_mod) * (ignore_movement_cost ? 1 : current_node.cell.MovementCostMult);
+                        float new_h = strategy.GetMinDistance((T)neighbour.cell);
+
+                        neighbour_node = GetNodeInfoFromList(cell_neighbour, leading_point, open);
+
+                        // if not in open list
+                        if (neighbour_node == null)
+                        {
+                            neighbour_node = new NodeInfo(cell_neighbour, leading_point, current_node, new_g, new_h); // g and h will be set later on
+                            open.Insert(0, neighbour_node);
+                        }
+                        else if ((new_g + new_h) < neighbour_node.TotalCost)
+                        {
+                            neighbour_node.parent = current_node;
+                            neighbour_node.leading_point = leading_point;
+                            neighbour_node.g = new_g;
+                            neighbour_node.h = new_h;
+                        }
                     }
                 }
             }
 
             if (allow_disconnected && closed.Count > 0)
             {
+                //Trace.WriteLine("No direct path found :(");
+
                 var dest = strategy.GetDestination();
                 NodeInfo best = closed.OrderBy(x => x.h).First();
                 strategy.FinalDestCell = (T)best.cell;
@@ -664,6 +685,34 @@ namespace Nav
             }
         }
 
+        public static void VisitBreadth<T>(T cell, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null) where T : Cell
+        {
+            HashSet<int> processed = new HashSet<int>();
+            List<T> to_visit = new List<T>();
+            to_visit.Add(cell);
+            processed.Add(cell.GlobalId);
+
+            while (to_visit.Count > 0)
+            {
+                cell = to_visit.First();
+                to_visit.RemoveAt(0);                
+
+                if (visitor != null && (allowed_cells == null || allowed_cells.Contains(cell)))
+                    visitor.Visit(cell);
+
+                foreach (Cell.Neighbour neighbour in cell.Neighbours)
+                {
+                    T neighbour_cell = (T)neighbour.cell;
+                    
+                    if (processed.Contains(neighbour_cell.GlobalId))
+                        continue;
+
+                    to_visit.Add(neighbour_cell);
+                    processed.Add(neighbour_cell.GlobalId);
+                }
+            }
+        }
+
         public static void Visit<T>(T cell, MovementFlag flags, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null) where T : Cell
         {
             HashSet<T> visited = new HashSet<T>();
@@ -712,6 +761,16 @@ namespace Nav
 
             public HashSet<Cell> cells = new HashSet<Cell>();
             public Dictionary<AABB, List<Cell>> cellsGrid = new Dictionary<AABB, List<Cell>>();
+        }
+
+        public class CollectVisitor : IVisitor<Cell>
+        {
+            public void Visit(Cell cell)
+            {
+                cells.Add(cell);
+            }
+
+            public readonly List<Cell> cells = new List<Cell>();
         }
     }
 }

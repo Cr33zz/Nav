@@ -9,12 +9,44 @@ namespace Nav.ExploreEngine
     // This algorithm chooses nearest unexplored neighbor but prefer those with many visited neighbors to not leave unexplored islands
     public class Nearest : ExplorationEngine
     {
-        public Nearest(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90)
-            : base(navmesh, navigator, explore_cell_size)
+        public Nearest(Navmesh navmesh, NavigationEngine navigator, int explore_cell_size = 90, bool ignore_small = true)
+            : base(navmesh, navigator, explore_cell_size, ignore_small)
         {
         }
 
         public float DistanceReductionExplorePct { get; set; } = 500;
+
+        protected override ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
+        {
+            if (curr_explore_cell == null)
+                curr_explore_cell = GetCurrentExploreCell();
+
+            if (curr_explore_cell == null)
+                return curr_explore_cell;
+
+            if (!curr_explore_cell.Explored)
+                return curr_explore_cell;
+
+            HashSet<ExploreCell> unexplored_cells = GetUnexploredCells(curr_explore_cell);
+
+            if (unexplored_cells.Count > 0)
+            {
+                ExploreCellSelector selector = CreateExploreCellSelector();
+
+                using (new ReadLock(DataLock))
+                    Algorihms.VisitBreadth(curr_explore_cell, MovementFlag.None, -1, unexplored_cells, selector);
+
+                if (selector.dest_cell != null)
+                    return selector.dest_cell;
+            }
+            
+            return null;
+        }
+
+        protected virtual ExploreCellSelector CreateExploreCellSelector()
+        {
+            return new ExploreCellSelector(this);
+        }
 
         protected class ExploreCellSelector : Algorihms.IDistanceVisitor<ExploreCell>
         {
@@ -57,7 +89,7 @@ namespace Nav.ExploreEngine
             private float GetExploredNeighboursPct(ExploreCell cell, int max_depth)
             {
                 HashSet<ExploreCell> cells_group = new HashSet<ExploreCell>();
-                
+
                 Algorihms.Visit(cell, ref cells_group, MovementFlag.None, true, 0, max_depth);
 
                 //treat missing cells as explored thus explore edges to possibly load new navmesh data
@@ -77,43 +109,6 @@ namespace Nav.ExploreEngine
             private float dest_cell_distance = float.MaxValue;
             private Vec3 hint_pos = Vec3.ZERO;
             private Nearest explorer;
-        }
-
-        protected override ExploreCell GetDestinationCell(ExploreCell curr_explore_cell)
-        {
-            ExploreCell dest_cell = base.GetDestinationCell(curr_explore_cell);
-
-            if (dest_cell != null)
-                return dest_cell;
-
-            if (curr_explore_cell == null)
-                curr_explore_cell = GetCurrentExploreCell();
-
-            if (curr_explore_cell == null)
-                return curr_explore_cell;
-
-            if (!curr_explore_cell.Explored)
-                return curr_explore_cell;
-
-            HashSet<ExploreCell> unexplored_cells = GetUnexploredCells(curr_explore_cell);
-
-            if (unexplored_cells.Count > 0)
-            {
-                ExploreCellSelector selector = CreateExploreCellSelector();
-
-                using (new ReadLock(DataLock))
-                    Algorihms.VisitBreadth(curr_explore_cell, MovementFlag.None, -1, unexplored_cells, selector);
-
-                if (selector.dest_cell != null)
-                    return selector.dest_cell;
-            }
-            
-            return null;
-        }
-
-        protected virtual ExploreCellSelector CreateExploreCellSelector()
-        {
-            return new ExploreCellSelector(this);
         }
     }
 }
