@@ -62,20 +62,20 @@ namespace Nav
         {
             get
             {
-                using (new ReadLock(InputLock))
-                    return m_ExploreConstraints?.ToList();
+                return m_ExploreConstraints?.ToList();
             }
             set
             {
-                if (m_ExploreConstraints == null && value == null)
+                var exConstrains = m_ExploreConstraints;
+
+                if (exConstrains == null && value == null)
                     return;
 
-                if ((m_ExploreConstraints != null && value == null) ||
-                    (m_ExploreConstraints == null && value != null) ||
-                    m_ExploreConstraints.Intersect(value).Count() != m_ExploreConstraints.Count)
+                if ((exConstrains != null && value == null) ||
+                    (exConstrains == null && value != null) ||
+                    exConstrains.Intersect(value).Count() != exConstrains.Count)
                 {
-                    using (new WriteLock(InputLock))
-                        m_ExploreConstraints = value != null ? (value.Count > 0 ? value : null) : null;
+                    m_ExploreConstraints = value != null ? (value.Count > 0 ? value?.ToList() : null) : null;
 
                     OnExploreCriteriaChanged();
                 }
@@ -96,6 +96,8 @@ namespace Nav
             using (new WriteLock(DataLock))
             using (new WriteLock(InputLock))
             {
+                m_ExploreConstraints = null;
+                m_ExploreFilter = null;
                 m_ExploreCells.Clear();
                 m_ExploredCellsCount = 0;
                 m_CellsToExploreCount = 0;
@@ -166,7 +168,8 @@ namespace Nav
         public virtual void Dispose()
         {
             m_ShouldStopUpdates = true;
-            UpdatesThread.Join();
+            if (!UpdatesThread.Join(3000))
+                UpdatesThread.Abort();
 
             m_Navmesh.RemoveObserver(this);
             m_Navigator.RemoveObserver(this);
@@ -223,6 +226,9 @@ namespace Nav
             {                
                 OnDeserialize(m_Navmesh.m_AllCells, m_Navmesh.m_IdToCell, r);
             }
+
+            RequestReevaluation();
+            Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
         }
 
         protected virtual void OnDeserialize(HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
@@ -257,12 +263,13 @@ namespace Nav
             m_CellsToExploreCount = r.ReadInt32();
 
             var explore_constraints_count = r.ReadInt32();
-            m_ExploreConstraints = explore_constraints_count > 0 ? new List<AABB>() : null;
-            if (m_ExploreConstraints != null)
+            var exConstraints = explore_constraints_count > 0 ? new List<AABB>() : null;
+            if (exConstraints != null)
             {
                 for (int i = 0; i < explore_constraints_count; ++i)
-                    m_ExploreConstraints.Add(new AABB(r));
+                    exConstraints.Add(new AABB(r));
             }
+            m_ExploreConstraints = exConstraints;
 
             m_HintPos = new Vec3(r);
         }
@@ -426,6 +433,7 @@ namespace Nav
         public virtual void OnNavBlockersChanged()
         {
             RequestReevaluation();
+            Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
         }
 
         public virtual void OnNavDataCleared()
@@ -516,7 +524,7 @@ namespace Nav
                 if (!(filter?.Invoke(cell) ?? true))
                     return;
 
-                if (!(constraints?.Any(x => cell.AABB.Overlaps2D(x)) ?? true))
+                if (!(constraints?.Any(x => cell.CellsAABB.Overlaps2D(x)) ?? true))
                     return;
 
                 if (!navmesh.AreConnected(agent_pos, cell.Position, MovementFlag.Walk, 0, 0))
@@ -595,7 +603,7 @@ namespace Nav
             }
         }
 
-        private object UpdateLocker = new object();
+        private readonly object UpdateLocker = new object();
 
         // Controls updated thread execution
         private volatile bool m_ShouldStopUpdates = false;
@@ -851,12 +859,13 @@ namespace Nav
             var dest_cell = m_DestCell;
             if (dest_cell != null)
             {
-                var constraints = ExploreConstraints;
-                if ((constraints?.Count ?? 0) == 0)
-                    return dest_cell.Position;
+                return dest_cell.Position;
+                //var constraints = ExploreConstraints;
+                //if ((constraints?.Count ?? 0) == 0)
+                //    return dest_cell.Position;
 
-                var pos_in_contraint = constraints.Select(x => x.Align(dest_cell.Position)).OrderBy(x => x.Distance2DSqr(dest_cell.Position)).First();
-                return new Vec3(pos_in_contraint.X, pos_in_contraint.Y, dest_cell.Position.Z);
+                //var pos_in_contraint = constraints.Select(x => x.Align(dest_cell.Position)).OrderBy(x => x.Distance2DSqr(dest_cell.Position)).First();
+                //return new Vec3(pos_in_contraint.X, pos_in_contraint.Y, dest_cell.Position.Z);
             }
             return Vec3.ZERO;
         }
