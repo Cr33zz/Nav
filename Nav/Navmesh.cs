@@ -1563,7 +1563,8 @@ namespace Nav
         public virtual void Dispose()
         {
             ShouldStopUpdates = true;
-            UpdatesThread.Join();
+            if (!UpdatesThread.Join(3000))
+                UpdatesThread.Abort();
         }
 
         internal protected void Log(string msg, bool force = false)
