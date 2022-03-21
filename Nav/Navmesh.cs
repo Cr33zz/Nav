@@ -96,6 +96,7 @@ namespace Nav
             Verbose = verbose;
 
             Init();
+            LocksState.Reset();
 
             UpdatesThread = new Thread(Updates);
             UpdatesThread.Name = "Navmesh-UpdatesThread";
@@ -120,7 +121,7 @@ namespace Nav
 
             List<Cell> incoming_cells = null;
 
-            using (new WriteLock(DataLock))
+            using (new WriteLock(DataLock, "DataLock - Navmesh.Add - add to grid cells"))
             {
                 incoming_cells = g_cell.GetCells(false);
                 
@@ -156,7 +157,7 @@ namespace Nav
                 }
             }
 
-            using (new WriteLock(DataLock))
+            using (new WriteLock(DataLock, "DataLock - Navmesh.Add - add to all cells"))
             {
                 foreach (var grid_cell_neighbour in grid_cell_neighbours)
                 {
@@ -165,8 +166,9 @@ namespace Nav
                     // if they were not connected before, simply connect them
                     if (n1 == null)
                     {
-                        g_cell.Neighbours.Add(new GridCell.Neighbour(grid_cell_neighbour.Item1, Vec3.ZERO, grid_cell_neighbour.Item2));
-                        grid_cell_neighbour.Item1.Neighbours.Add(new GridCell.Neighbour(g_cell, Vec3.ZERO, grid_cell_neighbour.Item2));
+                        float distance = g_cell.Center.Distance2D(grid_cell_neighbour.Item1.Center);
+                        g_cell.Neighbours.Add(new GridCell.Neighbour(grid_cell_neighbour.Item1, Vec3.ZERO, grid_cell_neighbour.Item2, distance));
+                        grid_cell_neighbour.Item1.Neighbours.Add(new GridCell.Neighbour(g_cell, Vec3.ZERO, grid_cell_neighbour.Item2, distance));
                     }
                     // otherwise verify connection flags
                     else if (n1.connection_flags < grid_cell_neighbour.Item2)
@@ -314,7 +316,7 @@ namespace Nav
 
             set
             {
-                using (new WriteLock(InputLock))
+                using (new WriteLock(InputLock, "InputLock - Navmesh.Regions"))
                 {
                     m_Regions = value;
                 }
@@ -407,8 +409,15 @@ namespace Nav
 
             while (!ShouldStopUpdates)
             {
-                OnUpdate(timer.ElapsedMilliseconds);
-                Thread.Sleep(15);
+                try
+                {
+                    OnUpdate(timer.ElapsedMilliseconds);
+                    Thread.Sleep(15);
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"Navmesh exception {ex.Message}\n{ex.StackTrace}");
+                }                
             }
         }
 
@@ -473,7 +482,7 @@ namespace Nav
                     }
                 }
 
-                using (new WriteLock(PatchesDataLock))
+                using (new WriteLock(PatchesDataLock, "PatchesDataLock - Navmesh.UpdatePatches"))
                     m_CellsPatches = cells_patches;
 
                 //Console.WriteLine("patches update end");
@@ -495,7 +504,7 @@ namespace Nav
             bool force_rebuild = false;
             if (force_rebuild)
             {
-                using (new WriteLock(DataLock))
+                using (new WriteLock(DataLock, "DataLock - Navmesh.UpdateRegions - force rebuild"))
                 {
                     foreach (var cell in m_AllCells.Where(x => x.Replacement).ToList())
                     {
@@ -519,7 +528,7 @@ namespace Nav
             {
                 if (CellsOverlappedByRegions.Count > 0)
                 {
-                    using (new WriteLock(DataLock))
+                    using (new WriteLock(DataLock, "DataLock - Navmesh.Add - clear overlapping regions"))
                     {
                         foreach (var data in CellsOverlappedByRegions)
                             data.Value.overlapping_regions.Clear();
@@ -542,7 +551,7 @@ namespace Nav
 
                             if (overlapped_cells.Count > 0)
                             {
-                                using (new WriteLock(DataLock))
+                                using (new WriteLock(DataLock, "DataLock - Navmesh.Add - add to overlapping regions"))
                                 {
                                     foreach (Cell cell in overlapped_cells)
                                     {
@@ -574,7 +583,7 @@ namespace Nav
             {
                 bool blockersChanged = false;
 
-                using (new WriteLock(DataLock))
+                using (new WriteLock(DataLock, "DataLock - Navmesh.Add - update regions"))
                 //using (new WriteLock(DataLock, context: "UpdateRegions"))
                 using (new Profiler($"[Nav] Updating {regions_copy.Count} regions took %t", 50))
                 {
@@ -681,7 +690,7 @@ namespace Nav
                                     Vec3 border_point = default(Vec3);
 
                                     foreach (Cell potential_neighbor in potential_neighbors)
-                                        replacement_cell.TryAddNeighbour(potential_neighbor, ref border_point);
+                                        replacement_cell.TryAddNeighbour(potential_neighbor, out border_point);
 
                                     parent_grid_cell.AddReplacementCell(replacement_cell);
                                     m_AllCells.Add(replacement_cell);
@@ -753,9 +762,9 @@ namespace Nav
 
         public virtual void Clear()
         {
-            using (new WriteLock(DataLock))
-            using (new WriteLock(PatchesDataLock))
-            using (new WriteLock(InputLock))
+            using (new WriteLock(DataLock, "DataLock - Navmesh.Clear"))
+            using (new WriteLock(PatchesDataLock, "PatchesDataLock - Navmesh.Clear"))
+            using (new WriteLock(InputLock, "InputLock - Navmesh.Clear"))
             {
                 m_CellsCache.Clear();
                 m_AllCells.Clear();
@@ -770,6 +779,8 @@ namespace Nav
 
                 m_LastGridCellId = 0;
                 m_LastCellId = 0;
+
+                Trace.WriteLine("navmesh - cleared");
             }
 
             foreach (INavmeshObserver observer in m_Observers)
@@ -1136,7 +1147,7 @@ namespace Nav
             using (new Profiler("AreConnected (incl. lock) took %t", 100))
             using (new ReadLock(PatchesDataLock))
             //using (new ReadLock(DataLock, context: "AreConnected"))
-            using (new Profiler("AreConnected took %t", 5))
+            using (new Profiler("AreConnected took %t", 50))
             {
                 pos1_on_navmesh = pos1;
                 pos2_on_navmesh = pos2;
@@ -1202,6 +1213,23 @@ namespace Nav
                 }
 
                 return snapped_pos_dist >= 0;
+            }
+        }
+
+        public bool IsOnNavmesh(Vec3 pos, MovementFlag flags, bool check_2d = true)
+        {
+            using (new ReadLock(DataLock))
+            {
+                var gridCells = (check_2d ? m_GridCells.Where(x => x.Contains2D(pos)) : m_GridCells.Where(x => x.Contains(pos))).ToList();
+
+                if (!gridCells.Any())
+                    return false;
+
+                foreach (var gridCell in gridCells)
+                    if (gridCell.GetCellsAt(pos, check_2d, 0, false).Where(x => x.HasFlags(flags)).Any())
+                        return true;
+
+                return false;
             }
         }
 
@@ -1461,9 +1489,9 @@ namespace Nav
 
         protected virtual void OnDeserialize(BinaryReader r)
         {
-            using (new WriteLock(DataLock))
-            using (new WriteLock(PatchesDataLock))
-            using (new WriteLock(InputLock))
+            using (new WriteLock(DataLock, "DataLock - Navmesh.OnDeserialize"))
+            using (new WriteLock(PatchesDataLock, "PatchesDataLock - Navmesh.OnDeserialize"))
+            using (new WriteLock(InputLock, "InputLock - Navmesh.OnDeserialize"))
             {
                 //using (new Profiler("Navmesh deserialization took %t"))
                 {
@@ -1588,7 +1616,7 @@ namespace Nav
 
         public void AddObserver(INavmeshObserver observer)
         {
-            using (new WriteLock(InputLock))
+            using (new WriteLock(InputLock, "InputLock - Navmesh.AddObserver"))
             {
                 if (m_Observers.Contains(observer))
                     return;
@@ -1599,7 +1627,7 @@ namespace Nav
 
         public void RemoveObserver(INavmeshObserver observer)
         {
-            using (new WriteLock(InputLock))
+            using (new WriteLock(InputLock, "InputLock - Navmesh.RemoveObserver"))
                 m_Observers.Remove(observer);
         }
 
@@ -1646,12 +1674,11 @@ namespace Nav
         internal ReaderWriterLockSlim PatchesDataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
-        public ReadLock AcquireReadDataLock()
+        public ReadLock AcquireReadDataLock(string description = null)
         {
-            return new ReadLock(DataLock);
-            //return new ReadLock(DataLock, context: "AcquireReadDataLock");
+            return new ReadLock(DataLock, description: $"Navmesh.DataLock - {description}");
         }
-        
+
         internal HashSet<Cell> m_AllCells = new HashSet<Cell>(); //@ DataLock
         internal Dictionary<int, Cell> m_IdToCell = new Dictionary<int, Cell>(); //@ DataLock
         // cell patches are interconnected groups of cells allowing ultra fast connection checks

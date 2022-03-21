@@ -108,7 +108,7 @@ namespace Nav
             m_Navigator.KeepFromEdgePrecision = float.Parse(debug_ini.IniReadValue("Navigator", "keep_from_edge_precision"));
             m_Navigator.CurrentPosDiffRecalcThreshold = float.Parse(debug_ini.IniReadValue("Navigator", "current_pos_diff_recalc_threshold"));
 
-            m_Explorer.ChangeExploreCellSize(int.Parse(debug_ini.IniReadValue("Explorer", "explore_cell_size")));
+            //m_Explorer.ChangeExploreCellSize(int.Parse(debug_ini.IniReadValue("Explorer", "explore_cell_size")));
             m_Explorer.Enabled = bool.Parse(debug_ini.IniReadValue("Explorer", "enabled"));
             m_Explorer.ExploreDestPrecision= float.Parse(debug_ini.IniReadValue("Explorer", "explore_dest_precision"));
 
@@ -253,8 +253,7 @@ namespace Nav
 
                 if (!m_RenderOriginalPath && m_RenderPath)
                 {
-                    destination last_path_dest = default(destination);
-                    if (m_Navigator.TryGetPath(ref m_LastPath, ref last_path_dest))
+                    if (m_Navigator.TryGetPath(ref m_LastPath, out var last_path_dest))
                         m_LastPath.Insert(0, m_Navigator.CurrentPos);
                     RenderHelper.DrawLines(e.Graphics, RenderHelper.PATH_PEN, m_RenderCenter, m_LastPath, 1, true);
 
@@ -277,27 +276,19 @@ namespace Nav
 
                 Vec3 curr = m_Navigator.CurrentPos;
                 Vec3 dest = m_Navigator.Destination.pos;
-                var ring_dest = m_Navigator.RingDestination;
-
+                
                 if (!curr.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.Blue, m_RenderCenter, curr);
 
                 if (!dest.IsZero())
                     RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, dest);
 
-                if (!ring_dest.pos.IsZero())
-                {
-                    RenderHelper.DrawPoint(e.Graphics, Pens.LightBlue, m_RenderCenter, ring_dest.pos);
-                    RenderHelper.DrawCircle(e.Graphics, Pens.LightBlue, m_RenderCenter, ring_dest.pos, ring_dest.precision);
-                    RenderHelper.DrawCircle(e.Graphics, Pens.LightBlue, m_RenderCenter, ring_dest.pos, ring_dest.precision_max);
-                }
-
                 if (!curr.IsZero() && !dest.IsZero())
                 {
                     if (m_RenderOriginalPath)
                     {
                         List<Vec3> path = new List<Vec3>();
-                        m_Navigator.FindPath(curr, dest, MovementFlag.Walk, ref path, out var timedOut, out var path_recalc_trigger_position, out var path_recalc_trigger_precision, out var unused, -1, false, false, 0, false, 0, smoothen_distance: 0);
+                        m_Navigator.FindPath(curr, dest, ref path, out var timed_out, false, false, 0, 0, smoothen_distance: 0);
                         path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, Pens.Black, m_RenderCenter, path, 1);
                     }
@@ -307,7 +298,7 @@ namespace Nav
                         List<Vec3> rought_path = new List<Vec3>();
 
                         if (m_Navigator.m_RoughtPathEstimator != null)
-                            m_Navigator.m_RoughtPathEstimator.FindRoughPath(curr, dest, ref rought_path);
+                            m_Navigator.m_RoughtPathEstimator.FindRoughPath(curr, dest, ref rought_path, out var unused);
 
                         rought_path.Insert(0, curr);
                         RenderHelper.DrawLines(e.Graphics, RenderHelper.EXPLORE_PATH_PEN, m_RenderCenter, rought_path, 1, true);
@@ -382,6 +373,8 @@ namespace Nav
             e.Graphics.DrawString($"Explored: {m_Explorer.GetExploredPercent()}%", STATS_FONT, Brushes.Black, 10, Height - 100);
             e.Graphics.DrawString($"Grid cells: {m_Navmesh.GridCellsCount}", STATS_FONT, Brushes.Black, 10, Height - 70);
             e.Graphics.DrawString($"Cells: {m_Navmesh.CellsCount}", STATS_FONT, Brushes.Black, 10, Height - 85);
+
+            e.Graphics.DrawString(string.Join("\n", LocksState.GetActiveLocks()), STATS_FONT, Brushes.Black, Width / 2 - 120, 50);
         }
 
         protected virtual void OnRenderPos(PaintEventArgs e)
@@ -460,20 +453,20 @@ namespace Nav
                     m_Navigator.SetCustomDestination(result);
                     e.Handled = true;
                 }
-                else if (e.KeyCode == Keys.R)
-                {
-                    Vec3 result = default(Vec3);
-                    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
-                                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
-                                            MovementFlag.Walk,
-                                            ref result))
-                    {
-                        result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
-                    }
+                //else if (e.KeyCode == Keys.R)
+                //{
+                //    Vec3 result = default(Vec3);
+                //    if (!m_Navmesh.RayTrace(new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 1000),
+                //                            new Vec3(m_RenderCenter.X, m_RenderCenter.Y, -1000),
+                //                            MovementFlag.Walk,
+                //                            ref result))
+                //    {
+                //        result = new Vec3(m_RenderCenter.X, m_RenderCenter.Y, 0);
+                //    }
 
-                    m_Navigator.Destination = new destination(result, DestType.Custom, 400, 700);
-                    e.Handled = true;
-                }
+                //    m_Navigator.Destination = new destination(result, DestType.Custom, 400, 700);
+                //    e.Handled = true;
+                //}
                 else if (e.KeyCode == Keys.L)
                 {
                     m_RenderLegend = !m_RenderLegend;
@@ -593,7 +586,8 @@ namespace Nav
                     //m_Navmesh.dbg_GenerateBlockOfAvoidAreas(50, 30);
 
                     //Thread t = new Thread(() => dbg_MovingRegions(200));
-                    Thread t = new Thread(() => dbg_RandomRegions(200));
+                    //Thread t = new Thread(() => dbg_RandomRegions(200));
+                    Thread t = new Thread(() => dbg_RandomExploreConstraints(2000));
                     t.Start();
 
                     e.Handled = true;
@@ -807,6 +801,29 @@ namespace Nav
                 }
 
                 m_Navmesh.Regions = regions;
+
+                Thread.Sleep(dt);
+            }
+        }
+
+        private void dbg_RandomExploreConstraints(int approx_size)
+        {
+            Random rng = new Random();
+
+            const int dt = 50;
+
+            while (true)
+            {
+                var constraints = new List<AABB>();
+
+                for (int i = 0; i < 3; ++i)
+                {
+                    Vec3 pos = m_Navmesh.GetRandomPos(rng);
+                    float size = approx_size + (float)rng.NextDouble() * (approx_size * 0.5f);
+                    constraints.Add(new AABB(pos - new Vec3(size * 0.5f, size * 0.5f, 0), pos + new Vec3(size * 0.5f, size * 0.5f, 0)));
+                }
+
+                m_Explorer.ExploreConstraints = constraints;
 
                 Thread.Sleep(dt);
             }
@@ -1076,7 +1093,7 @@ namespace Nav
             }
 
             if (draw_id)
-                DrawString(e.Graphics, Brushes.Black, trans, cell.Position, cell.GlobalId.ToString() + " (" + cell.Id.ToString() + ")", 10);
+                DrawString(e.Graphics, Brushes.Black, trans, cell.Position, cell.GlobalId.ToString() + " (" + cell.Id.ToString() + ")", 35);
         }
 
         public static void Render(Nav.Navmesh navmesh, Nav.ExploreCell cell, List<Nav.ExploreCell> all_cells, PointF trans, PaintEventArgs e, bool draw_id)

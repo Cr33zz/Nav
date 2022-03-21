@@ -55,8 +55,9 @@ namespace Nav
                 {
                     if (cell.Equals(other_cell) || cell.Neighbours.Exists(x => x.cell.Equals(other_cell)))
                     {
-                        Neighbours.Add(new Neighbour(explore_cell, Vec3.ZERO, MovementFlag.None));
-                        explore_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, MovementFlag.None));
+                        float distance = Position.Distance2D(explore_cell.Position);
+                        Neighbours.Add(new Neighbour(explore_cell, Vec3.ZERO, MovementFlag.None, distance));
+                        explore_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, MovementFlag.None, distance));
                         
                         return true;
                     }
@@ -120,7 +121,7 @@ namespace Nav
 
         public bool CellsContains2D(Vec3 p)
         {
-            if (!Contains2D(p))
+            if (!CellsAABB.Contains2D(p))
                 return false;
 
             return Cells.Exists(c => c.Contains2D(p));

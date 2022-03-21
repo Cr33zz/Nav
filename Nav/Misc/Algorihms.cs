@@ -75,7 +75,7 @@ namespace Nav
             return travel_distance;
         }
 
-        public static void FindExplorePath2Opt(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<ExploreCell> path)
+        public static void FindExplorePath2Opt(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<ExploreCell> path, long timeout)
         {
             using (new Profiler($"2-Opt %t"))
             {
@@ -91,8 +91,8 @@ namespace Nav
                 // reordering cell in breadth-first order seems to help with 2-opt backtracking
                 var collect_cells_visitor = new CollectVisitor();
                 Algorihms.VisitBreadth(start_cell, visitor: collect_cells_visitor);
-                var best_tour = collect_cells_visitor.cells.Select(x => x as ExploreCell).Intersect(explore_cells).ToList();
 
+                var best_tour = collect_cells_visitor.cells.Select(x => x as ExploreCell).Intersect(explore_cells).ToList();
                 best_tour.RemoveAll(c => c.Explored || c.Neighbours.Count == 0);
 
                 if (start_cell.Explored) // re-insert start cell if needed
@@ -104,8 +104,9 @@ namespace Nav
                     return;
                 }
 
-                float best_dist = GetTravelDistance(best_tour, distances);
+                var timeout_timer = Stopwatch.StartNew();
 
+                float best_dist = GetTravelDistance(best_tour, distances);
 
                 if (best_tour.Count < 90)
                 {
@@ -113,6 +114,12 @@ namespace Nav
 
                     while (true)
                     {
+                        if (timeout_timer.ElapsedMilliseconds > timeout)
+                        {
+                            Trace.WriteLine($"explore path finder timeout out ({best_tour.Count} nodes)");
+                            break;
+                        }
+
                         bool better_found = false;
 
                         for (int i = 1; i < best_tour.Count - 1; ++i)
@@ -145,6 +152,12 @@ namespace Nav
 
                     while (true)
                     {
+                        if (timeout_timer.ElapsedMilliseconds > timeout)
+                        {
+                            Trace.WriteLine($"explore path finder timeout out ({best_tour.Count} nodes)");
+                            break;
+                        }
+
                         float min_change = 0;
 
                         int min_i = -1;

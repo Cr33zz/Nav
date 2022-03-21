@@ -26,6 +26,12 @@ namespace Nav
             InitGridCell(area_id);
         }
 
+        public GridCell(AABB aabb, int id = -1, int area_id = -1)
+            : base(aabb, MovementFlag.None, id)
+        {
+            InitGridCell(area_id);
+        }
+
         private void InitGridCell(int area_id)
         {
             AreaId = area_id;
@@ -40,10 +46,8 @@ namespace Nav
             if (cell.AABB.Area < MIN_CELL_AREA_TO_CONSIDER)
                 return false;
 
-            Vec3 border_point = default(Vec3);
-
             foreach (Cell our_cell in Cells)
-                our_cell.TryAddNeighbour(cell, ref border_point);
+                our_cell.TryAddNeighbour(cell, out var border_point);
 
             cell.ParentAABB = AABB;
             Cells.AddFirst(cell);
@@ -75,8 +79,7 @@ namespace Nav
             {
                 foreach (Cell other_cell in grid_cell.Cells)
                 {
-                    Vec3 border_point = default(Vec3);
-                    bool cells_connected = our_cell.TryAddNeighbour(other_cell, ref border_point);
+                    bool cells_connected = our_cell.TryAddNeighbour(other_cell, out var border_point);
 
                     if (cells_connected)
                     {
@@ -96,8 +99,9 @@ namespace Nav
                 // if they were not connected before, simply connect them
                 if (n1 == null)
                 {
-                    Neighbours.Add(new Neighbour(grid_cell, Vec3.ZERO, connection_flags));
-                    grid_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, connection_flags));
+                    float distance = Center.Distance2D(grid_cell.Center);
+                    Neighbours.Add(new Neighbour(grid_cell, Vec3.ZERO, connection_flags, distance));
+                    grid_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, connection_flags, distance));
                 }
                 // otherwise verify connection flags
                 else if (n1.connection_flags < connection_flags)
@@ -123,8 +127,7 @@ namespace Nav
             {
                 foreach (Cell other_cell in grid_cell.Cells)
                 {
-                    Vec3 border_point = default(Vec3);
-                    bool should_be_connected = our_cell.ShouldBecomeNeighbours(other_cell, ref border_point);
+                    bool should_be_connected = our_cell.ShouldBecomeNeighbours(other_cell, out var border_point);
 
                     if (should_be_connected)
                     {

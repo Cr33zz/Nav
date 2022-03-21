@@ -98,6 +98,7 @@
     <Compile Include="Misc\Locks.cs" />
     <Compile Include="Misc\Plane.cs" />
     <Compile Include="Misc\Profiler.cs" />
+    <Compile Include="Misc\ScopedTimer.cs" />
     <Compile Include="Misc\Vec3.cs" />
     <Compile Include="NavigationEngine.cs" />
     <Compile Include="INavigationObserver.cs" />

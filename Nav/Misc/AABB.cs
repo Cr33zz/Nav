@@ -48,7 +48,14 @@ namespace Nav
             get { return (Max.X - Min.X) * (Max.Y - Min.Y); }
         }
 
-        public float Radius
+        public float Radius => MaxDimension2d;
+
+        public float MaxDimension2d
+        {
+            get { return Math.Max(Max.X - Min.X, Max.Y - Min.Y) * 0.5f; }
+        }
+
+        public float MinDimension2d
         {
             get { return Math.Min(Max.X - Min.X, Max.Y - Min.Y) * 0.5f; }
         }

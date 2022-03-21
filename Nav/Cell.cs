@@ -298,12 +298,14 @@ namespace Nav
 
         private void AddNeighbour(Cell cell, Vec3 border_point)
         {
-            Neighbours.Add(new Neighbour(cell, border_point, Flags & cell.Flags));
+            Neighbours.Add(new Neighbour(cell, border_point, Flags & cell.Flags, Center.Distance2D(cell.Center)));
             AlignPlaneDirty = true;
         }
 
-        public bool ShouldBecomeNeighbours(Cell cell, ref Vec3 border_point)
+        public bool ShouldBecomeNeighbours(Cell cell, out Vec3 border_point)
         {
+            border_point = Vec3.ZERO;
+
             // should not happen - removed due to performance impact - deep down it only checks global ID matching
             if (cell.Equals(this))
                 return false;
@@ -324,9 +326,9 @@ namespace Nav
         }
 
         // Try to add given cell as neighbour. Returns true when actually added.
-        public bool TryAddNeighbour(Cell cell, ref Vec3 border_point)
+        public bool TryAddNeighbour(Cell cell, out Vec3 border_point)
         {
-            if (ShouldBecomeNeighbours(cell, ref border_point))
+            if (ShouldBecomeNeighbours(cell, out border_point))
             {
                 MakeNeighbours(cell, border_point, force: true);
                 return true;
@@ -446,16 +448,18 @@ namespace Nav
 
         public class Neighbour
         {
-            public Neighbour(Cell cell, Vec3 border_point, MovementFlag connection_flags)
+            public Neighbour(Cell cell, Vec3 border_point, MovementFlag connection_flags, float distance)
             {
                 this.cell = cell;
                 this.border_point = border_point;
                 this.connection_flags = connection_flags;
+                this.distance = distance;
             }
 
             public Cell cell;
             public Vec3 border_point;
             public MovementFlag connection_flags;
+            public float distance;
         }
 
         public List<Neighbour> Neighbours { get; private set; }
@@ -491,6 +495,7 @@ namespace Nav
                 w.Write(neighbour.cell.GlobalId);
                 neighbour.border_point.Serialize(w);
                 w.Write((int)neighbour.connection_flags);
+                w.Write(neighbour.distance);
             }
         }
 
@@ -510,12 +515,13 @@ namespace Nav
             int neighbours_num = r.ReadInt32();
             for (int i = 0; i < neighbours_num; ++i)
             {
-                Neighbour neighbour = new Neighbour(null, Vec3.ZERO, MovementFlag.None);
+                Neighbour neighbour = new Neighbour(null, Vec3.ZERO, MovementFlag.None, 0);
 
                 int neighbour_global_id = r.ReadInt32();
                 neighbour.cell = id_to_cell != null ? id_to_cell[neighbour_global_id] : all_cells.FirstOrDefault(x => x.GlobalId == neighbour_global_id);
                 neighbour.border_point = new Vec3(r);
                 neighbour.connection_flags = (MovementFlag)r.ReadInt32();
+                neighbour.distance = r.ReadSingle();
 
                 if (neighbour.cell != null)
                     Neighbours.Add(neighbour);

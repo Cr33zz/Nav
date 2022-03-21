@@ -19,7 +19,7 @@ namespace Nav
 
             m_Navigator = navigator;
             m_Navigator.AddObserver(this);
-            m_Navigator.m_RoughtPathEstimator = m_Navigator.m_RoughtPathEstimator ?? this;
+            m_Navigator.m_RoughtPathEstimator = this;
 
             // generate exploration data from already existing grid cells
             Reset();
@@ -35,12 +35,16 @@ namespace Nav
         public float MaxAreaToMarkAsSmall { get; set; } = 0 * 0;
         public float MaxDimensionToMarkAsSmall { get; set; } = 0;
 
+        public int UpdateExplorationInterval { get; set; } = 300;
+
         // precision with explore destination will be accepted as reached
         public float ExploreDestPrecision { get; set; } = 20;
 
         // change it via ChangeExploreCellSize function
         public int ExploreCellSize { get; private set; }
         public bool IgnoreSmall { get; private set; }
+
+        public Int64 ExploreUpdateDuration => ExploreUpdateTimer.ElapsedMilliseconds;
 
         public Func<ExploreCell, bool> ExploreFilter
         {
@@ -93,8 +97,8 @@ namespace Nav
 
         public virtual void Clear()
         {
-            using (new WriteLock(DataLock))
-            using (new WriteLock(InputLock))
+            using (new WriteLock(DataLock, "DataLock - ExplorationEngine.Clear"))
+            using (new WriteLock(InputLock, "InputLock - ExplorationEngine.Clear"))
             {
                 m_ExploreConstraints = null;
                 m_ExploreFilter = null;
@@ -106,13 +110,15 @@ namespace Nav
                 m_LastExploreCellId = 0;
 
                 m_HintPos = Vec3.ZERO;
+
+                Trace.WriteLine("explorer - cleared");
             }
         }
 
         public void ResetExploration(List<AABB> areas = null)
         {
-            using (new WriteLock(DataLock))
-            using (new WriteLock(InputLock))
+            using (new WriteLock(DataLock, "DataLock - ExplorationEngine.ResetExploration"))
+            using (new WriteLock(InputLock, "InputLock - ExplorationEngine.ResetExploration"))
             {
                 if ((areas?.Count ?? 0) == 0)
                 {
@@ -120,16 +126,16 @@ namespace Nav
                         ex_cell.Explored = false;
                     m_ExploredCellsCount = 0;
                     m_CellsToExploreCount = 0;
+                    Trace.WriteLine($"Reset all ({m_ExploreCells.Count}) explore cells.");
                 }
                 else
                 {
-                    var exploreCellsInAreas = m_ExploreCells.Where(x => areas.Any(a => x.AABB.Overlaps2D(a))).ToList();
-                    var alreadyExploredCellsCount = exploreCellsInAreas.Count(x => x.Explored);
-                    m_ExploredCellsCount -= alreadyExploredCellsCount;
-                    m_CellsToExploreCount += alreadyExploredCellsCount;
-
+                    var exploreCellsInAreas = m_ExploreCells.Where(x => areas.Any(a => x.CellsAABB.Overlaps2D(a))).ToList();
                     foreach (var ex_cell in exploreCellsInAreas)
                         ex_cell.Explored = false;
+
+                    Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
+                    Trace.WriteLine($"Reset {exploreCellsInAreas.Count} explore cells.");
                 }
             }
         }
@@ -150,14 +156,18 @@ namespace Nav
         public virtual float GetExploredPercent()
         {
             // need to run expensive version when exploration is disabled and number of explore cells has changed (because numbers used are not refreshed then)
-            if (!Enabled && Interlocked.CompareExchange(ref m_ForceRefreshExploredPercent, 0, 1) == 1)
+            var forceRefresh = Interlocked.CompareExchange(ref m_ForceRefreshExploredPercent, 0, 1) == 1;
+            if ((!Enabled && forceRefresh) || forceRefresh)
             {
                 ExploreCell current_explore_cell;
                 using (new ReadLock(DataLock))
                     current_explore_cell = GetCurrentExploreCell();
 
                 if (current_explore_cell == null)
+                {
+                    Trace.WriteLine($"no explore cell found @{m_Navigator.CurrentPos} (total ex cells {m_ExploreCells.Count})");
                     return 100;
+                }
 
                 GetUnexploredCells(current_explore_cell);
             }
@@ -179,8 +189,8 @@ namespace Nav
         public void Serialize(string name)
         {
             using (BinaryWriter w = new BinaryWriter(File.OpenWrite(name + ".explorer")))
-            using (new ReadLock(DataLock))
-            using (new ReadLock(InputLock))
+            using (new ReadLock(DataLock, description: "DataLock - ExplorationEngine.Serialize"))
+            using (new ReadLock(InputLock, description: "InputLock - ExplorationEngine.Serialize"))
             using (m_Navmesh.AcquireReadDataLock())
             {
                 OnSerialize(w);
@@ -221,8 +231,8 @@ namespace Nav
         {
             using (BinaryReader r = new BinaryReader(File.OpenRead(name + ".explorer")))
             using (m_Navmesh.AcquireReadDataLock())
-            using (new WriteLock(DataLock))
-            using (new WriteLock(InputLock))
+            using (new WriteLock(DataLock, "DataLock - ExplorationEngine.Deserialize"))
+            using (new WriteLock(InputLock, "InputLock - ExplorationEngine.Deserialize"))
             {                
                 OnDeserialize(m_Navmesh.m_AllCells, m_Navmesh.m_IdToCell, r);
             }
@@ -317,9 +327,9 @@ namespace Nav
             return m_ExploreCells;
         }
 
-        public ReadLock AquireReadDataLock()
+        public ReadLock AquireReadDataLock(string description = null)
         {
-            return new ReadLock(DataLock);
+            return new ReadLock(DataLock, description: description);
         }
 
         protected virtual bool CanBeEnabled() { return true; }
@@ -352,6 +362,7 @@ namespace Nav
 
         private void SelectNewDestinationCell(ExploreCell curr_explore_cell)
         {
+            ExploreUpdateStage = "SelectDestCell";
             //using (new Profiler("SelectNewDestinationCell [%t]"))
             {
                 var prev_dest_cell = m_DestCell;
@@ -361,7 +372,7 @@ namespace Nav
 
                 //using (new Profiler("set explore cell pos as dest [%t]"))
                 if (Enabled)
-                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false, as_close_as_possible: false));
+                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false, as_close_as_possible: false, debug_annotation: $"explore cell {m_DestCell?.GlobalId ?? -1}"));
 
                 // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
                 if (m_DestCell != prev_dest_cell)
@@ -376,18 +387,22 @@ namespace Nav
 
         public virtual void OnGridCellAdded(GridCell grid_cell)
         {
-            using (new ReadLock(DataLock, true))
+            using (new ReadLock(DataLock, true, "DataLock - ExplorationEngine.OnGridCellAdded"))
             {
                 // remove explore cells overlapping with grid cell
                 var cells_to_validate = m_ExploreCells.Where(x => x.Overlaps2D(grid_cell)).ToList();
 
-                using (new WriteLock(DataLock))
+                //Trace.WriteLine($"gcell #{grid_cell.GlobalId} added");
+                if (cells_to_validate.Any())
                 {
-                    foreach (ExploreCell explore_cell in cells_to_validate)
+                    using (new WriteLock(DataLock, "DataLock - ExplorationEngine.OnGridCellAdded"))
                     {
-                        explore_cell.Detach();
-                        OnExploreCellRemoved(explore_cell);
-                        m_ExploreCells.Remove(explore_cell);
+                        foreach (ExploreCell explore_cell in cells_to_validate)
+                        {
+                            explore_cell.Detach();
+                            m_ExploreCells.Remove(explore_cell);
+                            OnExploreCellRemoved(explore_cell);
+                        }
                     }
                 }
 
@@ -426,8 +441,7 @@ namespace Nav
 
         protected virtual void OnExploreCriteriaChanged()
         {
-            lock (UpdateLocker)
-                UpdateExploration(true, true);
+            RequestReevaluation();
         }
 
         public virtual void OnNavBlockersChanged()
@@ -456,6 +470,7 @@ namespace Nav
 
         protected virtual void OnExploreCellRemoved(ExploreCell cell)
         {
+            //Trace.WriteLine($"explore cell #{cell.GlobalId} @{cell.Position} removed");
         }
 
         public virtual bool IsExplored()
@@ -475,7 +490,7 @@ namespace Nav
             if (current_explore_cell == null)
             {
                 // try explore cells containing current position first
-                var potential_explore_cells = m_ExploreCells.Where(x => x.Contains2D(curr_pos));
+                var potential_explore_cells = m_ExploreCells.Where(x => x.CellsAABB.Contains2D(curr_pos));
 
                 if (potential_explore_cells == null)
                     potential_explore_cells = m_ExploreCells; // find nearest explore cell
@@ -527,7 +542,7 @@ namespace Nav
                 if (!(constraints?.Any(x => cell.CellsAABB.Overlaps2D(x)) ?? true))
                     return;
 
-                if (!navmesh.AreConnected(agent_pos, cell.Position, MovementFlag.Walk, 0, 0))
+                if (!navmesh.AreConnected(agent_pos, cell.Position, MovementFlag.Walk, 10, 0))
                     return;
 
                 ++all_cells_count;
@@ -548,7 +563,7 @@ namespace Nav
 
         protected HashSet<ExploreCell> GetUnexploredCells(ExploreCell origin_cell)
         {
-            using (new ReadLock(DataLock))
+            using (new ReadLock(DataLock, description: "DataLock - ExplorationEngine.GetUnexploredCells"))
             {
                 var agent_pos = m_Navigator.CurrentPos;
 
@@ -585,30 +600,33 @@ namespace Nav
 
             while (!m_ShouldStopUpdates)
             {
-                long time = timer.ElapsedMilliseconds;
-
-                var forceReevaluation = Interlocked.CompareExchange(ref m_ForceReevaluation, 0, 1) == 1;
-                if (forceReevaluation || (m_UpdateExplorationInterval > 0 && (time - last_update_time) > m_UpdateExplorationInterval) || (Enabled && m_Navigator.GetDestinationType() < DestType.Explore))
+                try
                 {
-                    last_update_time = time;
+                    long time = timer.ElapsedMilliseconds;
 
-                    lock (UpdateLocker)
+                    var forceReevaluation = Interlocked.CompareExchange(ref m_ForceReevaluation, 0, 1) == 1;
+                    if (forceReevaluation || (UpdateExplorationInterval > 0 && (time - last_update_time) > UpdateExplorationInterval) || (Enabled && m_Navigator.GetDestinationType() < DestType.Explore))
                     {
+                        last_update_time = time;
+
                         //using (new Profiler("[Nav] Nav updated [%t]"))
-                        UpdateExploration(forceReevaluation, false);
+                        using (new ScopedTimer(ExploreUpdateTimer))
+                            UpdateExploration(forceReevaluation);
                     }
+                    else
+                        Thread.Sleep(50);
                 }
-                else
-                    Thread.Sleep(50);
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"ExploreEngine exception {ex.Message}\n{ex.StackTrace}");
+                }
             }
         }
-
-        private readonly object UpdateLocker = new object();
 
         // Controls updated thread execution
         private volatile bool m_ShouldStopUpdates = false;
 
-        private void UpdateExploration(bool forceReevaluation, bool ignore_explored)
+        private void UpdateExploration(bool force_reevaluation)
         {
             Vec3 current_pos = m_Navigator.CurrentPos;
 
@@ -621,7 +639,7 @@ namespace Nav
                 return;
             }
 
-            if (!ignore_explored && IsExplored())
+            if (!force_reevaluation && IsExplored())
             {
                 m_Navmesh.Log("[Nav] Exploration finished!");
                 m_Navigator.ClearDestination(DestType.Explore);
@@ -630,10 +648,12 @@ namespace Nav
 
             if (m_DestCell != null)
             {
+                ExploreUpdateStage = "UpdtDestCell";
+
                 bool validate_dest_cell = Interlocked.CompareExchange(ref m_ValidateDestCell, 0, 1) == 1;
                 bool mark_dest_cell_as_explored = false;
                 // perform connection check only when reevaluation is forced (usually due to navigation data change)
-                bool is_dest_cell_connected = (!forceReevaluation && !validate_dest_cell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, 0, 0, out var unused1, out var unused2);
+                bool is_dest_cell_connected = (!force_reevaluation && !validate_dest_cell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, 0, 10, out var unused1, out var unused2);
                 
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)
@@ -641,7 +661,7 @@ namespace Nav
                     if (!m_DestCell.Delayed)
                     {
                         m_DestCell.Delayed = true;
-                        forceReevaluation = true; // this is a change to find another un-delayed explore cell
+                        force_reevaluation = true; // this is a change to find another un-delayed explore cell
                     }
                     else
                     {
@@ -660,15 +680,21 @@ namespace Nav
                 }
             }
 
-            using (new ReadLock(DataLock, true))
+            ExploreUpdateStage = "AcqLock";
+
+            using (new ReadLock(DataLock, true, "DataLock - ExplorationEngine.UpdateExploration"))
             {
-                if ((Enabled && m_Navigator.GetDestinationType() < DestType.Explore) || (m_DestCell?.Explored ?? false) || forceReevaluation)
+                ExploreUpdateStage = "LockAcqed";
+
+                if ((Enabled && m_Navigator.GetDestinationType() < DestType.Explore) || (m_DestCell?.Explored ?? false) || force_reevaluation)
                 {
                     SelectNewDestinationCell(null);
                     //m_Navmesh.Log("[Nav] Explore dest changed.");
                 }
 
-                ExploreCell travel_through_explore_cell = m_ExploreCells.FirstOrDefault(x => x.Contains2D(current_pos));
+                ExploreUpdateStage = "UpdtTravelThr";
+
+                ExploreCell travel_through_explore_cell = GetCurrentExploreCell();
 
                 if (travel_through_explore_cell != null && !travel_through_explore_cell.Explored)
                 {
@@ -690,8 +716,12 @@ namespace Nav
                         OnCellExplored(travel_through_explore_cell);
                 }
 
+                ExploreUpdateStage = "OnUpdt";
+
                 OnUpdateExploration(travel_through_explore_cell);
             }
+
+            ExploreUpdateStage = "";
         }
 
         // DataLock is already acquired in read-upgradeable state
@@ -702,14 +732,13 @@ namespace Nav
         private void Add(ExploreCell explore_cell)
         {
             using (m_Navmesh.AcquireReadDataLock())
-            using (new WriteLock(DataLock))
+            using (new WriteLock(DataLock, "DataLock - ExplorationEngine.Add"))
             {
                 foreach (ExploreCell e_cell in m_ExploreCells)
-                {
                     e_cell.AddNeighbour(explore_cell);
-                }
 
                 m_ExploreCells.Add(explore_cell);
+                //Trace.WriteLine($"explore cell #{explore_cell.GlobalId} @{explore_cell.Position} added");
                 Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
             }
         }
@@ -732,7 +761,7 @@ namespace Nav
                 HashSet<int> tmp_overlapping_grid_cells = new HashSet<int>();
 
                 // find all cells inside cell_aabb
-                using (m_Navmesh.AcquireReadDataLock())
+                using (m_Navmesh.AcquireReadDataLock("ExplorationEngine.GenerateExploreCells - add"))
                 {
                     foreach (GridCell grid_cell in m_Navmesh.m_GridCells.Where(x => x.AABB.Overlaps2D(cell_aabb)))
                     {
@@ -753,7 +782,7 @@ namespace Nav
                 {
                     HashSet<Cell> visited = new HashSet<Cell>();
 
-                    using (m_Navmesh.AcquireReadDataLock())
+                    using (m_Navmesh.AcquireReadDataLock("ExplorationEngine.GenerateExploreCells - visit"))
                         Algorihms.Visit(cells_copy.First(), ref visited, movement_flags, true, 1, -1, cells_copy);
 
                     List<AABB> intersections = new List<AABB>();
@@ -773,6 +802,7 @@ namespace Nav
                     ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, m_LastExploreCellId++);
                     ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall);
                     Add(ex_cell);
+                    //Trace.WriteLine($"Adding GID {ex_cell.GlobalId}");
                     OnExploreCellAdded(ex_cell);
 
                     cells_copy.RemoveWhere(x => visited.Contains(x));
@@ -786,31 +816,15 @@ namespace Nav
         {
             using (new ReadLock(DataLock))
             {
-                result_cell = null;
-
-                if (p.IsZero())
-                    return false;
-
-                foreach (var explore_cell in m_ExploreCells)
-                {
-                    if (explore_cell.Contains2D(p))
-                    {
-                        var cells = explore_cell.GetCellsAt(p, test_2d: true, z_tolerance: 0);
-
-                        if (cells.Count() > 0)
-                        {
-                            result_cell = explore_cell;
-                            return true;
-                        }
-                    }
-                }
-
-                return false;
+                result_cell = m_ExploreCells.FirstOrDefault(x => x.CellsContains2D(p));
+                return result_cell != null;
             }
         }
 
-        public bool FindRoughPath(Vec3 from, Vec3 to, ref List<Vec3> path)
+        public bool FindRoughPath(Vec3 from, Vec3 to, ref List<Vec3> path, out string debug_info)
         {
+            debug_info = "";
+
             if (from.IsZero() || to.IsZero())
                 return false;
 
@@ -819,10 +833,18 @@ namespace Nav
             bool start_on_nav_mesh = GetCellAt(from, out ExploreCell start);
             bool end_on_nav_mesh = GetCellAt(to, out ExploreCell end);
 
+            if (start == null || end == null)
+            {
+                path.Clear();
+                return false;
+            }
+
+            debug_info = $"#{start.GlobalId} {start.Position} -> #{end.GlobalId} {end.Position}";
+
             using (new Profiler("Rough path finding (incl. lock) took %t", 50))
-            using (new ReadLock(DataLock))
+            using (new ReadLock(DataLock, description: "DataLock - ExplorationEngine.FindRoughPath"))
             using (new Profiler("Rough path finding took %t", 50))
-                Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<ExploreCell>(to, end), MovementFlag.None, ref tmp_path, out var timedOut, use_cell_centers: true);
+                Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<ExploreCell>(to, end), MovementFlag.None, ref tmp_path, out var timed_out, use_cell_centers: true);
 
             path = tmp_path.Select(x => x.pos).ToList();
             return true;
@@ -844,7 +866,7 @@ namespace Nav
 
             set
             {
-                using (new WriteLock(InputLock))
+                using (new WriteLock(InputLock, "InputLock - ExplorationEngine.HintPos"))
                     m_HintPos = value;
             }
         }
@@ -873,6 +895,9 @@ namespace Nav
         private bool m_Enabled = true;
         private int m_LastExploreCellId = 0;
 
+        private Stopwatch ExploreUpdateTimer = new Stopwatch();
+        public string ExploreUpdateStage { get; private set; } = "";
+
         protected HashSet<ExploreCell> m_ExploreCells = new HashSet<ExploreCell>(); //@ DataLock
         protected int m_ExploredCellsCount = 0;
         protected int m_CellsToExploreCount = 0;
@@ -884,7 +909,6 @@ namespace Nav
 
         private int m_ForceReevaluation = 0;
         private int m_ValidateDestCell = 0;
-        protected int m_UpdateExplorationInterval = 300;
 
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         protected ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);

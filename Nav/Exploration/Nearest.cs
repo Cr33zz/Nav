@@ -33,7 +33,7 @@ namespace Nav.ExploreEngine
             {
                 ExploreCellSelector selector = CreateExploreCellSelector();
 
-                using (new ReadLock(DataLock))
+                using (new ReadLock(DataLock, description: "DataLock - Nearest.GetDestinationCell"))
                     Algorihms.VisitBreadth(curr_explore_cell, MovementFlag.None, -1, unexplored_cells, selector);
 
                 if (selector.dest_cell != null)
