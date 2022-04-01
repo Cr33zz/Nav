@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.IO;
 using System.Linq;
+using static Nav.Algorihms;
 
 namespace Nav
 {
@@ -327,6 +328,25 @@ namespace Nav
             return m_ExploreCells;
         }
 
+        public List<AABB> GetConstraintsFloodFill(Vec3 start_pos, float radius)
+        {
+            return GetConstraintsFloodFill(start_pos, x => x.CellsAABB.Overlaps2D(start_pos, radius));
+        }
+
+        public List<AABB> GetConstraintsFloodFill(Vec3 start_pos, Func<ExploreCell, bool> pred)
+        {
+            using (new ReadLock(DataLock, true, "DataLock - ExplorationEngine.GetExploreCellsFloodFill"))
+            {
+                ExploreCell start_cell = m_ExploreCells.FirstOrDefault(x => x.CellsAABB.Contains2D(start_pos));
+                if (start_cell == null)
+                    return new List<AABB>();
+
+                var collect_cells_visitor = new CollectVisitor<ExploreCell>();
+                Algorihms.VisitBreadth(start_cell, visitor: collect_cells_visitor, neigh_predicate: pred);
+                return collect_cells_visitor.cells.Select(x => new AABB(x.Position, ExploreCellSize / 100)).ToList();
+            }
+        }
+
         public ReadLock AquireReadDataLock(string description = null)
         {
             return new ReadLock(DataLock, description: description);
@@ -539,7 +559,7 @@ namespace Nav
                 if (!(filter?.Invoke(cell) ?? true))
                     return;
 
-                if (!(constraints?.Any(x => cell.CellsAABB.Overlaps2D(x)) ?? true))
+                if (!(constraints?.Any(x => cell.CellsOverlaps2D(x)) ?? true))
                     return;
 
                 if (!navmesh.AreConnected(agent_pos, cell.Position, MovementFlag.Walk, 10, 0))

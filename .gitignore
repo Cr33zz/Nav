@@ -17,3 +17,5 @@ NavMeshViewer/NavMeshViewer.csproj.user
 *.PoE
 *.user
 *.user
+*.txt
+NavMeshViewer/NavMeshViewer.csproj.user

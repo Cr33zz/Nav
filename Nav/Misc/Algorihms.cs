@@ -89,10 +89,10 @@ namespace Nav
                 //List<ExploreCell> best_tour_old = explore_cells.FindAll(c => cells_id_in_start_cell_network.Contains(c.GlobalId));
 
                 // reordering cell in breadth-first order seems to help with 2-opt backtracking
-                var collect_cells_visitor = new CollectVisitor();
+                var collect_cells_visitor = new CollectVisitor<ExploreCell>();
                 Algorihms.VisitBreadth(start_cell, visitor: collect_cells_visitor);
 
-                var best_tour = collect_cells_visitor.cells.Select(x => x as ExploreCell).Intersect(explore_cells).ToList();
+                var best_tour = collect_cells_visitor.cells.Intersect(explore_cells).ToList();
                 best_tour.RemoveAll(c => c.Explored || c.Neighbours.Count == 0);
 
                 if (start_cell.Explored) // re-insert start cell if needed
@@ -108,45 +108,45 @@ namespace Nav
 
                 float best_dist = GetTravelDistance(best_tour, distances);
 
-                if (best_tour.Count < 90)
-                {
-                    // based on http://en.wikipedia.org/wiki/2-opt
+                //if (best_tour.Count < 90)
+                //{
+                //    // based on http://en.wikipedia.org/wiki/2-opt
 
-                    while (true)
-                    {
-                        if (timeout_timer.ElapsedMilliseconds > timeout)
-                        {
-                            Trace.WriteLine($"explore path finder timeout out ({best_tour.Count} nodes)");
-                            break;
-                        }
+                //    while (true)
+                //    {
+                //        if (timeout_timer.ElapsedMilliseconds > timeout)
+                //        {
+                //            Trace.WriteLine($"explore path finder timeout out ({best_tour.Count} nodes)");
+                //            break;
+                //        }
 
-                        bool better_found = false;
+                //        bool better_found = false;
 
-                        for (int i = 1; i < best_tour.Count - 1; ++i)
-                        {
-                            for (int k = i + 1; k < best_tour.Count; ++k)
-                            {
-                                float new_dist = Swap2OptDistance(best_tour, distances, i, k);
+                //        for (int i = 1; i < best_tour.Count - 1; ++i)
+                //        {
+                //            for (int k = i + 1; k < best_tour.Count; ++k)
+                //            {
+                //                float new_dist = Swap2OptDistance(best_tour, distances, i, k);
 
-                                if (new_dist < best_dist)
-                                {
-                                    Swap2Opt(ref best_tour, i, k);
-                                    best_dist = new_dist;
+                //                if (new_dist < best_dist)
+                //                {
+                //                    Swap2Opt(ref best_tour, i, k);
+                //                    best_dist = new_dist;
 
-                                    better_found = true;
-                                    break;
-                                }
-                            }
+                //                    better_found = true;
+                //                    break;
+                //                }
+                //            }
 
-                            if (better_found)
-                                break;
-                        }
+                //            if (better_found)
+                //                break;
+                //        }
 
-                        if (!better_found)
-                            break;
-                    }
-                }
-                else // greedy
+                //        if (!better_found)
+                //            break;
+                //    }
+                //}
+                //else // greedy
                 {
                     // based on http://on-demand.gputechconf.com/gtc/2014/presentations/S4534-high-speed-2-opt-tsp-solver.pdf
 
@@ -656,9 +656,9 @@ namespace Nav
             public int depth;
         }
 
-        public static void VisitBreadth<T>(T cell, MovementFlag flags, int max_depth = -1, HashSet<T> allowed_cells = null, IDistanceVisitor<T> visitor = null) where T : Cell
+        public static void VisitBreadth<T>(T cell, MovementFlag flags, int max_depth = -1, HashSet<T> allowed_cells = null, IDistanceVisitor<T> visitor = null, Func<T, bool> neigh_predicate = null) where T : Cell
         {
-            HashSet<T> visited = new HashSet<T>();
+            var processed = new HashSet<int>();
             List<visit_node<T>> to_visit = new List<visit_node<T>>();
             to_visit.Add(new visit_node<T>(cell, 0, 0));
 
@@ -666,7 +666,7 @@ namespace Nav
             {
                 visit_node<T> cell_data = to_visit.First();
                 to_visit.RemoveAt(0);
-                visited.Add(cell_data.cell);
+                processed.Add(cell_data.cell.GlobalId);
 
                 if (visitor != null && (allowed_cells == null || allowed_cells.Contains(cell_data.cell)))
                     visitor.Visit(cell_data.cell, cell_data.distance);
@@ -687,28 +687,30 @@ namespace Nav
                         }
 
                         if ((neighbour.connection_flags & flags) != flags ||
-                            visited.Contains(neighbour_cell))
+                            processed.Contains(neighbour_cell.GlobalId) ||
+                            !(neigh_predicate?.Invoke(neighbour_cell) ?? true))
                         {
                             continue;
                         }
 
                         to_visit.Add(new visit_node<T>(neighbour_cell, distance, cell_data.depth + 1));
+                        processed.Add(neighbour_cell.GlobalId);
                     }
                 }
             }
         }
 
-        public static void VisitBreadth<T>(T cell, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null) where T : Cell
+        public static void VisitBreadth<T>(T cell, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null, Func<T, bool> neigh_predicate = null) where T : Cell
         {
-            HashSet<int> processed = new HashSet<int>();
-            List<T> to_visit = new List<T>();
-            to_visit.Add(cell);
-            processed.Add(cell.GlobalId);
-
-            while (to_visit.Count > 0)
+            List<T> to_process = new List<T>();
+            to_process.Add(cell);
+            var processed = new HashSet<int>();
+            
+            while (to_process.Count > 0)
             {
-                cell = to_visit.First();
-                to_visit.RemoveAt(0);                
+                cell = to_process.First();
+                to_process.RemoveAt(0);                
+                processed.Add(cell.GlobalId);
 
                 if (visitor != null && (allowed_cells == null || allowed_cells.Contains(cell)))
                     visitor.Visit(cell);
@@ -716,11 +718,11 @@ namespace Nav
                 foreach (Cell.Neighbour neighbour in cell.Neighbours)
                 {
                     T neighbour_cell = (T)neighbour.cell;
-                    
-                    if (processed.Contains(neighbour_cell.GlobalId))
+
+                    if (processed.Contains(neighbour_cell.GlobalId) || to_process.Contains(neighbour_cell) || !(neigh_predicate?.Invoke(neighbour_cell) ?? true))
                         continue;
 
-                    to_visit.Add(neighbour_cell);
+                    to_process.Add(neighbour_cell);
                     processed.Add(neighbour_cell.GlobalId);
                 }
             }
@@ -776,14 +778,31 @@ namespace Nav
             public Dictionary<AABB, List<Cell>> cellsGrid = new Dictionary<AABB, List<Cell>>();
         }
 
-        public class CollectVisitor : IVisitor<Cell>
+        public class CollectVisitor<T> : IVisitor<T> where T : Cell
         {
-            public void Visit(Cell cell)
+            public void Visit(T cell)
             {
                 cells.Add(cell);
             }
 
-            public readonly List<Cell> cells = new List<Cell>();
+            public readonly List<T> cells = new List<T>();
+        }
+
+        public class CollectPredVisitor<T> : IVisitor<T> where T : Cell
+        {
+            public CollectPredVisitor(Func<T, bool> pred)
+            {
+                predicate = pred;
+            }
+
+            public void Visit(T cell)
+            {
+                if (predicate(cell))
+                    cells.Add(cell);
+            }
+
+            public readonly List<T> cells = new List<T>();
+            private readonly Func<T, bool> predicate;
         }
     }
 }

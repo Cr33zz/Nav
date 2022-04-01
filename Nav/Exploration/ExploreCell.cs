@@ -124,7 +124,15 @@ namespace Nav
             if (!CellsAABB.Contains2D(p))
                 return false;
 
-            return Cells.Exists(c => c.Contains2D(p));
+            return Cells.Any(c => c.Contains2D(p));
+        }
+
+        public bool CellsOverlaps2D(AABB aabb)
+        {
+            if (!CellsAABB.Overlaps2D(aabb))
+                return false;
+
+            return Cells.Any(c => c.AABB.Overlaps2D(aabb));
         }
 
         public List<Cell> Cells { get; private set; }
