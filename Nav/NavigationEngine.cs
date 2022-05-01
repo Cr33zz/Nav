@@ -1153,7 +1153,7 @@ namespace Nav
         {
             ShouldStopUpdates = true;
             if (!UpdatesThread.Join(3000))
-                UpdatesThread.Abort();
+                UpdatesThread.Interrupt();
 
             m_Navmesh.RemoveObserver(this);
         }

@@ -19,3 +19,8 @@ NavMeshViewer/NavMeshViewer.csproj.user
 *.user
 *.txt
 NavMeshViewer/NavMeshViewer.csproj.user
+*.json
+*.explorer
+*.navigator
+*.navmesh
+*.user
