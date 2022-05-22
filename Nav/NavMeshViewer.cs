@@ -216,10 +216,9 @@ namespace Nav
                 {
                     using (new ReadLock(m_Navmesh.PatchesDataLock))
                     {
-                        int id = 0;
                         foreach (var patch in m_Navmesh.m_CellsPatches)
                         {
-                            var rng = new Random(id++);
+                            var rng = new Random(patch.GlobalId);
                             Color c = Color.FromArgb(rng.Next(255), rng.Next(255), rng.Next(255));
 
                             foreach (var cell in patch.Cells)

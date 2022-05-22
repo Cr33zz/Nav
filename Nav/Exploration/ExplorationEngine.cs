@@ -335,15 +335,20 @@ namespace Nav
 
         public List<AABB> GetConstraintsFloodFill(Vec3 start_pos, Func<ExploreCell, bool> pred)
         {
+            return GetExploreCellsFloodFill(start_pos, pred).Select(x => new AABB(x.Position, ExploreCellSize / 100)).ToList();
+        }
+
+        public List<ExploreCell> GetExploreCellsFloodFill(Vec3 start_pos, Func<ExploreCell, bool> pred)
+        {
             using (new ReadLock(DataLock, true, "DataLock - ExplorationEngine.GetExploreCellsFloodFill"))
             {
                 ExploreCell start_cell = m_ExploreCells.FirstOrDefault(x => x.CellsAABB.Contains2D(start_pos));
                 if (start_cell == null)
-                    return new List<AABB>();
+                    return new List<ExploreCell>();
 
                 var collect_cells_visitor = new CollectVisitor<ExploreCell>();
                 Algorihms.VisitBreadth(start_cell, visitor: collect_cells_visitor, neigh_predicate: pred);
-                return collect_cells_visitor.cells.Select(x => new AABB(x.Position, ExploreCellSize / 100)).ToList();
+                return collect_cells_visitor.cells.ToList();
             }
         }
 

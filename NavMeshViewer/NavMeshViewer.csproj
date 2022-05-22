@@ -31,21 +31,6 @@
     <BaseOutputPath>.\</BaseOutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Enigma.D3.Assets">
-      <HintPath>..\Nav.D3\Enigma.D3.Assets.dll</HintPath>
-    </Reference>
-    <Reference Include="Enigma.D3.Core">
-      <HintPath>..\Nav.D3\Enigma.D3.Core.dll</HintPath>
-    </Reference>
-    <Reference Include="Enigma.D3.MemoryModel">
-      <HintPath>..\Nav.D3\Enigma.D3.MemoryModel.dll</HintPath>
-    </Reference>
-    <Reference Include="Enigma.D3.MemoryModel.Caching">
-      <HintPath>..\Nav.D3\Enigma.D3.MemoryModel.Caching.dll</HintPath>
-    </Reference>
-    <Reference Include="Enigma.Memory">
-      <HintPath>..\Nav.D3\Enigma.Memory.dll</HintPath>
-    </Reference>
     <Reference Include="ExileCore">
       <HintPath>..\..\Nav.PoE\ExileCore.dll</HintPath>
     </Reference>
@@ -64,12 +49,8 @@
     <Reference Include="Nav.D3">
       <HintPath>.\Nav.D3.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="Newtonsoft.Json">
       <HintPath>..\..\Nav.PoE\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="ProcessMemoryUtilities">
-      <HintPath>..\..\Nav.PoE\ProcessMemoryUtilities.dll</HintPath>
     </Reference>
     <Reference Include="Serilog">
       <HintPath>..\..\Nav.PoE\Serilog.dll</HintPath>
@@ -82,6 +63,9 @@
     </Reference>
     <Reference Include="SharpDX.Mathematics">
       <HintPath>..\..\Nav.PoE\SharpDX.Mathematics.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.Caching">
+      <HintPath>..\..\Nav.PoE\System.Runtime.Caching.dll </HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>

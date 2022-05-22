@@ -361,9 +361,7 @@ namespace Nav
             if (radius <= 0)
                 return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Contains2D(pos));
 
-            AABB area = new AABB(pos - new Vec3(radius, radius, 0), pos + new Vec3(radius, radius, 0));
-            AABB output = default(AABB);
-            return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Intersect2D(area, ref output));
+            return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Overlaps(pos, radius));
         }
 
         public List<Region> GetRegions(AABB area)
@@ -1354,6 +1352,12 @@ namespace Nav
                     m_AvoidanceDestination.pos, 
                     include_from: m_PathFollowStrategy.IncludePathStart(), 
                     shift_nodes_distance: PathNodesShiftDist);
+
+                if (new_path.Any())
+                {
+                    dest.pos = new_path.Last();
+                    dest.stop = true;
+                }
             }
             else
             {

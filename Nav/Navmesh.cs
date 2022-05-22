@@ -450,6 +450,8 @@ namespace Nav
             {
                 //Console.WriteLine("patches update start");
                 var cells_patches = new HashSet<CellsPatch>();
+                var all_patches_cells = new HashSet<Cell>();
+                var all_patches_cells_grid = new Dictionary<AABB, List<Cell>>();
 
                 using (new Profiler($"Updating cell patches (incl. lock) took %t", 50))
                 using (is_data_locked ? new EmptyLock() : new ReadLock(DataLock))
@@ -477,13 +479,26 @@ namespace Nav
 
                         Algorihms.Visit(start_cell, ref visited, MovementFlag.Walk, visit_disabled: false, allowed_cells: cells_copy, visitor: patchVisitor);
 
-                        cells_patches.Add(new CellsPatch(patchVisitor.cells, patchVisitor.cellsGrid, MovementFlag.Walk));
+                        cells_patches.Add(new CellsPatch(patchVisitor.cells, patchVisitor.cells_grid, MovementFlag.Walk));
                         cells_copy.ExceptWith(patchVisitor.cells);
+                        all_patches_cells.UnionWith(patchVisitor.cells);
+                    }
+
+                    foreach (var cell in all_patches_cells)
+                    {
+                        AABB gridAABB = cell.ParentAABB;
+                        if (!all_patches_cells_grid.ContainsKey(gridAABB))
+                            all_patches_cells_grid.Add(gridAABB, new List<Cell>() { cell });
+                        else
+                            all_patches_cells_grid[gridAABB].Add(cell);
                     }
                 }
 
                 using (new WriteLock(PatchesDataLock, "PatchesDataLock - Navmesh.UpdatePatches"))
+                {
                     m_CellsPatches = cells_patches;
+                    m_UberCellsPatch = new CellsPatch(all_patches_cells, all_patches_cells_grid, MovementFlag.Walk);
+                }
 
                 //Console.WriteLine("patches update end");
             }
@@ -772,6 +787,7 @@ namespace Nav
                 m_Regions.Clear();
                 CellsOverlappedByRegions.Clear();
                 LastBlockers.Clear();
+                m_UberCellsPatch = null;
                 m_CellsPatches.Clear();
                 CellsPatch.LastCellsPatchGlobalId = 0;
                 Cell.LastCellGlobalId = 0;
@@ -1130,6 +1146,22 @@ namespace Nav
             }
         }
 
+        public HashSet<int> GetPatchesIds(Vec3 pos, MovementFlag flags, float nearest_tolerance_pos)
+        {
+            using (new ReadLock(PatchesDataLock))
+            {
+                var near_cells = m_UberCellsPatch.GetCellsWithin(pos, nearest_tolerance_pos, flags);
+
+                var ids = new HashSet<int>();
+                foreach (var patch in m_CellsPatches)
+                {
+                    if (near_cells.Where(x => patch.Cells.Contains(x)).Any())
+                        ids.Add(patch.GlobalId);
+                }
+                return ids;
+            }
+        }
+
         public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2)
         {
             return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out var pos1_on_navmesh, out var pos2_on_navmesh);
@@ -1142,19 +1174,35 @@ namespace Nav
 
         public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh, bool check_near_navmesh, out bool is_pos1_near_navmesh, out bool is_pos2_near_navmesh)
         {
-            is_pos2_near_navmesh  = is_pos1_near_navmesh = false;
-            
+            is_pos2_near_navmesh = is_pos1_near_navmesh = false;
+
             using (new Profiler("AreConnected (incl. lock) took %t", 100))
             using (new ReadLock(PatchesDataLock))
             //using (new ReadLock(DataLock, context: "AreConnected"))
-            using (new Profiler("AreConnected took %t", 50))
+            using (new Profiler("AreConnected took %t", 10))
             {
                 pos1_on_navmesh = pos1;
                 pos2_on_navmesh = pos2;
 
+                if (m_UberCellsPatch == null)
+                    return false;
+
+                var near_pos1_cells = m_UberCellsPatch.GetCellsWithin(pos1, nearest_tolerance_pos1, flags).ToHashSet();
+
+                if (!check_near_navmesh && !near_pos1_cells.Any())
+                    return false;
+
+                var near_pos2_cells = m_UberCellsPatch.GetCellsWithin(pos2, nearest_tolerance_pos2, flags).ToHashSet();
+
+                if (!check_near_navmesh && !near_pos2_cells.Any())
+                    return false;
+
                 foreach (var patch in m_CellsPatches)
                 {
-                    var pos1_cells = patch.GetCellsWithin(pos1, nearest_tolerance_pos1, flags);
+                    List<Cell> pos1_cells = 
+                    //patch.GetCellsWithin(pos1, nearest_tolerance_pos1, flags);
+                    near_pos1_cells.Where(x => patch.Cells.Contains(x)).ToList();
+                    //near_pos1_cells.Intersect(patch.Cells).ToList();
 
                     if (pos1_cells.Count == 0)
                     {
@@ -1164,7 +1212,10 @@ namespace Nav
                     else
                         is_pos1_near_navmesh = true;
 
-                    var pos2_cells = patch.GetCellsWithin(pos2, nearest_tolerance_pos2, flags);
+                    List<Cell> pos2_cells =
+                    //patch.GetCellsWithin(pos2, nearest_tolerance_pos2, flags);
+                    near_pos2_cells.Where(x => patch.Cells.Contains(x)).ToList();
+                    //near_pos2_cells.Intersect(patch.Cells).ToList();
 
                     if (pos2_cells.Count == 0)
                         continue;
@@ -1457,6 +1508,9 @@ namespace Nav
                 foreach (CellsPatch patch in m_CellsPatches)
                     patch.Serialize(w);
 
+                w.Write(m_UberCellsPatch?.GlobalId ?? -1);
+                m_UberCellsPatch?.Serialize(w);
+
                 w.Write(CellsPatch.LastCellsPatchGlobalId);
 
                 w.Write(m_Regions.Count);
@@ -1563,6 +1617,16 @@ namespace Nav
 
                     foreach (CellsPatch patch in patches)
                         patch.Deserialize(m_AllCells, m_IdToCell, r);
+
+                    var uber_patch_global_id = r.ReadInt32();
+                    if (uber_patch_global_id != -1)
+                    {
+                        m_UberCellsPatch = new CellsPatch(new HashSet<Cell>(), new Dictionary<AABB, List<Cell>>(), MovementFlag.None);
+                        m_UberCellsPatch.GlobalId = uber_patch_global_id;
+                        m_UberCellsPatch.Deserialize(m_AllCells, m_IdToCell, r);
+                    }
+                    else
+                        m_UberCellsPatch = null;
 
                     m_CellsPatches = new HashSet<CellsPatch>(patches);
 
@@ -1683,6 +1747,8 @@ namespace Nav
         internal Dictionary<int, Cell> m_IdToCell = new Dictionary<int, Cell>(); //@ DataLock
         // cell patches are interconnected groups of cells allowing ultra fast connection checks
         internal HashSet<CellsPatch> m_CellsPatches = new HashSet<CellsPatch>(); //@ PatchesDataLock
+        // all cells used to build past patches snapshot
+        internal CellsPatch m_UberCellsPatch; //@ PatchesDataLock
         internal HashSet<GridCell> m_GridCells = new HashSet<GridCell>(); //@ DataLock
         private List<Region> m_Regions = new List<Region>(); //@ InputLock        
         private List<INavmeshObserver> m_Observers = new List<INavmeshObserver>(); //@ InputLock

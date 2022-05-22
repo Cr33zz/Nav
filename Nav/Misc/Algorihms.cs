@@ -376,6 +376,27 @@ namespace Nav
             return null;
         }
 
+        public static bool AnyCellWithin(IEnumerable<Cell> cells, Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
+        {
+            if (p.IsZero())
+                return false;
+
+            float radiusSqr = radius * radius;
+
+            foreach (Cell cell in cells)
+            {
+                if ((!allow_disabled && cell.Disabled) || (cell.Flags & flags) != flags)
+                    continue;
+
+                float distSqr = test_2d ? cell.Distance2DSqr(p) : cell.DistanceSqr(p);
+
+                if (distSqr <= radiusSqr)
+                    return true;
+            }
+
+            return false;
+        }
+
         public static List<Cell> GetCellsWithin(IEnumerable<Cell> cells, Vec3 p, float radius, MovementFlag flags, bool allow_disabled = false, bool test_2d = true, float z_tolerance = 0)
         {
             var result_cells = new List<Cell>();
@@ -768,14 +789,14 @@ namespace Nav
                 cells.Add(cell);
 
                 AABB gridAABB = cell.ParentAABB;
-                if (!cellsGrid.ContainsKey(gridAABB))
-                    cellsGrid.Add(gridAABB, new List<Cell>() { cell });
+                if (!cells_grid.ContainsKey(gridAABB))
+                    cells_grid.Add(gridAABB, new List<Cell>() { cell });
                 else
-                    cellsGrid[gridAABB].Add(cell);
+                    cells_grid[gridAABB].Add(cell);
             }
 
             public HashSet<Cell> cells = new HashSet<Cell>();
-            public Dictionary<AABB, List<Cell>> cellsGrid = new Dictionary<AABB, List<Cell>>();
+            public Dictionary<AABB, List<Cell>> cells_grid = new Dictionary<AABB, List<Cell>>();
         }
 
         public class CollectVisitor<T> : IVisitor<T> where T : Cell

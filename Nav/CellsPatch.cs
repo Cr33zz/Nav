@@ -34,6 +34,23 @@ namespace Nav
             return result_cells;
         }
 
+        internal bool AnyCellWithin(Vec3 p, float radius, MovementFlag flags)
+        {
+            if (p.IsZero())
+                return false;
+
+            foreach (var cellsG in CellsGrid)
+            {
+                if (cellsG.Key.Distance2D(p) > radius)
+                    continue;
+
+                if (Algorihms.AnyCellWithin(cellsG.Value, p, radius, flags, allow_disabled: true))
+                    return true;
+            }
+
+            return false;
+        }
+
         internal override void Serialize(BinaryWriter w)
         {
             base.Serialize(w);
