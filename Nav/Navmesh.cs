@@ -500,6 +500,8 @@ namespace Nav
                     m_UberCellsPatch = new CellsPatch(all_patches_cells, all_patches_cells_grid, MovementFlag.Walk);
                 }
 
+                NotifyOnPatchesChanged();
+
                 //Console.WriteLine("patches update end");
             }
         }
@@ -1150,6 +1152,9 @@ namespace Nav
         {
             using (new ReadLock(PatchesDataLock))
             {
+                if (m_UberCellsPatch == null)
+                    return new HashSet<int>();
+
                 var near_cells = m_UberCellsPatch.GetCellsWithin(pos, nearest_tolerance_pos, flags);
 
                 var ids = new HashSet<int>();
@@ -1160,6 +1165,11 @@ namespace Nav
                 }
                 return ids;
             }
+        }
+
+        public bool AreConnected(HashSet<int> patchesIds1, HashSet<int> patchesIds2)
+        {
+            return patchesIds1.Overlaps(patchesIds2);
         }
 
         public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2)
@@ -1715,6 +1725,17 @@ namespace Nav
 
             foreach (INavmeshObserver observer in observers_copy)
                 observer.OnNavBlockersChanged();
+        }
+
+        protected void NotifyOnPatchesChanged()
+        {
+            List<INavmeshObserver> observers_copy = null;
+
+            using (new ReadLock(InputLock))
+                observers_copy = m_Observers.ToList();
+
+            foreach (INavmeshObserver observer in observers_copy)
+                observer.OnPatchesChanged();
         }
 
         protected void NotifyOnGridCellAdded(GridCell g_cell)

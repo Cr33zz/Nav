@@ -83,6 +83,10 @@ namespace Nav
             CellsAABB.Serialize(w);
             w.Write(CellsArea);
 
+            w.Write(PatchesIds.Count);
+            foreach (var patch_id in PatchesIds)
+                w.Write(patch_id);
+
             w.Write(Cells.Count);
             foreach (Cell cell in Cells)
                 w.Write(cell.GlobalId);
@@ -102,6 +106,13 @@ namespace Nav
             Position = new Vec3(r);
             CellsAABB = new AABB(r);
             CellsArea = r.ReadSingle();
+
+            int patches_ids_count = r.ReadInt32();
+            for (int i = 0; i < patches_ids_count; ++i)
+            {
+                int patch_id = r.ReadInt32();
+                PatchesIds.Add(patch_id);
+            }
 
             int cells_count = r.ReadInt32();
             for (int i = 0; i < cells_count; ++i)
@@ -149,6 +160,9 @@ namespace Nav
 
         // Small explore cells will be visited as last
         public bool Small;
+
+        // Patch id of explore cell position (used in connectivity checks)
+        public HashSet<int> PatchesIds = new HashSet<int>();
 
         internal static int LastExploreCellGlobalId = 0;
     }

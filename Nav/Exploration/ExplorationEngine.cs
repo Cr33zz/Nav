@@ -157,20 +157,24 @@ namespace Nav
         public virtual float GetExploredPercent()
         {
             // need to run expensive version when exploration is disabled and number of explore cells has changed (because numbers used are not refreshed then)
-            var forceRefresh = Interlocked.CompareExchange(ref m_ForceRefreshExploredPercent, 0, 1) == 1;
-            if ((!Enabled && forceRefresh) || forceRefresh)
+            //if (m_TimeSinceExploredPercentRefresh.ElapsedMilliseconds > 200)
             {
-                ExploreCell current_explore_cell;
-                using (new ReadLock(DataLock))
-                    current_explore_cell = GetCurrentExploreCell();
-
-                if (current_explore_cell == null)
+                var forceRefresh = Interlocked.CompareExchange(ref m_ForceRefreshExploredPercent, 0, 1) == 1;
+                if ((!Enabled && forceRefresh) || forceRefresh)
                 {
-                    Trace.WriteLine($"no explore cell found @{m_Navigator.CurrentPos} (total ex cells {m_ExploreCells.Count})");
-                    return 100;
-                }
+                    ExploreCell current_explore_cell;
+                    using (new ReadLock(DataLock))
+                        current_explore_cell = GetCurrentExploreCell();
 
-                GetUnexploredCells(current_explore_cell);
+                    if (current_explore_cell == null)
+                    {
+                        Trace.WriteLine($"no explore cell found @{m_Navigator.CurrentPos} (total ex cells {m_ExploreCells.Count})");
+                        return 100;
+                    }
+
+                    GetUnexploredCells(current_explore_cell);
+                    m_TimeSinceExploredPercentRefresh.Restart();
+                }
             }
         
             return m_CellsToExploreCount > 0 ? (float)Math.Round(m_ExploredCellsCount / (float)m_CellsToExploreCount * 100, 1) : 0;
@@ -464,6 +468,15 @@ namespace Nav
             RequestReevaluation();
         }
 
+        public virtual void OnPatchesChanged()
+        {
+            using (new WriteLock(DataLock, "DataLock - ExplorationEngine.ResetExploration"))
+            {
+                foreach (var ex_cell in m_ExploreCells)
+                    ex_cell.PatchesIds = m_Navmesh.GetPatchesIds(ex_cell.Position, MovementFlag.Walk, 5);
+            }
+        }
+
         protected virtual void OnExploreCriteriaChanged()
         {
             RequestReevaluation();
@@ -554,6 +567,7 @@ namespace Nav
                 this.ignore_small = ignore_small;
                 this.agent_pos = agent_pos;
                 this.navmesh = navmesh;
+                this.agent_patches_ids = navmesh.GetPatchesIds(agent_pos, MovementFlag.Walk, 10);
             }
 
             public void Visit(ExploreCell cell)
@@ -567,7 +581,7 @@ namespace Nav
                 if (!(constraints?.Any(x => cell.CellsOverlaps2D(x)) ?? true))
                     return;
 
-                if (!navmesh.AreConnected(agent_pos, cell.Position, MovementFlag.Walk, 10, 0))
+                if (!navmesh.AreConnected(agent_patches_ids, cell.PatchesIds))
                     return;
 
                 ++all_cells_count;
@@ -583,6 +597,7 @@ namespace Nav
             private readonly Func<ExploreCell, bool> filter;
             private readonly bool ignore_small = false;
             private readonly Vec3 agent_pos;
+            private readonly HashSet<int> agent_patches_ids;
             private readonly Navmesh navmesh;
         }
 
@@ -593,8 +608,12 @@ namespace Nav
                 var agent_pos = m_Navigator.CurrentPos;
 
                 // unexplored selector is collecting ALL unexplored cells matching constraints and filter criteria
-                UnexploredSelector selector = new UnexploredSelector(ExploreConstraints, ExploreFilter, IgnoreSmall, agent_pos, m_Navmesh);
-                Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
+                UnexploredSelector selector;
+                using (new ReadLock(m_Navmesh.PatchesDataLock, false, "PatchesDataLock - ExplorationEngine.GetUnexploredCells")) // this enforces using the same patches throughout visitation process
+                {
+                    selector = new UnexploredSelector(ExploreConstraints, ExploreFilter, IgnoreSmall, agent_pos, m_Navmesh);
+                    Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
+                }
 
                 m_CellsToExploreCount = selector.all_cells_count;
                 m_ExploredCellsCount = m_CellsToExploreCount - selector.unexplored_cells.Count;
@@ -927,6 +946,7 @@ namespace Nav
         protected int m_ExploredCellsCount = 0;
         protected int m_CellsToExploreCount = 0;
         private int m_ForceRefreshExploredPercent = 1;
+        private Stopwatch m_TimeSinceExploredPercentRefresh = Stopwatch.StartNew();
         private List<AABB> m_ExploreConstraints = new List<AABB>();
         private Func<ExploreCell, bool> m_ExploreFilter = null;
 

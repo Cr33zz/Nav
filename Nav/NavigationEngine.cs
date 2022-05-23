@@ -1956,6 +1956,10 @@ namespace Nav
             RequestPathUpdate();
         }
 
+        public virtual void OnPatchesChanged()
+        {
+        }
+
         public virtual void OnNavDataCleared()
         {
             Clear();
