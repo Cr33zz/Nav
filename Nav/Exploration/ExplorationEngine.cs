@@ -470,7 +470,7 @@ namespace Nav
 
         public virtual void OnPatchesChanged()
         {
-            using (new WriteLock(DataLock, "DataLock - ExplorationEngine.ResetExploration"))
+            using (new WriteLock(DataLock, "DataLock - ExplorationEngine.OnPatchesChanged"))
             {
                 foreach (var ex_cell in m_ExploreCells)
                     ex_cell.PatchesIds = m_Navmesh.GetPatchesIds(ex_cell.Position, MovementFlag.Walk, 5);

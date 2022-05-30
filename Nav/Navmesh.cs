@@ -203,7 +203,7 @@ namespace Nav
         internal static List<Cell> m_CellsCache = new List<Cell>();
 
         // Returns true when position is on navmesh. Acquires DataLock (read)
-        internal protected bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool allow_replacement = true, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
+        public bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool allow_replacement = true, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
         {
             using (new ReadLock(DataLock))
             //using (new ReadLock(DataLock, context: "GetCellAt"))
@@ -434,7 +434,8 @@ namespace Nav
 
             if (time - LastUpdatePatchesTime > UpdatePatchesInterval)
             {
-                UpdatePatches();
+                if (UpdatePatches())
+                    NotifyOnPatchesChanged();
                 LastUpdatePatchesTime = time;
             }
         }
@@ -444,7 +445,7 @@ namespace Nav
 
         internal int ForcePatchesUpdate = 0;
 
-        private void UpdatePatches(bool force = false, bool is_data_locked = false)
+        private bool UpdatePatches(bool force = false, bool is_data_locked = false)
         {
             if (Interlocked.CompareExchange(ref ForcePatchesUpdate, 0, 1) == 1 || force)
             {
@@ -454,7 +455,7 @@ namespace Nav
                 var all_patches_cells_grid = new Dictionary<AABB, List<Cell>>();
 
                 using (new Profiler($"Updating cell patches (incl. lock) took %t", 50))
-                using (is_data_locked ? new EmptyLock() : new ReadLock(DataLock))
+                using (is_data_locked ? new EmptyLock() : new ReadLock(DataLock, description: "DataLock - Navmesh.UpdatePatches"))
                 using (new Profiler($"Updating cell patches took %t", 50))
                 {
                     var cells_copy = new HashSet<Cell>();
@@ -500,10 +501,10 @@ namespace Nav
                     m_UberCellsPatch = new CellsPatch(all_patches_cells, all_patches_cells_grid, MovementFlag.Walk);
                 }
 
-                NotifyOnPatchesChanged();
-
-                //Console.WriteLine("patches update end");
+                return true;
             }
+
+            return false;
         }
 
         public uint UpdateRegionsInterval { get; set; } = 100;
@@ -540,7 +541,7 @@ namespace Nav
                 }
             }
 
-            using (new ReadLock(DataLock, true))
+            using (new ReadLock(DataLock, true, "DataLock - Navmesh.Add - update overlapping regions"))
             //using (new Profiler($"update cells overlapped by regions %t"))
             {
                 if (CellsOverlappedByRegions.Count > 0)
@@ -742,7 +743,10 @@ namespace Nav
                 }
 
                 if (blockersChanged)
+                {
                     NotifyOnNavBlockersChanged();
+                    NotifyOnPatchesChanged();
+                }
                 
                 //only when movement costs are affected
                 if (nav_data_changed && anyReplacementCellWithMovementCost)
@@ -1254,23 +1258,23 @@ namespace Nav
 
             using (new ReadLock(PatchesDataLock))
             {
-                foreach (var patch in m_CellsPatches)
+                if (m_UberCellsPatch == null)
+                    return false;
+
+                var pos_cells = m_UberCellsPatch.GetCellsWithin(pos, tolerance, flags);
+
+                if (pos_cells.Count == 0)
+                    return false;
+
+                var pos_nearest_cell = pos_cells.OrderBy(x => pos.Distance2DSqr(x.AABB.Align(pos))).First();
+
+                var aligned_pos = pos_nearest_cell.AABB.Align(pos);
+                var dist = pos.Distance2DSqr(aligned_pos);
+
+                if (snapped_pos_dist < 0 || dist < snapped_pos_dist)
                 {
-                    var pos_cells = patch.GetCellsWithin(pos, tolerance, flags);
-
-                    if (pos_cells.Count == 0)
-                        continue;
-
-                    var pos_nearest_cell = pos_cells.OrderBy(x => pos.Distance2DSqr(x.AABB.Align(pos))).First();
-
-                    var aligned_pos = pos_nearest_cell.AABB.Align(pos);
-                    var dist = pos.Distance2DSqr(aligned_pos);
-
-                    if (snapped_pos_dist < 0 || dist < snapped_pos_dist)
-                    {
-                        snapped_pos = aligned_pos;
-                        snapped_pos_dist = dist;
-                    }
+                    snapped_pos = aligned_pos;
+                    snapped_pos_dist = dist;
                 }
 
                 return snapped_pos_dist >= 0;

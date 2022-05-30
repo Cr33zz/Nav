@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Diagnostics.Runtime;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -21,14 +22,14 @@ namespace Nav
             return $"#{Id} {Description} ({LocksState.GetLockedDuration(LockTime)}ms)";
         }
 
-        public string ToStringWithStackTrace()
+        public string ToStringWithStackTrace(int pid)
         {
-            return $"{ToString()}\n{GetStackTrace()}";
+            return $"{ToString()}\n{GetStackTrace(pid)}";
         }
 
-        public string GetStackTrace()
+        public string GetStackTrace(int pid)
         {
-            return LocksState.GetStackTrace(LockThread)?.ToString() ?? "";
+            return LocksState.GetStackTrace(pid, LockThread)?.ToString() ?? "";
         }
 
         public readonly ushort Id;
@@ -74,8 +75,32 @@ namespace Nav
         }
 
 #pragma warning disable CS0618
-        public static StackTrace GetStackTrace(Thread targetThread)
+        public static string GetStackTrace(int pid, Thread targetThread)
         {
+            using (var dataTarget = DataTarget.CreateSnapshotAndAttach(pid))
+            {
+                ClrInfo runtimeInfo = dataTarget.ClrVersions[0];
+                var runtime = runtimeInfo.CreateRuntime();
+
+                var stackTraceLines = new List<string>();
+
+                foreach (var t in runtime.Threads.Where(x => x.ManagedThreadId == targetThread.ManagedThreadId))
+                {
+                    int safetyValve = 0;
+                    foreach (var frame in t.EnumerateStackTrace())
+                    {
+                        if (++safetyValve > 50)
+                            break;
+
+                        if (frame.Method != null)
+                            stackTraceLines.Add($"{frame.Method}");
+                    }
+                    return string.Join(Environment.NewLine, stackTraceLines);
+                }
+            }
+
+            return "???";
+
             //using (ManualResetEvent fallbackThreadReady = new ManualResetEvent(false), exitedSafely = new ManualResetEvent(false))
             //{
             //    Thread fallbackThread = new Thread(delegate ()
@@ -125,7 +150,7 @@ namespace Nav
             //        fallbackThread.Join();
             //    }
             //}
-            return null;
+            //return null;
         }
 #pragma warning restore CS0618
 
