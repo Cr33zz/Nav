@@ -1,6 +1,8 @@
 Nav is easy to use 3D navigation library. It operates on axis-aligned cuboids (cells). Navigation data is built on-the-fly as soon as cells are fed to the system. Separate navigation module is responsible for pathing. Exploration module can be supplied for automatic navmesh traversal. Nav can be used in any project with AABB navmesh data.
 For documentation check out Wiki.
 
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/zTLo_vWpHo0/0.jpg)](https://www.youtube.com/watch?v=zTLo_vWpHo0)
+
 Features
 * dynamically builds navmesh from soup of axis-aligned cuboids
 * simple navigation (set Destination, update CurrentPos, then move toward GoToPosition)
