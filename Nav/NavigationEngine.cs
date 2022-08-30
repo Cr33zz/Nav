@@ -99,6 +99,8 @@ namespace Nav
         public float precision;
         public bool stop;
         public destination path_destination;
+
+        public bool is_going_to_dest => pos.Distance2D(path_destination.pos) < precision;
     }
 
     public struct path_data
@@ -361,7 +363,7 @@ namespace Nav
             if (radius <= 0)
                 return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Contains2D(pos));
 
-            return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Overlaps(pos, radius));
+            return regions_cache.Any(x => (consider_future_threats ? Math.Abs(x.Threat) : x.Threat) >= ThreatThreshold && x.Area.Overlaps2D(pos, radius));
         }
 
         public List<Region> GetRegions(AABB area)

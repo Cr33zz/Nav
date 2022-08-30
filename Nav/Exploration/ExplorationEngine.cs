@@ -35,6 +35,7 @@ namespace Nav
 
         public float MaxAreaToMarkAsSmall { get; set; } = 0 * 0;
         public float MaxDimensionToMarkAsSmall { get; set; } = 0;
+        public Func<ExploreCell, bool> SmallPredicate = null;
 
         public int UpdateExplorationInterval { get; set; } = 300;
 
@@ -320,9 +321,16 @@ namespace Nav
                 m_Enabled = CanBeEnabled() && value;
 
                 if (value)
+                {
                     RequestReevaluation();
+                    OnExplorationEnabled();
+                    SetNavigatorDestination();
+                }
                 else
+                {
                     m_Navigator.ClearDestination(DestType.Explore);
+                    OnExplorationDisabled();
+                }
             }
         }
 
@@ -397,16 +405,27 @@ namespace Nav
                 var prev_dest_cell = m_DestCell;
                 m_DestCell = GetDestinationCell(curr_explore_cell);
 
-                //Trace.WriteLine($"dest explore cell id {m_DestCell?.GlobalId ?? -1} pos {GetDestinationCellPosition()}");
-
                 //using (new Profiler("set explore cell pos as dest [%t]"))
-                if (Enabled)
-                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false, as_close_as_possible: false, debug_annotation: $"explore cell {m_DestCell?.GlobalId ?? -1}"));
+                SetNavigatorDestination();
 
-                // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
                 if (m_DestCell != prev_dest_cell)
+                {
+                    Trace.WriteLine($"Heading to explore cell GID {m_DestCell?.GlobalId ?? -1} @ {GetDestinationCellPosition()}");
+                    // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
                     Interlocked.Exchange(ref m_ValidateDestCell, 1);
+                }
             }
+        }
+
+        private void SetNavigatorDestination()
+        {
+            if (Enabled)
+            {
+                if (m_DestCell != null)
+                    m_Navigator.SetDestination(new destination(GetDestinationCellPosition(), DestType.Explore, ExploreDestPrecision, user_data: m_DestCell, stop: false, as_close_as_possible: false, debug_annotation: $"explore cell {m_DestCell?.GlobalId ?? -1}"));
+            }
+            //else
+            //    Trace.WriteLine($"Exploration disabled nav destination NOT set!");
         }
 
         public void OnDestinationReachFailed(destination dest)
@@ -480,6 +499,14 @@ namespace Nav
         protected virtual void OnExploreCriteriaChanged()
         {
             RequestReevaluation();
+        }
+
+        protected virtual void OnExplorationEnabled()
+        {
+        }
+
+        protected virtual void OnExplorationDisabled()
+        {
         }
 
         public virtual void OnNavBlockersChanged()
@@ -844,7 +871,7 @@ namespace Nav
                     }
 
                     ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, m_LastExploreCellId++);
-                    ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall);
+                    ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall) || (SmallPredicate?.Invoke(ex_cell) ?? false);
                     Add(ex_cell);
                     //Trace.WriteLine($"Adding GID {ex_cell.GlobalId}");
                     OnExploreCellAdded(ex_cell);

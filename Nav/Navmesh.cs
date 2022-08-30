@@ -186,7 +186,7 @@ namespace Nav
                 }
 
                 m_AllCells.UnionWith(incoming_cells);
-                Interlocked.Exchange(ref ForcePatchesUpdate , 1);                
+                ForcePatchesRegen();
             }
 
             NotifyOnGridCellAdded(g_cell);
@@ -443,6 +443,11 @@ namespace Nav
         public uint UpdatePatchesInterval { get; set; } = 350;
         private Int64 LastUpdatePatchesTime = 0;
 
+        public void ForcePatchesRegen()
+        {
+            Interlocked.Exchange(ref ForcePatchesUpdate, 1);
+        }
+
         internal int ForcePatchesUpdate = 0;
 
         private bool UpdatePatches(bool force = false, bool is_data_locked = false)
@@ -537,7 +542,7 @@ namespace Nav
                         g_cell.ResetReplacementCells();
 
                     CellsOverlappedByRegions.Clear();
-                    Interlocked.Exchange(ref ForcePatchesUpdate, 1);
+                    ForcePatchesRegen();
                 }
             }
 

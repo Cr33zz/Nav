@@ -31,7 +31,8 @@ namespace Nav
             m_Navigator = navigator;
             m_Explorer = explorer;
 
-            CreateNavigation();
+            if (m_Navmesh == null)
+                CreateNavigation();
             LoadDebugConfig();
 
             if (m_Params.HasParam("load"))
@@ -54,6 +55,7 @@ namespace Nav
                 m_Navmesh.Deserialize(file);
                 m_Navigator.Deserialize(file);
                 m_Explorer.Deserialize(file);
+                m_Navmesh.ForcePatchesRegen();
 
                 OnDeserialize(file);
 
@@ -78,6 +80,8 @@ namespace Nav
 
             InitializeComponents();
         }
+
+        public bool ForceClose;
 
         protected virtual void OnDeserialize(string file)
         {
@@ -196,7 +200,7 @@ namespace Nav
 
                         if (contraints != null)
                         {
-                            var constraintPen = new Pen(Color.Magenta, 8);
+                            var constraintPen = new Pen(Color.Magenta, 10);
 
                             foreach (var contraint in contraints)
                                 RenderHelper.DrawRectangle(e.Graphics, constraintPen, m_RenderCenter, contraint.Min, contraint.Max);
@@ -369,6 +373,7 @@ namespace Nav
                 }
             }
 
+            e.Graphics.DrawString($"Zoom: {m_Zoom}", STATS_FONT, Brushes.Black, 10, Height - 115);
             e.Graphics.DrawString($"Explored: {m_Explorer.GetExploredPercent()}%", STATS_FONT, Brushes.Black, 10, Height - 100);
             e.Graphics.DrawString($"Grid cells: {m_Navmesh.GridCellsCount}", STATS_FONT, Brushes.Black, 10, Height - 70);
             e.Graphics.DrawString($"Cells: {m_Navmesh.CellsCount}", STATS_FONT, Brushes.Black, 10, Height - 85);
@@ -703,6 +708,9 @@ namespace Nav
 
             OnRenderUI(e);
             OnRenderPos(e);
+
+            if (ForceClose)
+                Close();
         }
 
         private void LoadWaypoints(string filename)
@@ -883,9 +891,7 @@ namespace Nav
         private void NavMeshViewer_MouseWheel(object sender, MouseEventArgs e)
         {
             var change = e.Delta * m_ZoomFactor;
-            m_Zoom = Math.Max(m_MinZoom, Math.Min(m_MaxZoom, m_Zoom + change));
-
-            m_RenderScale = m_Zoom / 1000;
+            SetZoom(Math.Max(m_MinZoom, Math.Min(m_MaxZoom, m_Zoom + change)));
         }
 
         private void NavMeshViewer_KeyPress(object sender, KeyEventArgs e)
@@ -933,7 +939,7 @@ namespace Nav
             ResumeLayout(false);
         }
 
-        private enum RegionsRenderMode
+        public enum RegionsRenderMode
         {
             None,
             MoveCostMult,
@@ -941,6 +947,12 @@ namespace Nav
             Threat,
             Outline,
             Count
+        }
+
+        public void SetZoom(float zoom)
+        {
+            m_Zoom = zoom;
+            m_RenderScale = m_Zoom / 1000;
         }
 
         protected Params m_Params;
@@ -955,25 +967,25 @@ namespace Nav
         protected float m_ZoomFactor = 0.5f;
         protected float m_MinZoom = 10.0f;
         protected float m_MaxZoom = 10000.0f;
-        private bool m_RenderIds = false;
-        protected bool m_RenderAxis = true;
-        private bool m_RenderConnections = false;
-        private bool m_RenderPath = true;
-        private bool m_RenderRoughPath = false;
-        private bool m_RenderOriginalPath = false;
-        private bool m_RenderAvoidancePath = false;
-        private bool m_RenderBacktrackPath = false;
-        private bool m_RenderPositionsHistory = false;
-        private bool m_RenderConnected = false;
-        private bool m_RenderRayCast = false;
-        private bool m_RenderExploreCells = false;
-        private RegionsRenderMode m_RenderRegionsMode = RegionsRenderMode.MoveCostMult;
-        private bool m_RenderExploreArea = false;
-        private bool m_RenderCells = true;
-        private bool m_RenderLegend = true;
-        private bool m_RenderGrids = false;
-        private bool m_RenderPatches = false;
-        private bool m_CenterOnBot = true;
+        public bool m_RenderIds = false;
+        public bool m_RenderAxis = true;
+        public bool m_RenderConnections = false;
+        public bool m_RenderPath = true;
+        public bool m_RenderRoughPath = false;
+        public bool m_RenderOriginalPath = false;
+        public bool m_RenderAvoidancePath = false;
+        public bool m_RenderBacktrackPath = false;
+        public bool m_RenderPositionsHistory = false;
+        public bool m_RenderConnected = false;
+        public bool m_RenderRayCast = false;
+        public bool m_RenderExploreCells = false;
+        public RegionsRenderMode m_RenderRegionsMode = RegionsRenderMode.MoveCostMult;
+        public bool m_RenderExploreArea = false;
+        public bool m_RenderCells = true;
+        public bool m_RenderLegend = true;
+        public bool m_RenderGrids = false;
+        public bool m_RenderPatches = false;
+        public bool m_CenterOnBot = true;
         private PointF m_LastDragMousePos = PointF.Empty;
         private TestBot m_Bot = null;
         private string m_LastWaypointsFile;
