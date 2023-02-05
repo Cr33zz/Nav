@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
 using System.Threading;
+using System.Drawing;
 
 namespace Nav
 {
@@ -20,6 +21,43 @@ namespace Nav
 
     public class Algorihms
     {
+        public static bool FindSegmentCircleIntersection(Vec3 circle_pos, float radius, Vec3 point1, Vec3 point2, out Vec3 intersection)
+        {
+            float dx, dy, A, B, C, det, t;
+
+            dx = point2.X - point1.X;
+            dy = point2.Y - point1.Y;
+
+            A = dx * dx + dy * dy;
+            B = 2 * (dx * (point1.X - circle_pos.X) + dy * (point1.Y - circle_pos.Y));
+            C = (point1.X - circle_pos.X) * (point1.X - circle_pos.X) + (point1.Y - circle_pos.Y) * (point1.Y - circle_pos.Y) - radius * radius;
+
+            det = B * B - 4 * A * C;
+            if ((A <= 0.0000001) || (det < 0))
+            {
+                // No real solutions.
+                intersection = Vec3.ZERO;
+                return false;
+            }
+            else if (det == 0)
+            {
+                // One solution.
+                t = -B / (2 * A);
+                intersection = new Vec3(point1.X + t * dx, point1.Y + t * dy, 0);
+                return true;
+            }
+                
+            // Two solutions.
+            t = (float)((-B + Math.Sqrt(det)) / (2 * A));
+            var intersection1 = new Vec3(point1.X + t * dx, point1.Y + t * dy, 0);
+            t = (float)((-B - Math.Sqrt(det)) / (2 * A));
+            var intersection2 = new Vec3(point1.X + t * dx, point1.Y + t * dy, 0);
+
+            intersection = (point1.Distance2DSqr(intersection1) < point1.Distance2DSqr(intersection2)) ? intersection1 : intersection2;
+
+            return true;
+        }
+
         private static double AcceptanceProbability(float energy, float new_energy, double temperature)
         {
             // If the new solution is better, accept it
@@ -420,17 +458,17 @@ namespace Nav
             return result_cells;
         }
 
-        public static T GetNearestCell<T>(IEnumerable<T> cells, Vec3 p) where T : Cell
+        public static T GetNearestCell<T>(IEnumerable<T> cells, Vec3 p, bool allow_disabled = false, bool use_distance_from_edge = false) where T : Cell
         {
             float min_dist = float.MaxValue;
             T nearest_cell = null;
 
             foreach (T cell in cells)
             {
-                if (cell.Disabled)
+                if (!allow_disabled && cell.Disabled)
                     continue;
 
-                float dist = cell.Distance(p);
+                float dist = cell.Distance(use_distance_from_edge ? cell.Align(p) : p);
 
                 if (dist < min_dist)
                 {

@@ -132,7 +132,7 @@ namespace Nav
 
     public abstract class IPathFollowStrategy
     {
-        public abstract void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination);
+        public abstract void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination, Navmesh navmesh);
         public abstract (Vec3, float) UpdateThreatAhead(Vec3 current_pos, IEnumerable<Region> threats);
         public abstract bool IncludePathStart();
         public virtual void OnPathReset()
@@ -161,10 +161,23 @@ namespace Nav
 
     public class SimplePathFollow : IPathFollowStrategy
     {
-        public override void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination)
+        public override void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination, Navmesh navmesh)
         {
             m_Path = path;
             m_PathDestination = path_destination;
+
+            Vec3 dest_pos = m_Path.Last();
+            // if there are no obstacles between current position and destination when in arrival radius, consider reached
+
+            if (current_pos.Distance2D(dest_pos) <= path_destination.precision && m_Path.Count > 1 && navmesh.DataLock.TryEnterReadLock(10))
+            {
+                if (navmesh.RayCast2D(current_pos, dest_pos, MovementFlag.Walk))
+                {
+                    path.Clear();
+                    m_GoToData = new goto_data(Vec3.ZERO, 0);
+                }
+                navmesh.DataLock.ExitReadLock();
+            }
 
             while (path.Count > 0)
             {
@@ -206,56 +219,6 @@ namespace Nav
             return false;
         }
     }
-
-    //public class SteeringBhvPathFollow : IPathFollowStrategy
-    //{
-    //    public SteeringBhvPathFollow(float follow_dist)
-    //    {
-    //        m_FollowDistance = follow_dist;
-    //    }
-
-    //    public override goto_data GetGoTo(Vec3 current_pos, List<Vec3> path, destination path_destination)
-    //    {
-    //        m_Owner.PathNodesShiftDist = 0;
-    //        return m_GoToData;
-    //    }
-
-    //    public override void UpdatePathProgress(Vec3 current_pos, ref List<Vec3> path, destination path_destination)
-    //    {
-    //        if (path.Count > 0)
-    //        {
-    //            // project agent position on path
-    //            Algorihms.ProjectAndMovePosOnPath(current_pos, path, m_FollowDistance, out var current_pos_on_path, out var goto_pos, out var unused_1, out var unused_2);
-
-    //            if (m_Owner.AlignGoToPositionToCurrentPosZWhenZero && goto_pos.Z == 0)
-    //                goto_pos.Z = current_pos.Z;
-
-    //            if (goto_pos.Equals(path_destination.pos, 0.1f) && current_pos.Distance2D(goto_pos) <= path_destination.precision)
-    //            {
-    //                path.Clear();
-    //                m_GoToData = new goto_data(Vec3.ZERO, 0);
-    //            }
-    //            else
-    //                m_GoToData = new goto_data(goto_pos, m_FollowDistance, stop: path_destination.pos.Distance2D(goto_pos) < path_destination.precision && path_destination.stop, path_destination: path_destination);
-    //        }
-    //        else
-    //            m_GoToData = new goto_data(Vec3.ZERO, 0);
-    //    }
-
-    //    public override bool IsThreatAhead(Vec3 current_pos, List<Vec3> path)
-    //    {
-    //        Algorihms.ProjectAndMovePosOnPath(current_pos, path, m_Owner.ThreatDetectionRange, out var current_pos_on_path, out var threat_check_end, out var unused_1, out var unused_2);
-    //        return m_Owner.IsThreatBetween(current_pos, threat_check_end);
-    //    }
-
-    //    public override bool IncludePathStart()
-    //    {
-    //        return true;
-    //    }
-
-    //    internal goto_data m_GoToData;
-    //    internal readonly float m_FollowDistance;
-    //}
 
     public class NavigationEngine : IDisposable, INavmeshObserver
     {
@@ -1696,30 +1659,18 @@ namespace Nav
                 if (m_Path.path.Count > 0)
                 {
                     path_destination = m_Path.path_destination;
-                    Vec3 dest_pos = m_Path.path.Last();
-                    // if there are no obstacles between current position and destination when in arrival radius, consider reached
-
-                    if (current_pos.Distance2D(dest_pos) <= path_destination.precision && m_Path.path.Count > 1 && m_Navmesh.DataLock.TryEnterReadLock(10))
-                    {
-                        if (m_Navmesh.RayCast2D(current_pos, dest_pos, MovementFlag.Walk))
-                            destination_reached = true;
-                        m_Navmesh.DataLock.ExitReadLock();
-                    }
-
+                    
                     using (new WriteLock(PathLock, "PathLock - NavigationEngine.UpdatePathProgression"))
                     {
-                        if (destination_reached)
-                        {
-                            m_Path.path.Clear();
-                            m_PathFollowStrategy.OnPathReset();
-                        }
-                        else
-                            m_PathFollowStrategy.UpdatePathProgress(current_pos, ref m_Path.path, path_destination);
+                        m_PathFollowStrategy.UpdatePathProgress(current_pos, ref m_Path.path, path_destination, m_Navmesh);
                         
                         destination_reached = m_Path.path.Count == 0;
 
                         if (destination_reached)
+                        {
                             m_Path.Clear();
+                            m_PathFollowStrategy.OnPathReset();
+                        }
                     }
                 }
                 else

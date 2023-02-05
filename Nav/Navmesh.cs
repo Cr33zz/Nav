@@ -1191,7 +1191,7 @@ namespace Nav
             return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out pos1_on_navmesh, out pos2_on_navmesh, false, out var is_pos1_near_navmesh, out var is_pos2_near_navmesh);
         }
 
-        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh, bool check_near_navmesh, out bool is_pos1_near_navmesh, out bool is_pos2_near_navmesh)
+        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh, bool check_near_navmesh, out bool is_pos1_near_navmesh, out bool is_pos2_near_navmesh, bool use_nearest_cell = true)
         {
             is_pos2_near_navmesh = is_pos1_near_navmesh = false;
 
@@ -1211,10 +1211,24 @@ namespace Nav
                 if (!check_near_navmesh && !near_pos1_cells.Any())
                     return false;
 
+                if (use_nearest_cell)
+                {
+                    var nearest_pos1_cell = Algorihms.GetNearestCell(near_pos1_cells, pos1, allow_disabled: true, use_distance_from_edge: true);
+                    near_pos1_cells.Clear();
+                    near_pos1_cells.Add(nearest_pos1_cell);
+                }
+
                 var near_pos2_cells = m_UberCellsPatch.GetCellsWithin(pos2, nearest_tolerance_pos2, flags).ToHashSet();
 
                 if (!check_near_navmesh && !near_pos2_cells.Any())
                     return false;
+
+                if (use_nearest_cell)
+                {
+                    var nearest_pos2_cell = Algorihms.GetNearestCell(near_pos2_cells, pos2, allow_disabled: true, use_distance_from_edge: true);
+                    near_pos2_cells.Clear();
+                    near_pos2_cells.Add(nearest_pos2_cell);
+                }
 
                 foreach (var patch in m_CellsPatches)
                 {
@@ -1764,9 +1778,9 @@ namespace Nav
 
         private Thread UpdatesThread = null;
 
-        internal ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
-        internal ReaderWriterLockSlim PatchesDataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
-        private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+        public readonly ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+        internal readonly ReaderWriterLockSlim PatchesDataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+        private readonly ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         public ReadLock AcquireReadDataLock(string description = null)
         {
