@@ -236,9 +236,9 @@ namespace Nav
         public void Deserialize(string name)
         {
             using (BinaryReader r = new BinaryReader(File.OpenRead(name + ".explorer")))
-            using (m_Navmesh.AcquireReadDataLock())
             using (new WriteLock(DataLock, "DataLock - ExplorationEngine.Deserialize"))
             using (new WriteLock(InputLock, "InputLock - ExplorationEngine.Deserialize"))
+            using (m_Navmesh.AcquireReadDataLock("ExplorationEngine.Deserialize"))
             {                
                 OnDeserialize(m_Navmesh.m_AllCells, m_Navmesh.m_IdToCell, r);
             }
