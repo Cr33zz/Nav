@@ -144,7 +144,7 @@ namespace Nav
             return result;
         }
 
-        internal override void Serialize(BinaryWriter w)
+        public override void Serialize(BinaryWriter w)
         {
             base.Serialize(w);
 
@@ -157,7 +157,7 @@ namespace Nav
                 w.Write(cell.GlobalId);
         }
 
-        internal void Deserialize(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
+        public void Deserialize(HashSet<GridCell> all_grid_cells, HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
             base.Deserialize(all_grid_cells, null, r);
 

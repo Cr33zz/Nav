@@ -476,7 +476,7 @@ namespace Nav
 
         }
 
-        internal virtual void Serialize(BinaryWriter w)
+        public virtual void Serialize(BinaryWriter w)
         {
             w.Write(GlobalId);
             w.Write(Id);
@@ -499,7 +499,7 @@ namespace Nav
             }
         }
 
-        internal void Deserialize<T>(HashSet<T> all_cells, Dictionary<int, T> id_to_cell, BinaryReader r) where T : Cell, new()
+        public void Deserialize<T>(HashSet<T> all_cells, Dictionary<int, T> id_to_cell, BinaryReader r) where T : Cell, new()
         {
             GlobalId = r.ReadInt32();
             Id = r.ReadInt32();

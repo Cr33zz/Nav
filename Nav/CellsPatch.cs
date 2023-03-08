@@ -51,7 +51,7 @@ namespace Nav
             return false;
         }
 
-        internal override void Serialize(BinaryWriter w)
+        public override void Serialize(BinaryWriter w)
         {
             base.Serialize(w);
 
@@ -69,7 +69,7 @@ namespace Nav
             }
         }
 
-        internal void Deserialize(HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
+        public void Deserialize(HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
             base.Deserialize(all_cells, null, r);
 

@@ -181,6 +181,30 @@ namespace Nav
             return m_CellsToExploreCount > 0 ? (float)Math.Round(m_ExploredCellsCount / (float)m_CellsToExploreCount * 100, 1) : 0;
         }
 
+        public float GetGlobalExploredPercent(bool ignoreSmall = true)
+        {
+            using (new ReadLock(DataLock))
+            {
+                int explored_count = 0;
+                int total_count = 0;
+                foreach (var ex_cell in m_ExploreCells)
+                {
+                    if ((ex_cell.Flags & MovementFlag.Walk) == 0 || (ignoreSmall && ex_cell.Small))
+                        continue;
+
+                    if (ex_cell.Explored)
+                        ++explored_count;
+
+                    ++total_count;
+                }
+                
+                if (total_count == 0)
+                    return 0;
+
+                return (float)Math.Round(explored_count / (float)total_count * 100, 1);
+            }
+        }
+
         public virtual void Dispose()
         {
             m_ShouldStopUpdates = true;
@@ -860,6 +884,7 @@ namespace Nav
                     AABB intersections_aabb = new AABB();
 
                     AABB intersection = default(AABB);
+                    MovementFlag combines_flags = MovementFlag.None;
 
                     foreach (Cell c in visited)
                     {
@@ -868,9 +893,10 @@ namespace Nav
                             intersections.Add(intersection);
                             intersections_aabb = intersections_aabb.Extend(intersection);
                         }
+                        combines_flags |= c.Flags;
                     }
 
-                    ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), overlapping_grid_cells, m_LastExploreCellId++);
+                    ExploreCell ex_cell = new ExploreCell(cell_aabb, visited.ToList(), combines_flags, overlapping_grid_cells, m_LastExploreCellId++);
                     ex_cell.Small = (ex_cell.CellsArea < MaxAreaToMarkAsSmall) || (ex_cell.CellsAABB.Dimensions.Max() < MaxDimensionToMarkAsSmall) || (SmallPredicate?.Invoke(ex_cell) ?? false);
                     Add(ex_cell);
                     //Trace.WriteLine($"Adding GID {ex_cell.GlobalId}");

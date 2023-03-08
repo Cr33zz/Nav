@@ -14,8 +14,8 @@ namespace Nav
             GridCellsId = new List<int>();
         }
 
-        public ExploreCell(AABB aabb, List<Cell> cells, List<int> grid_cells_id, int id = -1)
-            : base(aabb.Min.X, aabb.Min.Y, 0, aabb.Max.X, aabb.Max.Y, 0, MovementFlag.None, 1, id)
+        public ExploreCell(AABB aabb, List<Cell> cells, MovementFlag movement_flags, List<int> grid_cells_id, int id = -1)
+            : base(aabb.Min.X, aabb.Min.Y, 0, aabb.Max.X, aabb.Max.Y, 0, movement_flags, 1, id)
         {
             InitExploreCell();
 
@@ -72,7 +72,7 @@ namespace Nav
             return Cells.Where(x => (test_2d ? x.Contains2D(pos) : x.Contains(pos, z_tolerance)));
         }
 
-        internal override void Serialize(BinaryWriter w)
+        public override void Serialize(BinaryWriter w)
         {
             base.Serialize(w);
 
@@ -96,7 +96,7 @@ namespace Nav
                 w.Write(g_cell_id);
         }
 
-        internal void Deserialize(HashSet<ExploreCell> explore_cells, HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
+        public void Deserialize(HashSet<ExploreCell> explore_cells, HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
         {
             base.Deserialize(explore_cells, null, r);
 

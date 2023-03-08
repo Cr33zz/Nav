@@ -23,12 +23,13 @@ namespace Nav
 
     public struct destination : IEquatable<destination>
     {
-        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, bool stop = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
+        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
         {
             this.pos = pos;
             this.type = type;
             this.precision = precision;
             this.stop = stop;
+            this.stop_at_edge = stop_at_edge;
             this.debug_annotation = debug_annotation;
             this.user_data = user_data;
             this.as_close_as_possible = as_close_as_possible;
@@ -43,12 +44,12 @@ namespace Nav
 
         public bool Equals(destination d)
         {
-            return pos.Equals(d.pos) && type == d.type && precision == d.precision && user_data == d.user_data && as_close_as_possible == d.as_close_as_possible;
+            return pos.Equals(d.pos) && type == d.type && precision == d.precision && user_data == d.user_data && as_close_as_possible == d.as_close_as_possible && stop == d.stop && stop_at_edge == d.stop_at_edge;
         }
 
         public override int GetHashCode()
         {
-            return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ as_close_as_possible.GetHashCode();
+            return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ as_close_as_possible.GetHashCode() ^ stop.GetHashCode() ^ stop_at_edge.GetHashCode();
         }
 
         public void Serialize(BinaryWriter w)
@@ -56,10 +57,9 @@ namespace Nav
             pos.Serialize(w);
             w.Write((Int32)type);
             w.Write(precision);
-            w.Write(0); // legacy
             w.Write(stop);
+            w.Write(stop_at_edge);
             w.Write(as_close_as_possible);
-            w.Write(false); // legacy
             w.Write(shift);
         }
 
@@ -68,10 +68,9 @@ namespace Nav
             pos = new Vec3(r);
             type = (DestType)r.ReadInt32();
             precision = r.ReadSingle();
-            r.ReadSingle(); // legacy
             stop = r.ReadBoolean();
+            stop_at_edge = r.ReadBoolean();
             as_close_as_possible = r.ReadBoolean();
-            r.ReadBoolean(); // legacy
             shift = r.ReadBoolean();
         }
 
@@ -79,6 +78,7 @@ namespace Nav
         public DestType type;
         public float precision;
         public bool stop;
+        public bool stop_at_edge;
         public bool as_close_as_possible;
         public string debug_annotation;
         public Object user_data;
@@ -87,20 +87,22 @@ namespace Nav
 
     public struct goto_data
     {
-        public goto_data(Vec3 pos, float precision, bool stop = true, destination path_destination = default(destination))
+        public goto_data(Vec3 pos, float precision, bool stop = true, destination path_destination = default(destination), Vec3 destination_pos = default(Vec3))
         {
             this.pos = pos;
             this.precision = precision;
             this.stop = stop;
             this.path_destination = path_destination;
+            this.destination_pos = path_destination.pos;
         }
 
         public Vec3 pos;
         public float precision;
         public bool stop;
         public destination path_destination;
+        public Vec3 destination_pos; // can be different from path destination when stopping at edge is enabled, can be used for distance checks to destination
 
-        public bool is_going_to_dest => pos.Distance2D(path_destination.pos) < precision;
+        public bool is_going_to_dest => pos.Distance2D(destination_pos) < precision;
     }
 
     public struct path_data
@@ -196,7 +198,7 @@ namespace Nav
                 var pos = path[0];
                 if (m_Owner.AlignGoToPositionToCurrentPosZWhenZero && pos.Z == 0)
                     pos.Z = current_pos.Z;
-                m_GoToData = new goto_data(pos, m_Owner.GetPrecision(), stop: path.Count == 1 && path_destination.stop, path_destination: path_destination);
+                m_GoToData = new goto_data(pos, m_Owner.GetPrecision(), stop: path.Count == 1 && path_destination.stop, path_destination: path_destination, path_destination.pos);
             }
             else 
                 m_GoToData = new goto_data(Vec3.ZERO, 0);
@@ -864,13 +866,13 @@ namespace Nav
 
             set
             {
-                SetDestination(new destination(value.pos, value.type, value.precision <= 0 ? DefaultPrecision : value.precision, value.stop, value.as_close_as_possible, value.user_data, value.debug_annotation));
+                SetDestination(new destination(value.pos, value.type, value.precision <= 0 ? DefaultPrecision : value.precision, value.stop, value.stop_at_edge, value.as_close_as_possible, value.user_data, value.debug_annotation));
             }
         }
 
-        public void SetDestination(Vec3 pos, float precision, bool stop = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
+        public void SetDestination(Vec3 pos, float precision, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
         {
-            SetDestination(new destination(pos, DestType.User, precision <= 0 ? DefaultPrecision : precision, stop, as_close_as_possible, user_data, debug_annotation));
+            SetDestination(new destination(pos, DestType.User, precision <= 0 ? DefaultPrecision : precision, stop, stop_at_edge, as_close_as_possible, user_data, debug_annotation));
         }
 
         //public void ClearRingDestinations()
@@ -895,9 +897,9 @@ namespace Nav
             ClearDestination(DestType.Grid);
         }
 
-        public void SetCustomDestination(Vec3 pos, float precision = -1, bool stop = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
+        public void SetCustomDestination(Vec3 pos, float precision = -1, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
         {
-            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, stop, as_close_as_possible, user_data, debug_annotation));
+            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, stop, stop_at_edge, as_close_as_possible, user_data, debug_annotation));
         }
 
         public void ClearCustomDestination()
@@ -1533,10 +1535,10 @@ namespace Nav
         //        if (best_dest.IsZero())
         //            best_dest = furthest_dest;
 
-        //        SetDestination(new destination(best_dest, ring_dest.type, DefaultPrecision * 0.8f, 0, true, true, ring_dest.user_data) { is_ring = true/*, shift = true*/ });
+        //        SetDestination(new destination(best_dest, ring_dest.type, DefaultPrecision * 0.8f, 0, true, false, true, ring_dest.user_data) { is_ring = true/*, shift = true*/ });
         //    }
         //    else
-        //        SetDestination(new destination(current_pos, ring_dest.type, DefaultPrecision * 0.8f, 0, true, true, ring_dest.user_data) { is_ring = true });
+        //        SetDestination(new destination(current_pos, ring_dest.type, DefaultPrecision * 0.8f, 0, true, false, true, ring_dest.user_data) { is_ring = true });
         //}
 
         private void UpdateThreatAvoidance()

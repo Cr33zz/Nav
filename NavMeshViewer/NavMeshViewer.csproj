@@ -37,6 +37,12 @@
     <Reference Include="GameOffsets">
       <HintPath>..\..\Nav.PoE\GameOffsets.dll</HintPath>
     </Reference>
+    <Reference Include="ClickableTransparentOverlay">
+      <HintPath>..\..\Nav.PoE\ClickableTransparentOverlay.dll</HintPath>
+    </Reference>
+    <Reference Include="ImGui.NET">
+      <HintPath>..\..\Nav.PoE\ImGui.NET.dll</HintPath>
+    </Reference>
     <Reference Include="JM.LinqFaster">
       <HintPath>..\..\Nav.PoE\JM.LinqFaster.dll</HintPath>
     </Reference>
@@ -63,6 +69,9 @@
     </Reference>
     <Reference Include="SharpDX.Mathematics">
       <HintPath>..\..\Nav.PoE\SharpDX.Mathematics.dll</HintPath>
+    </Reference>
+    <Reference Include="Vortice.Mathematics">
+      <HintPath>..\..\Nav.PoE\Vortice.Mathematics.dll</HintPath>
     </Reference>
     <Reference Include="System.Runtime.Caching">
       <HintPath>..\..\Nav.PoE\System.Runtime.Caching.dll </HintPath>
