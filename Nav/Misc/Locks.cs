@@ -77,27 +77,31 @@ namespace Nav
 #pragma warning disable CS0618
         public static string GetStackTrace(int pid, Thread targetThread)
         {
-            using (var dataTarget = DataTarget.CreateSnapshotAndAttach(pid))
+            try
             {
-                ClrInfo runtimeInfo = dataTarget.ClrVersions[0];
-                var runtime = runtimeInfo.CreateRuntime();
-
-                var stackTraceLines = new List<string>();
-
-                foreach (var t in runtime.Threads.Where(x => x.ManagedThreadId == targetThread.ManagedThreadId))
+                using (var dataTarget = DataTarget.CreateSnapshotAndAttach(pid))
                 {
-                    int safetyValve = 0;
-                    foreach (var frame in t.EnumerateStackTrace())
-                    {
-                        if (++safetyValve > 50)
-                            break;
+                    ClrInfo runtimeInfo = dataTarget.ClrVersions[0];
+                    var runtime = runtimeInfo.CreateRuntime();
 
-                        if (frame.Method != null)
-                            stackTraceLines.Add($"{frame.Method}");
+                    var stackTraceLines = new List<string>();
+
+                    foreach (var t in runtime.Threads.Where(x => x.ManagedThreadId == targetThread.ManagedThreadId))
+                    {
+                        int safetyValve = 0;
+                        foreach (var frame in t.EnumerateStackTrace())
+                        {
+                            if (++safetyValve > 50)
+                                break;
+
+                            if (frame.Method != null)
+                                stackTraceLines.Add($"{frame.Method}");
+                        }
+                        return string.Join(Environment.NewLine, stackTraceLines);
                     }
-                    return string.Join(Environment.NewLine, stackTraceLines);
                 }
             }
+            catch (Exception) { }
 
             return "???";
 
