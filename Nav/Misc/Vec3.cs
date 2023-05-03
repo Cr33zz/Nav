@@ -4,6 +4,7 @@ using System.Drawing.Drawing2D;
 
 namespace Nav
 {
+    [Serializable]
     public struct Vec3 : IEquatable<Vec3>
     {
         public float X, Y, Z;

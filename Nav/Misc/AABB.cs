@@ -5,6 +5,7 @@ using System.Collections.Generic;
 
 namespace Nav
 {
+    [Serializable]
     public struct AABB : IEquatable<AABB>
     {
         public static readonly AABB ZERO = default(AABB);
@@ -178,7 +179,7 @@ namespace Nav
             return true;
         }
 
-        public AABB[] Extract2D(AABB aabb)
+        public AABB[] Extract2D(AABB aabb, bool splitAlongX = false)
         {
             AABB inter = default(AABB);
 
@@ -188,11 +189,24 @@ namespace Nav
             inter.Min.Z = Min.Z;
             inter.Max.Z = Max.Z;
 
-            List<AABB> result = new List<AABB>() { new AABB(inter.Min, inter.Max),
-                                                   new AABB(Min, new Vec3(Max.X, inter.Min.Y, Max.Z)),
-                                                   new AABB(new Vec3(Min.X, inter.Min.Y, Min.Z), new Vec3(inter.Min.X, inter.Max.Y, Max.Z)),
-                                                   new AABB(new Vec3(inter.Max.X, inter.Min.Y, Min.Z), new Vec3(Max.X, inter.Max.Y, Max.Z)),
-                                                   new AABB(new Vec3(Min.X, inter.Max.Y, Min.Z), Max) };
+            List<AABB> result = null;
+
+            if (splitAlongX)
+            {
+                result = new List<AABB>() { new AABB(inter.Min, inter.Max),
+                                            new AABB(Min, new Vec3(inter.Min.X, Max.Y, Max.Z)),
+                                            new AABB(new Vec3(inter.Min.X, inter.Max.Y, Min.Z), new Vec3(inter.Max.X, Max.Y, Max.Z)),
+                                            new AABB(new Vec3(inter.Min.X, Min.Y, Min.Z), new Vec3(inter.Max.X, inter.Min.Y, Max.Z)),
+                                            new AABB(new Vec3(inter.Max.X, Min.Y, Min.Z), Max) };
+            }
+            else
+            {
+                result = new List<AABB>() { new AABB(inter.Min, inter.Max),
+                                            new AABB(Min, new Vec3(Max.X, inter.Min.Y, Max.Z)),
+                                            new AABB(new Vec3(Min.X, inter.Min.Y, Min.Z), new Vec3(inter.Min.X, inter.Max.Y, Max.Z)),
+                                            new AABB(new Vec3(inter.Max.X, inter.Min.Y, Min.Z), new Vec3(Max.X, inter.Max.Y, Max.Z)),
+                                            new AABB(new Vec3(Min.X, inter.Max.Y, Min.Z), Max) };
+            }
 
             result.RemoveAll(x => x.Max.X - x.Min.X == 0 || x.Max.Y - x.Min.Y == 0);
 
