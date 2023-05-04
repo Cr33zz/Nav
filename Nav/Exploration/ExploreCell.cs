@@ -32,8 +32,8 @@ namespace Nav
             CellsAABB.Intersect(this.AABB, ref clampedCellsAABB);
             CellsAABB = clampedCellsAABB;
 
-            var nearest_cell = cells.OrderBy(x => CellsAABB.Center.Distance2DSqr(x.AABB.Align(CellsAABB.Center))).First();
-            Position = nearest_cell.AABB.Align(CellsAABB.Center);
+            var nearest_cell = cells.OrderBy(x => CellsAABB.Center.Distance2DSqr(x.AABB.Align(CellsAABB.Center))).FirstOrDefault();
+            Position = nearest_cell?.AABB.Align(CellsAABB.Center) ?? aabb.Center;
         }
 
         private void InitExploreCell()
@@ -44,27 +44,37 @@ namespace Nav
             GlobalId = LastExploreCellGlobalId++;
         }
 
-        public bool AddNeighbour(ExploreCell explore_cell)
+        public bool AddNeighbour(ExploreCell explore_cell, bool check_overlap = true)
         {
-            if (!Overlaps2D(explore_cell, true))
-                return false;
-
-            foreach (Cell cell in Cells)
+            Action add = () =>
             {
-                foreach (Cell other_cell in explore_cell.Cells)
+                float distance = Position.Distance2D(explore_cell.Position);
+                Neighbours.Add(new Neighbour(explore_cell, Vec3.ZERO, MovementFlag.None, distance));
+                explore_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, MovementFlag.None, distance));
+            };
+
+            if (check_overlap)
+            {
+                if (!Overlaps2D(explore_cell, true))
+                    return false;
+
+                foreach (Cell cell in Cells)
                 {
-                    if (cell.Equals(other_cell) || cell.Neighbours.Exists(x => x.cell.Equals(other_cell)))
+                    foreach (Cell other_cell in explore_cell.Cells)
                     {
-                        float distance = Position.Distance2D(explore_cell.Position);
-                        Neighbours.Add(new Neighbour(explore_cell, Vec3.ZERO, MovementFlag.None, distance));
-                        explore_cell.Neighbours.Add(new Neighbour(this, Vec3.ZERO, MovementFlag.None, distance));
-                        
-                        return true;
+                        if (cell.Equals(other_cell) || cell.Neighbours.Exists(x => x.cell.Equals(other_cell)))
+                        {
+                            add();
+                            return true;
+                        }
                     }
                 }
+
+                return false;
             }
 
-            return false;
+            add();
+            return true;
         }
 
         public IEnumerable<Cell> GetCellsAt(Vec3 pos, bool test_2d, float z_tolerance)

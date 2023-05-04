@@ -5,6 +5,7 @@ using System.Threading;
 using System.IO;
 using System.Linq;
 using static Nav.Algorihms;
+using Microsoft.VisualBasic;
 
 namespace Nav
 {
@@ -41,6 +42,8 @@ namespace Nav
 
         // precision with explore destination will be accepted as reached
         public float ExploreDestPrecision { get; set; } = 20;
+        // desired explore end cell must be withing that tolerance distance from desired end position
+        public float DesiredExploreEndPositionTolerance { get; set; } = 100;
 
         // change it via ChangeExploreCellSize function
         public int ExploreCellSize { get; private set; }
@@ -254,6 +257,7 @@ namespace Nav
             }
 
             m_HintPos.Serialize(w);
+            m_DesiredExploreEndPos.Serialize(w);
         }
 
         // Extension will be automatically added
@@ -269,6 +273,7 @@ namespace Nav
 
             RequestReevaluation();
             Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
+            Interlocked.Exchange(ref m_ForceUpdateDesiredExploreEndCell, 1);
         }
 
         protected virtual void OnDeserialize(HashSet<Cell> all_cells, Dictionary<int, Cell> id_to_cell, BinaryReader r)
@@ -312,6 +317,7 @@ namespace Nav
             m_ExploreConstraints = exConstraints;
 
             m_HintPos = new Vec3(r);
+            m_DesiredExploreEndPos = new Vec3(r);
         }
 
         public virtual void OnHugeCurrentPosChange()
@@ -555,10 +561,12 @@ namespace Nav
 
         protected virtual void OnExploreCellAdded(ExploreCell cell)
         {
+            Interlocked.Exchange(ref m_ForceUpdateDesiredExploreEndCell, 1);
         }
 
         protected virtual void OnExploreCellRemoved(ExploreCell cell)
         {
+            Interlocked.Exchange(ref m_ForceUpdateDesiredExploreEndCell, 1);
             //Trace.WriteLine($"explore cell #{cell.GlobalId} @{cell.Position} removed");
         }
 
@@ -572,33 +580,54 @@ namespace Nav
 
         protected ExploreCell GetCurrentExploreCell()
         {
-            Vec3 curr_pos = m_Navigator.CurrentPos;
+            return GetExploreCellNear(m_Navigator.CurrentPos);
+        }
 
-            ExploreCell current_explore_cell = m_ExploreCells.FirstOrDefault(x => x.CellsContains2D(curr_pos));
+        protected ExploreCell GetDesiredEndExploreCell()
+        {
+            var needUpdate = Interlocked.CompareExchange(ref m_ForceUpdateDesiredExploreEndCell, 0, 1) == 1;
+            if (needUpdate)
+            {
+                var desired_end_pos = DesiredExploreEndPos;
+                if (!desired_end_pos.IsZero())
+                {
+                    m_DesiredEndCell = GetExploreCellNear(desired_end_pos);
+                    if (m_DesiredEndCell == null)
+                        m_Navmesh.Log($"[Nav] Failed to find desired end explored cell near {desired_end_pos}!");
+                }
+                else
+                    m_DesiredEndCell = null;
+            }
+            return m_DesiredEndCell;
+        }
 
-            if (current_explore_cell == null)
+        protected ExploreCell GetExploreCellNear(Vec3 pos)
+        {
+            ExploreCell result_cell = m_ExploreCells.FirstOrDefault(x => x.CellsContains2D(pos));
+
+            if (result_cell == null)
             {
                 // try explore cells containing current position first
-                var potential_explore_cells = m_ExploreCells.Where(x => x.CellsAABB.Contains2D(curr_pos));
+                var potential_explore_cells = m_ExploreCells.Where(x => x.CellsAABB.Contains2D(pos));
 
-                if (potential_explore_cells == null)
+                if ((potential_explore_cells?.Count() ?? 0) == 0)
                     potential_explore_cells = m_ExploreCells; // find nearest explore cell
 
                 if (potential_explore_cells != null)
                 {
                     if (potential_explore_cells.Count() == 1)
-                        current_explore_cell = potential_explore_cells.First();
+                        result_cell = potential_explore_cells.First();
                     else
                     {
                         float min_dist = float.MaxValue;
 
                         foreach (var explore_cell in potential_explore_cells)
                         {
-                            float dist = explore_cell.Cells.Select(x => x.Distance(curr_pos)).Min();
+                            float dist = explore_cell.Cells.Select(x => x.Distance(pos)).Min();
 
                             if (dist < min_dist)
                             {
-                                current_explore_cell = explore_cell;
+                                result_cell = explore_cell;
                                 min_dist = dist;
                             }
                         }
@@ -606,7 +635,7 @@ namespace Nav
                 }
             }
 
-            return current_explore_cell;
+            return result_cell;
         }
 
         private class UnexploredSelector : Algorihms.IVisitor<ExploreCell>
@@ -801,7 +830,7 @@ namespace Nav
                     }
 
                     // mark cells as explored when passing by close enough
-                    if (travel_through_explore_cell.Position.Distance2D(current_pos) < ExploreDestPrecision)
+                    if (!mark_explored && travel_through_explore_cell.Position.Distance2D(current_pos) < ExploreDestPrecision)
                     {
                         Trace.WriteLine($"Explore cell GID {travel_through_explore_cell.GlobalId} considered explored because of passing by.");
                         mark_explored = true;
@@ -811,16 +840,18 @@ namespace Nav
                         OnCellExplored(travel_through_explore_cell);
                 }
 
+                //ExploreCell desired_end_explore_cell = GetDesiredEndExploreCell();
+
                 ExploreUpdateStage = "OnUpdt";
 
-                OnUpdateExploration(travel_through_explore_cell);
+                OnUpdateExploration(travel_through_explore_cell, DesiredExploreEndPos);
             }
 
             ExploreUpdateStage = "";
         }
 
         // DataLock is already acquired in read-upgradeable state
-        protected virtual void OnUpdateExploration(ExploreCell curr_explore_cell)
+        protected virtual void OnUpdateExploration(ExploreCell curr_explore_cell, Vec3 desired_explore_end_pos)
         {
         }
 
@@ -968,6 +999,28 @@ namespace Nav
             }
         }
 
+        // Optional position where exploration should end (it matters for some exploration algorithms)
+        public Vec3 DesiredExploreEndPos
+        {
+            get
+            {
+                using (new ReadLock(InputLock))
+                    return new Vec3(m_DesiredExploreEndPos);
+            }
+
+            set
+            {
+                if (m_DesiredExploreEndPos == value)
+                    return;
+
+                using (new WriteLock(InputLock, "InputLock - ExplorationEngine.DesiredExploreEndPos"))
+                    m_DesiredExploreEndPos = value;
+
+                Interlocked.Exchange(ref m_ForceUpdateDesiredExploreEndCell, 1);
+                RequestReevaluation();
+            }
+        }
+
         public bool IsDestinationCellSmall()
         {
             return m_DestCell != null && m_DestCell.Small;
@@ -1005,13 +1058,16 @@ namespace Nav
 
         private Thread UpdatesThread = null;        
 
+        private int m_ForceUpdateDesiredExploreEndCell = 0;
         private int m_ForceReevaluation = 0;
         private int m_ValidateDestCell = 0;
 
         private ReaderWriterLockSlim InputLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         protected ReaderWriterLockSlim DataLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
+        protected ExploreCell m_DesiredEndCell;
         protected ExploreCell m_DestCell;
         private Vec3 m_HintPos = Vec3.ZERO; //@ InputLock
+        private Vec3 m_DesiredExploreEndPos = Vec3.ZERO; //@ InputLock
     }
 }

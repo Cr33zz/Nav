@@ -5,7 +5,30 @@ using System.IO;
 
 namespace Nav
 {
-    public class CellsDistancer
+    public interface ICellsDistancer
+    {
+        float GetDistance(int cell_id_1, int cell_id_2);
+    }
+
+    public class DirectCellsDistancer : ICellsDistancer
+    {
+        public float GetDistance(int cell_id_1, int cell_id_2)
+        {
+            if (Distances.TryGetValue((cell_id_1, cell_id_2), out var dist))
+                return dist;
+            return 0;
+        }
+
+        public void AddDistance(int cell_id_1, int cell_id_2, float dist)
+        {
+            Distances[(cell_id_1, cell_id_2)] = dist;
+            Distances[(cell_id_2, cell_id_1)] = dist;
+        }
+
+        private readonly Dictionary<(int, int), float> Distances = new Dictionary<(int, int), float>();
+    }
+
+    public class GraphCellsDistancer : ICellsDistancer
     {
         public float GetDistance(int cell_id_1, int cell_id_2)
         {

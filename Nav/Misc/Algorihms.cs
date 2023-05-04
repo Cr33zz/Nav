@@ -68,7 +68,7 @@ namespace Nav
             return Math.Exp((energy - new_energy) / temperature);
         }
 
-        private static float GetTravelDistance(List<ExploreCell> tour, CellsDistancer distances)
+        private static float GetTravelDistance(List<ExploreCell> tour, ICellsDistancer distances)
         {
             float travel_distance = 0;
             if (tour.Count > 2)
@@ -98,7 +98,7 @@ namespace Nav
             tour.Reverse(i, k - i + 1); // reverse from i to k (inclusive)
         }
 
-        private static float Swap2OptDistance(List<ExploreCell> tour, CellsDistancer distances, int i, int k)
+        private static float Swap2OptDistance(List<ExploreCell> tour, GraphCellsDistancer distances, int i, int k)
         {
             var tour_indices = tour.Select(x => x.GlobalId).ToList();
             tour_indices.Reverse(i, k - i + 1);
@@ -113,7 +113,7 @@ namespace Nav
             return travel_distance;
         }
 
-        public static void FindExplorePath2Opt(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<ExploreCell> path, long timeout)
+        public static void FindExplorePath2Opt(ExploreCell start_cell, Vec3 desired_explore_end_pos, float desired_explore_end_tolerance, List<ExploreCell> explore_cells, ICellsDistancer distances, ref List<ExploreCell> path, long timeout)
         {
             using (new Profiler($"2-Opt %t"))
             {
@@ -130,6 +130,23 @@ namespace Nav
                 var collect_cells_visitor = new CollectVisitor<ExploreCell>();
                 Algorihms.VisitBreadth(start_cell, visitor: collect_cells_visitor);
 
+                ExploreCell end_cell = null;
+                // clear end cell when it is disconnected
+                if (!desired_explore_end_pos.IsZero())
+                {
+                    //find nearest cell to the desired end
+                    float min_dist = float.MaxValue;
+                    foreach (var cell in collect_cells_visitor.cells)
+                    {
+                        float dist = cell.Distance2D(desired_explore_end_pos);
+                        if (dist < desired_explore_end_tolerance && dist < min_dist)
+                        {
+                            end_cell = cell;
+                            min_dist = dist;
+                        }
+                    }
+                }
+
                 var best_tour = collect_cells_visitor.cells.Intersect(explore_cells).ToList();
                 best_tour.RemoveAll(c => c.Explored || c.Neighbours.Count == 0);
 
@@ -140,6 +157,13 @@ namespace Nav
                 {
                     path.Add(best_tour[0]);
                     return;
+                }
+
+                // move end cell to the end
+                if (end_cell != null)
+                {
+                    best_tour.Remove(end_cell);
+                    best_tour.Add(end_cell);
                 }
 
                 var timeout_timer = Stopwatch.StartNew();
@@ -242,7 +266,7 @@ namespace Nav
             }
         }
 
-        public static void FindExplorePath(ExploreCell start_cell, List<ExploreCell> explore_cells, CellsDistancer distances, ref List<ExploreCell> path)
+        public static void FindExplorePath(ExploreCell start_cell, List<ExploreCell> explore_cells, GraphCellsDistancer distances, ref List<ExploreCell> path)
         {
             using (new Profiler($"Simulated annealing %t"))
             {
@@ -325,6 +349,43 @@ namespace Nav
                 if (start_cell.Explored)
                     path.RemoveAt(0);
             }
+        }
+
+        // useful for finding optimal visit order using explore path
+        public static List<ExploreCell> CreateExplorationGraphFromPositions(List<Vec3> positions, NavigationEngine navigator, out DirectCellsDistancer distancer)
+        {
+            var exploreCells = new List<ExploreCell>();
+            distancer = new DirectCellsDistancer();
+            
+            foreach (var pos in positions)
+                exploreCells.Add(new ExploreCell(new AABB(pos, 1), new List<Cell>(), MovementFlag.Walk, new List<int>()));
+            
+            for (int i = 0; i < exploreCells.Count; ++i)
+            {
+                for (int j = i + 1; j < exploreCells.Count; ++j)
+                {
+                    exploreCells[i].AddNeighbour(exploreCells[j], check_overlap: false);
+
+                    List<Vec3> path = new List<Vec3>();
+                    float pathLength = float.MaxValue;
+                    if (navigator.FindPath(exploreCells[i].Position, exploreCells[j].Position, ref path, out var timedOut, as_close_as_possible: true, allow_rought_path: true, smoothen_distance: 0, can_time_out: false))
+                        pathLength = Algorihms.GetPathLength(path, exploreCells[i].Position);
+
+                    distancer.AddDistance(exploreCells[i].GlobalId, exploreCells[j].GlobalId, pathLength);
+                }
+            }
+
+            return exploreCells;
+        }
+
+        // first position should be start position and last position on list it where we want to end these won't change
+        public static List<Vec3> GetOptimalVisitOrder(List<Vec3> positions, NavigationEngine navigator)
+        {
+            var exploreCells = CreateExplorationGraphFromPositions(positions, navigator, out var distancer);
+            var path = new List<ExploreCell>();
+            FindExplorePath2Opt(exploreCells.First(), positions.Last(), exploreCells.First().AABB.Radius, exploreCells, distancer, ref path, 2000);
+
+            return path.Select(x => x.Position).ToList();
         }
 
         public static bool AreConnected<T>(T start, ref T end, MovementFlag flags) where T : Cell
