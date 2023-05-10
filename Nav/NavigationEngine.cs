@@ -962,6 +962,28 @@ namespace Nav
             return false;
         }
 
+        public Vec3 GetHistoricPosition(Vec3 referencePos, float minDistance, float connectedTolerance)
+        {
+            var refPosPatches = m_Navmesh.GetPatchesIds(referencePos, MovementFlag.Walk, connectedTolerance);
+
+            using (new ReadLock(InputLock))
+            {
+                for (int i = m_DebugPositionsHistory.Count - 1; i >= 0; --i)
+                {
+                    var historicPos = m_DebugPositionsHistory[i];
+                    var historicPosPatches = m_Navmesh.GetPatchesIds(historicPos, MovementFlag.Walk, connectedTolerance);
+
+                    if (!m_Navmesh.AreConnected(refPosPatches, historicPosPatches))
+                        break;
+
+                    if (referencePos.Distance(historicPos) >= minDistance)
+                        return historicPos;
+                }
+
+                return Vec3.ZERO;
+            }
+        }
+
         public List<Vec3> GetPath()
         {
             using (new ReadLock(PathLock))
@@ -1023,8 +1045,13 @@ namespace Nav
                     RequestPathUpdate();
                 }
 
-                if (!m_Path.path_recalc_trigger_pos.IsZero() && m_Path.path_recalc_trigger_pos.Distance2D(value) < m_Path.path_recalc_trigger_precision)
+                if (!m_Path.path_recalc_trigger_pos.IsZero() && 
+                    m_Path.path_recalc_trigger_pos.Distance2D(value) < m_Path.path_recalc_trigger_precision &&
+                    PathRecalcTriggerCooldown.ElapsedMilliseconds > 500)
+                {
                     RequestPathUpdate();
+                    PathRecalcTriggerCooldown.Restart();
+                }
 
                 if (was_empty)
                     ReorganizeWaypoints();
@@ -1267,6 +1294,7 @@ namespace Nav
         public Int64 PathUpdateDuration => PathUpdateTimer.ElapsedMilliseconds;
         public string PathUpdateStage { get; private set; } = "";
 
+        private Stopwatch PathRecalcTriggerCooldown = Stopwatch.StartNew();
         private Stopwatch PathUpdateTimer = new Stopwatch();
         private Int64 LastPathUpdateTime = 0;
 
