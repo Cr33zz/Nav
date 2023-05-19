@@ -13,3 +13,6 @@ Features
 * supports ray casts and ray traces
 * supports both walking and flying
 * NavMeshViewer allows easy viewing/debugging
+
+Special thanks to [JetBrains](https://jb.gg/OpenSourceSupport) for supporting development of this project.<br>
+<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo (Main) logo." width=15% height=15%>
