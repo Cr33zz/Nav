@@ -919,6 +919,34 @@ namespace Nav
             }
         }
 
+        public Vec3 GetRandomPosOnPatch(Vec3 origin_pos, Random rng = null)
+        {
+            using (new ReadLock(PatchesDataLock))
+            {
+                if (m_UberCellsPatch == null)
+                    return Vec3.ZERO;
+
+                var origin_cells = m_UberCellsPatch.GetCellsWithin(origin_pos, 0, MovementFlag.Walk).ToHashSet();
+
+                if (!origin_cells.Any())
+                    return Vec3.ZERO;
+
+                var origin_cell = origin_cells.First();
+
+                foreach (var patch in m_CellsPatches)
+                {
+                    if (patch.Cells.Contains(origin_cell))
+                    {
+                        rng = rng ?? Rng;
+                        Cell random_cell = patch.Cells.ToList().ElementAt(rng.Next(patch.Cells.Count()));
+                        return random_cell.AABB.GetRandomPos(rng);
+                    }
+                }
+            }
+
+            return Vec3.ZERO;
+        }
+
         public Vec3 GetCenter()
         {
             using (new ReadLock(DataLock))
@@ -1169,7 +1197,26 @@ namespace Nav
                 var ids = new HashSet<int>();
                 foreach (var patch in m_CellsPatches)
                 {
-                    if (near_cells.Where(x => patch.Cells.Contains(x)).Any())
+                    if (near_cells.Any(x => patch.Cells.Contains(x)))
+                        ids.Add(patch.GlobalId);
+                }
+                return ids;
+            }
+        }
+
+        public HashSet<int> GetPatchesIds(AABB area, MovementFlag flags)
+        {
+            using (new ReadLock(PatchesDataLock))
+            {
+                if (m_UberCellsPatch == null)
+                    return new HashSet<int>();
+
+                var cells = m_UberCellsPatch.GetCellsWithin(area, flags);
+
+                var ids = new HashSet<int>();
+                foreach (var patch in m_CellsPatches)
+                {
+                    if (cells.Any(x => patch.Cells.Contains(x)))
                         ids.Add(patch.GlobalId);
                 }
                 return ids;

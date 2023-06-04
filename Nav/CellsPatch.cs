@@ -34,6 +34,21 @@ namespace Nav
             return result_cells;
         }
 
+        internal List<Cell> GetCellsWithin(AABB area, MovementFlag flags)
+        {
+            var result_cells = new List<Cell>();
+
+            foreach (var cellsG in CellsGrid)
+            {
+                if (!cellsG.Key.Overlaps2D(area))
+                    continue;
+
+                result_cells.AddRange(Algorihms.GetCellsWithin(cellsG.Value, area, flags, allow_disabled: true));
+            }
+
+            return result_cells;
+        }
+
         internal bool AnyCellWithin(Vec3 p, float radius, MovementFlag flags)
         {
             if (p.IsZero())

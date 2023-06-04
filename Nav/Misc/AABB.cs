@@ -145,6 +145,12 @@ namespace Nav
             return tangential_ok ? dist_sqr < radius_sqr : dist_sqr <= radius_sqr;
         }
 
+        public bool Overlaps(AABB aabb, bool tangential_ok = false)
+        {
+            return (tangential_ok && Max.X >= aabb.Min.X && Min.X <= aabb.Max.X && Max.Y >= aabb.Min.Y && Min.Y <= aabb.Max.Y && Max.Z >= aabb.Min.Z && Min.Z <= aabb.Max.Z) ||
+                   (Max.X > aabb.Min.X && Min.X < aabb.Max.X && Max.Y > aabb.Min.Y && Min.Y < aabb.Max.Y && Max.Z > aabb.Min.Z && Min.Z < aabb.Max.Z);
+        }
+
         public bool Overlaps2D(Vec3 circle_center, float radius, bool tangential_ok = false)
         {
             float radius_sqr = radius * radius;

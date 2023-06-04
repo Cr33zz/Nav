@@ -519,6 +519,22 @@ namespace Nav
             return result_cells;
         }
 
+        public static List<Cell> GetCellsWithin(IEnumerable<Cell> cells, AABB area, MovementFlag flags, bool allow_disabled = false, bool test_2d = true)
+        {
+            var result_cells = new List<Cell>();
+
+            foreach (Cell cell in cells)
+            {
+                if ((!allow_disabled && cell.Disabled) || (cell.Flags & flags) != flags)
+                    continue;
+
+                if (test_2d ? cell.AABB.Overlaps2D(area) : cell.AABB.Overlaps(area))
+                    result_cells.Add(cell);
+            }
+
+            return result_cells;
+        }
+
         public static T GetNearestCell<T>(IEnumerable<T> cells, Vec3 p, bool allow_disabled = false, bool use_distance_from_edge = false) where T : Cell
         {
             float min_dist = float.MaxValue;
