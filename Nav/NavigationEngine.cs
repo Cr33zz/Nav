@@ -549,9 +549,10 @@ namespace Nav
                 
                 if (bounce)
                 {
-                    Vec3 bounce_dir = start.AABB.GetBounceDir2D(from);
+                    Vec3 bounce_dir = start.AABB.GetBounceDir2D((to - from).Normalized2D(), m_Navmesh.Rng);
                     Vec3 new_from = from + bounce_dir * BounceDist;
                     m_Navmesh.GetCellAt(new_from, out start, flags, false, true, as_close_as_possible);
+                    new_from = start.AABB.Align(new_from);
 
                     if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
                     {
@@ -1786,10 +1787,10 @@ namespace Nav
             if (!EnableAntiStuck)
                 return;
 
-            const float MIN_TIME_TO_RECALCULATE_PATH = 2000;
-            const float MIN_TIME_TO_OVERRIDE_PRECISION = 4000;
-            const float MIN_TIME_TO_BOUNCE = 6000;
-            const float MIN_TIME_TO_OVERRIDE_PATH_RANDOM_COEFF = 9000;
+            const float MIN_TIME_TO_RECALCULATE_PATH = 1500;
+            const float MIN_TIME_TO_OVERRIDE_PRECISION = 2000;
+            const float MIN_TIME_TO_BOUNCE = 3000;
+            const float MIN_TIME_TO_OVERRIDE_PATH_RANDOM_COEFF = 4500;
 
             Vec3 curr_pos = CurrentPos;
 
@@ -1810,8 +1811,11 @@ namespace Nav
                     m_AntiStuckPathingTimer.Start();
 
                 // handle anti stuck precision management features
-                if (m_AntiStuckPrecisionTimer.ElapsedMilliseconds > MIN_TIME_TO_OVERRIDE_PRECISION)
-                    m_PrecisionOverride = AntiStuckPrecisionOverride;
+                if (m_AntiStuckPrecisionTimer.ElapsedMilliseconds > MIN_TIME_TO_OVERRIDE_PRECISION &&
+                    m_AntiStuckPathingLevel <= 0)
+                {
+                    m_PrecisionOverride = AntiStuckPrecisionOverride; // overriding precision on higher levels can disable bouncing!
+                }
 
                 // handle anti stuck path management features
 
@@ -1829,6 +1833,9 @@ namespace Nav
                     ResetAntiStuckPrecition(curr_pos);
                     m_AntiStuckPathingLevel = 2;
                     m_PathBounce = true;
+                    m_PathRandomCoeffOverride = 1.25f;
+                    m_PrecisionOverride = -1;
+                    m_UpdatePathIntervalOverride = 1250;
                     RequestPathUpdate();
                 }
                 // level 3
@@ -1836,10 +1843,11 @@ namespace Nav
                          m_AntiStuckPathingLevel == 2)
                 {
                     ResetAntiStuckPrecition(curr_pos);
-                    m_PathBounce = false;
                     m_AntiStuckPathingLevel = 3;
-                    m_PathRandomCoeffOverride = 1.5f;
-                    m_UpdatePathIntervalOverride = 3000;
+                    m_PathBounce = true;
+                    m_PathRandomCoeffOverride = 1.75f;
+                    m_PrecisionOverride = -1;
+                    m_UpdatePathIntervalOverride = 1500;
                     RequestPathUpdate();
                 }
             }

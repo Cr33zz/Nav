@@ -1228,14 +1228,14 @@ namespace Nav
             return patchesIds1.Overlaps(patchesIds2);
         }
 
-        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2)
+        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, bool use_nearest_cell = true)
         {
-            return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out var pos1_on_navmesh, out var pos2_on_navmesh);
+            return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out var pos1_on_navmesh, out var pos2_on_navmesh, use_nearest_cell);
         }
 
-        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh)
+        public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh, bool use_nearest_cell = true)
         {
-            return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out pos1_on_navmesh, out pos2_on_navmesh, false, out var is_pos1_near_navmesh, out var is_pos2_near_navmesh);
+            return AreConnected(pos1, pos2, flags, nearest_tolerance_pos1, nearest_tolerance_pos2, out pos1_on_navmesh, out pos2_on_navmesh, false, out var is_pos1_near_navmesh, out var is_pos2_near_navmesh, use_nearest_cell);
         }
 
         public bool AreConnected(Vec3 pos1, Vec3 pos2, MovementFlag flags, float nearest_tolerance_pos1, float nearest_tolerance_pos2, out Vec3 pos1_on_navmesh, out Vec3 pos2_on_navmesh, bool check_near_navmesh, out bool is_pos1_near_navmesh, out bool is_pos2_near_navmesh, bool use_nearest_cell = true)
@@ -1821,7 +1821,7 @@ namespace Nav
 
         private int m_LastGridCellId = 0;
         private int m_LastCellId = 0;
-        protected Random Rng = new Random();
+        internal Random Rng = new Random();
 
         private Thread UpdatesThread = null;
 

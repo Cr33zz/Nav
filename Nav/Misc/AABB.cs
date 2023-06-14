@@ -290,25 +290,27 @@ namespace Nav
         }
 
         // method assumes that pos is inside AABB
-        public Vec3 GetBounceDir2D(Vec3 pos)
+        public Vec3 GetBounceDir2D(Vec3 dir_to_dest, Random rng = null)
         {
-            float dist_1 = pos.X - Min.X;
-            float dist_2 = Max.X - pos.X;
-            float dist_3 = pos.Y - Min.Y;
-            float dist_4 = Max.Y - pos.Y;
+            //float dist_1 = pos.X - Min.X;
+            //float dist_2 = Max.X - pos.X;
+            //float dist_3 = pos.Y - Min.Y;
+            //float dist_4 = Max.Y - pos.Y;
 
-            float[] dists = new float[] { dist_1, dist_2, dist_3, dist_4 };
+            //float[] dists = new float[] { dist_1, dist_2, dist_3, dist_4 };
 
-            float min_dist = dists.Min();
+            //float min_dist = dists.Min();
 
-            if (min_dist.Equals(dist_1))
-                return new Vec3(1, 0, 0);
-            else if (min_dist.Equals(dist_2))
-                return new Vec3(-1, 0, 0);
-            else if (min_dist.Equals(dist_3))
-                return new Vec3(0, 1, 0);
-            else
-                return new Vec3(0, -1, 0);
+            //if (min_dist.Equals(dist_1))
+            //    return new Vec3(1, 0, 0);
+            //else if (min_dist.Equals(dist_2))
+            //    return new Vec3(-1, 0, 0);
+            //else if (min_dist.Equals(dist_3))
+            //    return new Vec3(0, 1, 0);
+            //else
+            //    return new Vec3(0, -1, 0);
+            rng = rng ?? new Random();
+            return Vec3.Rotate(dir_to_dest, rng.Next(15, 345), Vec3.UP);
         }
 
         public Vec3 GetRandomPos(Random rng = null)

@@ -10,6 +10,7 @@ namespace Nav
         public float X, Y, Z;
 
         public static readonly Vec3 ZERO = default(Vec3);
+        public static readonly Vec3 UP = new Vec3(0, 0, 1);
 
         public bool IsZero() { return X == 0 && Y == 0 && Z == 0; }
 
