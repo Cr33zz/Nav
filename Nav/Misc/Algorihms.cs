@@ -645,7 +645,7 @@ namespace Nav
             private Vec3 HintPos;
         }
 
-        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, out bool timedOut, float random_coeff = 0, bool allow_disconnected = false, bool use_cell_centers = false, bool ignore_movement_cost = false, Int64 time_limit = -1)
+        public static bool FindPath<T,S>(T start, Vec3 from, S strategy, MovementFlag flags, ref List<path_pos> path, out bool timedOut, float random_coeff = 0, bool allow_disconnected = false, bool use_cell_centers = false, bool ignore_movement_cost = false, Int64 time_limit = -1, float max_path_length = float.MaxValue)
             where T : Cell
             where S : PathFindStrategy<T>
         {
@@ -696,6 +696,9 @@ namespace Nav
                     }
 
                     closed.Insert(0, current_node);
+
+                    if (current_node.g > max_path_length)
+                        continue;
 
                     foreach (Cell.Neighbour neighbour in current_node.cell.Neighbours)
                     {

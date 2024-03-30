@@ -893,6 +893,8 @@ namespace Nav
 
                         stream.Close();
 
+                        OnDataLoaded();
+
                         return true;
                     }
                 }
@@ -905,6 +907,10 @@ namespace Nav
 
                 return false;
             }
+        }
+
+        protected virtual void OnDataLoaded()
+        {
         }
 
         public Vec3 GetRandomPos(Random rng = null)

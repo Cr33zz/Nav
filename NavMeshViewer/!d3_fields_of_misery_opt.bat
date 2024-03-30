@@ -1,0 +1,1 @@
+NavMeshViewer.exe --offline --load test_data\nav_exp_fields_of_misery.txt --debug_config ./debug_d3_opt.ini 

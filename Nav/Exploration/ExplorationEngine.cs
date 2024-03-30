@@ -120,28 +120,41 @@ namespace Nav
             }
         }
 
-        public void ResetExploration(List<AABB> areas = null)
+        public void ResetExploration(List<AABB> areas = null, bool only_current_zone = false)
         {
             using (new WriteLock(DataLock, "DataLock - ExplorationEngine.ResetExploration"))
             using (new WriteLock(InputLock, "InputLock - ExplorationEngine.ResetExploration"))
             {
-                if ((areas?.Count ?? 0) == 0)
-                {
-                    foreach (var ex_cell in m_ExploreCells)
-                        ex_cell.Explored = false;
-                    m_ExploredCellsCount = 0;
-                    m_CellsToExploreCount = 0;
-                    Trace.WriteLine($"Reset all ({m_ExploreCells.Count}) explore cells.");
-                }
-                else
-                {
-                    var exploreCellsInAreas = m_ExploreCells.Where(x => areas.Any(a => x.CellsAABB.Overlaps2D(a))).ToList();
-                    foreach (var ex_cell in exploreCellsInAreas)
-                        ex_cell.Explored = false;
+                var explore_cells_to_reset = m_ExploreCells.ToHashSet();
 
-                    Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
-                    Trace.WriteLine($"Reset {exploreCellsInAreas.Count} explore cells.");
+                if (only_current_zone)
+                {
+                    var start_cell = GetCurrentExploreCell();
+                    if (start_cell != null)
+                    {
+                        var collect_cells_visitor = new CollectVisitor<ExploreCell>();
+                        Algorihms.VisitBreadth(start_cell, visitor: collect_cells_visitor);
+                        explore_cells_to_reset.IntersectWith(collect_cells_visitor.cells);
+                        
+                        Trace.WriteLine($"Found {collect_cells_visitor.cells.Count} explore cells in current zone.");
+                    }
                 }
+                
+                int areas_count = (areas?.Count ?? 0);
+
+                if (areas_count > 0)
+                {
+                    var explore_cells_in_areas = m_ExploreCells.Where(x => areas.Any(a => x.CellsAABB.Overlaps2D(a))).ToList();                    
+                    explore_cells_to_reset.IntersectWith(explore_cells_in_areas);
+                 
+                    Trace.WriteLine($"Found {explore_cells_in_areas.Count} explore cells in areas.");
+                }
+
+                foreach (var ex_cell in explore_cells_to_reset)
+                    ex_cell.Explored = false;
+
+                Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
+                Trace.WriteLine($"Reset ({explore_cells_to_reset.Count}) explore cells.");
             }
         }
 
@@ -523,7 +536,10 @@ namespace Nav
             {
                 foreach (var ex_cell in m_ExploreCells)
                     ex_cell.PatchesIds = m_Navmesh.GetPatchesIds(ex_cell.Position, MovementFlag.Walk, 5);
+                    //ex_cell.PatchesIds = m_Navmesh.GetPatchesIds(ex_cell.CellsAABB, MovementFlag.Walk); // it can be problematic for explore cells with overlapping cells AABBs (diagonal areas)
             }
+
+            RequestReevaluation();
         }
 
         protected virtual void OnExploreCriteriaChanged()
@@ -765,7 +781,7 @@ namespace Nav
 
             if (!force_reevaluation && IsExplored())
             {
-                m_Navmesh.Log("[Nav] Exploration finished!");
+                //m_Navmesh.Log("[Nav] Exploration finished!");
                 m_Navigator.ClearDestination(DestType.Explore);
                 return;
             }
@@ -967,6 +983,25 @@ namespace Nav
                 return false;
             }
 
+            if (!m_Navmesh.GetCellAt(to, out var end_cell, MovementFlag.Walk))
+                return false;
+
+            //Func<ExploreCell, bool> isExploreCellAllowed = (ex_cell) =>
+            //{
+            //    if (!m_Navmesh.GetCellAt(ex_cell.Position, out var from_cell, MovementFlag.Walk))
+            //        return false;
+
+            //    var path = new List<path_pos>();
+            //    return Algorihms.FindPath(from_cell, ex_cell.Position, new DestinationPathFindStrategy<Cell>(to, end_cell), MovementFlag.Walk, ref path, out var timed_out, max_path_length: ex_cell.AABB.Radius * 2);
+            //};
+
+            //// special handling for case when there is navmesh blocker in that explore cell and causing destination point
+            //// to be disconnected from explore position
+            //if (!isExploreCellAllowed(end))
+            //{
+            //    Trace.WriteLine(":)");
+            //}
+
             debug_info = $"#{start.GlobalId} {start.Position} -> #{end.GlobalId} {end.Position}";
 
             using (new Profiler("Rough path finding (incl. lock) took %t", 50))
@@ -1031,13 +1066,12 @@ namespace Nav
             var dest_cell = m_DestCell;
             if (dest_cell != null)
             {
-                return dest_cell.Position;
-                //var constraints = ExploreConstraints;
-                //if ((constraints?.Count ?? 0) == 0)
-                //    return dest_cell.Position;
+                if (dest_cell.PatchesIds.Count <= 1)
+                    return dest_cell.Position;
 
-                //var pos_in_contraint = constraints.Select(x => x.Align(dest_cell.Position)).OrderBy(x => x.Distance2DSqr(dest_cell.Position)).First();
-                //return new Vec3(pos_in_contraint.X, pos_in_contraint.Y, dest_cell.Position.Z);
+                // align destination position to the patch for current position (this is aimed to fix explore cells belonging to multiple patches
+                //if (m_Navmesh.AreConnected(m_Navigator.CurrentPos, dest_cell.Position, MovementFlag.Walk, 10, dest_cell.AABB.Radius, out var unused, out var dest_pos))
+                //    return dest_pos;
             }
             return Vec3.ZERO;
         }

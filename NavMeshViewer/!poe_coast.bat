@@ -1,0 +1,1 @@
+NavMeshViewer.exe --offline --load "the coast-1104840656.nav" --debug_config ./debug.ini 

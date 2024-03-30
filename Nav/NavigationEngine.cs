@@ -23,7 +23,7 @@ namespace Nav
 
     public struct destination : IEquatable<destination>
     {
-        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
+        public destination(Vec3 pos, DestType type = DestType.User, float precision = 0, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, bool keep_moving_while_repath = true, Object user_data = null, string debug_annotation = null)
         {
             this.pos = pos;
             this.type = type;
@@ -33,8 +33,8 @@ namespace Nav
             this.debug_annotation = debug_annotation;
             this.user_data = user_data;
             this.as_close_as_possible = as_close_as_possible;
-
-            shift = false;
+            this.keep_moving_while_repath = keep_moving_while_repath;
+            this.shift = false;
         }
 
         public override bool Equals(Object obj)
@@ -44,12 +44,12 @@ namespace Nav
 
         public bool Equals(destination d)
         {
-            return pos.Equals(d.pos) && type == d.type && precision == d.precision && user_data == d.user_data && as_close_as_possible == d.as_close_as_possible && stop == d.stop && stop_at_edge == d.stop_at_edge;
+            return pos.Equals(d.pos) && type == d.type && precision == d.precision && user_data == d.user_data && as_close_as_possible == d.as_close_as_possible && keep_moving_while_repath == d.keep_moving_while_repath && stop == d.stop && stop_at_edge == d.stop_at_edge;
         }
 
         public override int GetHashCode()
         {
-            return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ as_close_as_possible.GetHashCode() ^ stop.GetHashCode() ^ stop_at_edge.GetHashCode();
+            return pos.GetHashCode() ^ type.GetHashCode() ^ precision.GetHashCode() ^ user_data.GetHashCode() ^ as_close_as_possible.GetHashCode() ^ keep_moving_while_repath.GetHashCode() ^ stop.GetHashCode() ^ stop_at_edge.GetHashCode();
         }
 
         public void Serialize(BinaryWriter w)
@@ -60,6 +60,7 @@ namespace Nav
             w.Write(stop);
             w.Write(stop_at_edge);
             w.Write(as_close_as_possible);
+            w.Write(keep_moving_while_repath);
             w.Write(shift);
         }
 
@@ -71,6 +72,7 @@ namespace Nav
             stop = r.ReadBoolean();
             stop_at_edge = r.ReadBoolean();
             as_close_as_possible = r.ReadBoolean();
+            keep_moving_while_repath = r.ReadBoolean();
             shift = r.ReadBoolean();
         }
 
@@ -80,6 +82,7 @@ namespace Nav
         public bool stop;
         public bool stop_at_edge;
         public bool as_close_as_possible;
+        public bool keep_moving_while_repath;
         public string debug_annotation;
         public Object user_data;
         internal bool shift;
@@ -440,15 +443,17 @@ namespace Nav
 
         public bool FindPath(Vec3 from, Vec3 to, ref List<Vec3> path, out bool timed_out, bool as_close_as_possible, bool allow_rought_path, float random_coeff = 0, float nodes_shift_dist = 0, float smoothen_distance = float.MaxValue, bool ignore_movement_cost = false, bool can_time_out = true)
         {
-            return FindPath(from, to, MovementFlags, m_Path, ref path, out timed_out, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, random_coeff, m_PathBounce, nodes_shift_dist, false, smoothen_distance, allow_rought_path, ignore_movement_cost, can_time_out);
+            return FindPath(from, to, MovementFlags, m_Path, out var __unused, ref path, out timed_out, out var path_recalc_trigger_position, out var path_recalc_trigger_dist, out var unused, PATH_NODES_MERGE_DISTANCE, as_close_as_possible, false, random_coeff, m_PathBounce, nodes_shift_dist, false, smoothen_distance, allow_rought_path, ignore_movement_cost, can_time_out);
         }
 
-        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, path_data current_path, ref List<Vec3> path, out bool timed_out, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, out Vec3 rough_path_destination, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false, bool ignore_movement_cost = false, bool can_time_out = true)
+        public bool FindPath(Vec3 from, Vec3 to, MovementFlag flags, path_data current_path, out string __tmp_crash_dbg, ref List<Vec3> path, out bool timed_out, out Vec3 path_recalc_trigger_position, out float path_recalc_trigger_precision, out Vec3 rough_path_destination, float merge_distance = -1, bool as_close_as_possible = false, bool include_from = false, float random_coeff = 0, bool bounce = false, float shift_nodes_distance = 0, bool shift_dest = false, float smoothen_distance = float.MaxValue, bool allow_rough_path = false, bool ignore_movement_cost = false, bool can_time_out = true)
         {
+            __tmp_crash_dbg = "0";
             using (new Profiler("Path finding (incl. lock) took %t", 100))
             using (m_Navmesh.AcquireReadDataLock("NavigationEngine.FindPath"))
             using (new Profiler($"Path finding took %t [from: {from}, to: {to}]", 100))
             {
+                __tmp_crash_dbg = "1";
                 path_recalc_trigger_position = Vec3.ZERO;
                 path_recalc_trigger_precision = 0;
                 rough_path_destination = Vec3.ZERO;
@@ -457,10 +462,14 @@ namespace Nav
                 if (from.IsZero() || to.IsZero())
                     return false;
 
+                __tmp_crash_dbg = "2";
+
                 var original_to = to;
 
                 bool start_on_nav_mesh = m_Navmesh.GetCellAt(from, out Cell start, flags, false, true, true);
                 bool end_on_nav_mesh = m_Navmesh.GetCellAt(to, out Cell end, flags, false, true, as_close_as_possible);
+
+                __tmp_crash_dbg = "3";
 
                 // align from position to closest cell
                 if (!start_on_nav_mesh)
@@ -471,6 +480,8 @@ namespace Nav
                     from = start.AABB.Align(from);
                 }
 
+                __tmp_crash_dbg = "4";
+
                 // align to position to closest cell
                 if (!end_on_nav_mesh)
                 {
@@ -480,6 +491,8 @@ namespace Nav
                     to = end.AABB.Align(to);
                 }
 
+                __tmp_crash_dbg = "5";
+
                 int are_connected = -1;
 
                 if (!as_close_as_possible)
@@ -488,6 +501,8 @@ namespace Nav
                     if (are_connected == 0)
                         return false;
                 }
+
+                __tmp_crash_dbg = "6";
 
                 List<Vec3> rough_path = new List<Vec3>();
                 string rough_path_debug_info = "";
@@ -499,7 +514,11 @@ namespace Nav
                         m_RoughtPathEstimator.FindRoughPath(from, to, ref rough_path, out rough_path_debug_info);
                 }
 
+                __tmp_crash_dbg = "7";
+
                 bool use_time_limit = can_time_out && current_path.path_destination.pos == original_to && current_path.path.Count > 0;
+
+                __tmp_crash_dbg = "8";
 
                 // check if current rough path destination is still valid
                 // sometimes path is not aligned with rough path and it may lead to some going back and forth stuck
@@ -511,8 +530,11 @@ namespace Nav
                     !current_path.rough_path_destination.IsZero() &&
                     CurrentPos.Distance2D(current_path.rough_path_destination) > m_RoughtPathEstimator.GetRoughPathRecalcPrecision();
 
+                __tmp_crash_dbg = "9";
+
                 if (keep_using_rough_destination)
                 {
+                    __tmp_crash_dbg = "9a";
                     rough_path.Clear();
                     rough_path.Add(to);
 
@@ -525,6 +547,7 @@ namespace Nav
                 }
                 else if (rough_path.Count > 4)
                 {
+                    __tmp_crash_dbg = "9b";
                     rough_path_destination = rough_path[4];
 
                     //Trace.WriteLine($"overriding path destination {original_to} with rough destination {rough_path_destination} (path: {string.Join(" - ", rough_path)}, {rough_path_debug_info})");
@@ -543,27 +566,44 @@ namespace Nav
                     path_recalc_trigger_precision = m_RoughtPathEstimator.GetRoughPathRecalcPrecision();
                 }
                 else
+                {
+                    __tmp_crash_dbg = "9c";
                     rough_path.Clear();
+                }
+
+                __tmp_crash_dbg = "10";
 
                 List<path_pos> tmp_path = new List<path_pos>();
+
+                bool bounced = false;
                 
                 if (bounce)
                 {
+                    __tmp_crash_dbg = "10b";
+
                     Vec3 bounce_dir = start.AABB.GetBounceDir2D((to - from).Normalized2D(), m_Navmesh.Rng);
                     Vec3 new_from = from + bounce_dir * BounceDist;
                     m_Navmesh.GetCellAt(new_from, out start, flags, false, true, as_close_as_possible);
-                    new_from = start.AABB.Align(new_from);
 
-                    if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
+                    if (start != null)
                     {
-                        Trace.WriteLine($"Failed to find bounce path between {from} and {to}, are connected {are_connected}, timed out {timed_out}, use time limit {use_time_limit}");
-                        return false;
-                    }
+                        new_from = start.AABB.Align(new_from);
 
-                    tmp_path.Insert(0, new path_pos(start.AABB.Align(from), start));
+                        if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
+                        {
+                            Trace.WriteLine($"Failed to find bounce path between {from} and {to}, are connected {are_connected}, timed out {timed_out}, use time limit {use_time_limit}");
+                            return false;
+                        }
+
+                        tmp_path.Insert(0, new path_pos(start.AABB.Align(from), start));
+
+                        bounced = true;
+                    }
                 }
-                else
+
+                if (!bounced)
                 {
+                    __tmp_crash_dbg = "11";
                     using (new Profiler($"Path finding algorithm took %t [rough: {rough_path.Count}, connected: {are_connected}]", 100))
                     {
                         if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
@@ -574,18 +614,30 @@ namespace Nav
                     }
                 }
 
+                __tmp_crash_dbg = "12";
+
                 if (smoothen_distance > 0 && random_coeff == 0)
                     SmoothenPath(ref tmp_path, flags, smoothen_distance, ref path_recalc_trigger_position, ref path_recalc_trigger_precision, bounce ? 1 : 0);
+
+                __tmp_crash_dbg = "13";
 
                 if (DistToKeepFromEdge > 0 && random_coeff == 0)
                     KeepAwayFromEdges(ref tmp_path, flags);
 
+                __tmp_crash_dbg = "14";
+
                 path = tmp_path.Select(x => x.pos).Concat(rough_path).ToList();
+
+                __tmp_crash_dbg = "15";
 
                 PostProcessPath(ref path, merge_distance, shift_nodes_distance, shift_dest);
 
+                __tmp_crash_dbg = "16";
+
                 if (!include_from && start_on_nav_mesh)
                     path.RemoveAt(0);
+
+                __tmp_crash_dbg = "17";
 
                 return true;
             }
@@ -867,13 +919,13 @@ namespace Nav
 
             set
             {
-                SetDestination(new destination(value.pos, value.type, value.precision <= 0 ? DefaultPrecision : value.precision, value.stop, value.stop_at_edge, value.as_close_as_possible, value.user_data, value.debug_annotation));
+                SetDestination(new destination(value.pos, value.type, value.precision <= 0 ? DefaultPrecision : value.precision, value.stop, value.stop_at_edge, value.as_close_as_possible, value.keep_moving_while_repath, value.user_data, value.debug_annotation));
             }
         }
 
-        public void SetDestination(Vec3 pos, float precision, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
+        public void SetDestination(Vec3 pos, float precision, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, bool keep_moving_while_repath = true, Object user_data = null, string debug_annotation = null)
         {
-            SetDestination(new destination(pos, DestType.User, precision <= 0 ? DefaultPrecision : precision, stop, stop_at_edge, as_close_as_possible, user_data, debug_annotation));
+            SetDestination(new destination(pos, DestType.User, precision <= 0 ? DefaultPrecision : precision, stop, stop_at_edge, as_close_as_possible, keep_moving_while_repath, user_data, debug_annotation));
         }
 
         //public void ClearRingDestinations()
@@ -898,9 +950,9 @@ namespace Nav
             ClearDestination(DestType.Grid);
         }
 
-        public void SetCustomDestination(Vec3 pos, float precision = -1, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, Object user_data = null, string debug_annotation = null)
+        public void SetCustomDestination(Vec3 pos, float precision = -1, bool stop = false, bool stop_at_edge = false, bool as_close_as_possible = true, bool keep_moving_while_repath = true, Object user_data = null, string debug_annotation = null)
         {
-            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, stop, stop_at_edge, as_close_as_possible, user_data, debug_annotation));
+            SetDestination(new destination(pos, DestType.Custom, precision < 0 ? DefaultPrecision : precision, stop, stop_at_edge, as_close_as_possible, keep_moving_while_repath, user_data, debug_annotation));
         }
 
         public void ClearCustomDestination()
@@ -1357,30 +1409,39 @@ namespace Nav
             }
             else
             {
-                if (
-                !FindPath(
-                    current_pos,
-                    dest.pos,
-                    MovementFlags,
-                    m_Path,
-                    ref new_path,
-                    out timed_out,
-                    out new_path_recalc_trigger_position,
-                    out new_path_recalc_trigger_precision,
-                    out new_rough_path_destination,
-                    PATH_NODES_MERGE_DISTANCE,
-                    as_close_as_possible: dest.as_close_as_possible,
-                    include_from: m_PathFollowStrategy.IncludePathStart(),
-                    random_coeff: m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff,
-                    bounce: m_PathBounce,
-                    shift_nodes_distance: PathNodesShiftDist,
-                    shift_dest: dest.shift,
-                    smoothen_distance: PathSmoothingDistance,
-                    allow_rough_path: AllowRoughPath)
-                    )
+                string tmp_debug = "";
+                try
                 {
-                    Trace.WriteLine($"No path to {dest.pos} {dest.type} {MovementFlags} ({dest.debug_annotation ?? ""} current path dest {m_Path.path_destination.pos})");
-                    new_rough_path_destination = Vec3.ZERO; // clear rough destination just in case it is causing issues
+                    if (
+                    !FindPath(
+                        current_pos,
+                        dest.pos,
+                        MovementFlags,
+                        m_Path,
+                        out tmp_debug,
+                        ref new_path,
+                        out timed_out,
+                        out new_path_recalc_trigger_position,
+                        out new_path_recalc_trigger_precision,
+                        out new_rough_path_destination,
+                        PATH_NODES_MERGE_DISTANCE,
+                        as_close_as_possible: dest.as_close_as_possible,
+                        include_from: m_PathFollowStrategy.IncludePathStart(),
+                        random_coeff: m_PathRandomCoeffOverride > 0 ? m_PathRandomCoeffOverride : PathRandomCoeff,
+                        bounce: m_PathBounce,
+                        shift_nodes_distance: PathNodesShiftDist,
+                        shift_dest: dest.shift,
+                        smoothen_distance: PathSmoothingDistance,
+                        allow_rough_path: AllowRoughPath)
+                        )
+                    {
+                        Trace.WriteLine($"No path to {dest.pos} {dest.type} {MovementFlags} ({dest.debug_annotation ?? ""} current path dest {m_Path.path_destination.pos})");
+                        new_rough_path_destination = Vec3.ZERO; // clear rough destination just in case it is causing issues
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"[{tmp_debug}] {ex.Message}\n{ex.StackTrace}\n{ex.InnerException?.Message ?? "no-inner"}");
                 }
             }
 
@@ -1683,6 +1744,8 @@ namespace Nav
             bool destination_reached = false;
             destination path_destination = default;
 
+            var dest = Destination;
+
             // check and removed reached nodes from path
             //using (new Profiler("update path prog [update] [%t]", 10))
             using (new ReadLock(PathLock, true, description: "PathLock - NavigationEngine.UpdatePathProgression"))
@@ -1690,14 +1753,19 @@ namespace Nav
                 if (m_Path.path.Count > 0)
                 {
                     path_destination = m_Path.path_destination;
-                    
+
                     using (new WriteLock(PathLock, "PathLock - NavigationEngine.UpdatePathProgression"))
                     {
-                        m_PathFollowStrategy.UpdatePathProgress(current_pos, ref m_Path.path, path_destination, m_Navmesh);
-                        
-                        destination_reached = m_Path.path.Count == 0;
+                        // when current destination doesn't match the one from the path we are following
+                        bool force_clear_path = !path_destination.keep_moving_while_repath && !dest.Equals(path_destination);
 
-                        if (destination_reached)
+                        if (!force_clear_path)
+                        {
+                            m_PathFollowStrategy.UpdatePathProgress(current_pos, ref m_Path.path, path_destination, m_Navmesh);
+                            destination_reached = m_Path.path.Count == 0;
+                        }
+
+                        if (destination_reached || force_clear_path)
                         {
                             m_Path.Clear();
                             m_PathFollowStrategy.OnPathReset();
@@ -1712,8 +1780,6 @@ namespace Nav
             //using (new Profiler("update path prog [dest reached] [%t]", 10))
             if (destination_reached)
             {
-                var dest = Destination;
-
                 if (IsDestinationReached(dest, path_destination, DestType.All))
                 {
                     using (new WriteLock(InputLock, "InputLock - NavigationEngine.UpdatePathProgression - dest history update"))

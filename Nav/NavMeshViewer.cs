@@ -33,6 +33,10 @@ namespace Nav
 
             if (m_Navmesh == null)
                 CreateNavigation();
+
+            if (m_Params.HasParam("debug_config"))
+                m_Params.GetParam("debug_config", out DEBUG_CONFIG_FILE);
+
             LoadDebugConfig();
 
             if (m_Params.HasParam("load"))
@@ -96,12 +100,19 @@ namespace Nav
             m_Explorer.Enabled = false;
         }
 
-        protected virtual void LoadDebugConfig()
+        protected void LoadDebugConfig()
         {
             if (!File.Exists(DEBUG_CONFIG_FILE))
                 return;
 
             Ini.IniFile debug_ini = new Ini.IniFile(DEBUG_CONFIG_FILE);
+
+            OnLoadDebugConfig(debug_ini);
+        }
+
+        protected virtual void OnLoadDebugConfig(Ini.IniFile debug_ini)
+        {
+            m_ZoomFactor = float.Parse(debug_ini.IniReadValue("Viewer", "zoom_factor"));
 
             m_Navigator.UpdatePathInterval = int.Parse(debug_ini.IniReadValue("Navigator", "update_path_interval"));
             m_Navigator.MovementFlags = (MovementFlag)Enum.Parse(typeof(MovementFlag), debug_ini.IniReadValue("Navigator", "movement_flags"));
@@ -109,12 +120,15 @@ namespace Nav
             m_Navigator.DefaultPrecision = float.Parse(debug_ini.IniReadValue("Navigator", "default_precision"));
             m_Navigator.GridDestPrecision = float.Parse(debug_ini.IniReadValue("Navigator", "grid_dest_precision"));
             m_Navigator.PathSmoothingPrecision = float.Parse(debug_ini.IniReadValue("Navigator", "path_smoothing_precision"));
+            m_Navigator.PathSmoothingDistance = float.Parse(debug_ini.IniReadValue("Navigator", "path_smoothing_distance"));
             m_Navigator.KeepFromEdgePrecision = float.Parse(debug_ini.IniReadValue("Navigator", "keep_from_edge_precision"));
             m_Navigator.CurrentPosDiffRecalcThreshold = float.Parse(debug_ini.IniReadValue("Navigator", "current_pos_diff_recalc_threshold"));
 
-            //m_Explorer.ChangeExploreCellSize(int.Parse(debug_ini.IniReadValue("Explorer", "explore_cell_size")));
+            m_Explorer.ChangeExploreCellSize(int.Parse(debug_ini.IniReadValue("Explorer", "explore_cell_size")));
             m_Explorer.Enabled = bool.Parse(debug_ini.IniReadValue("Explorer", "enabled"));
-            m_Explorer.ExploreDestPrecision= float.Parse(debug_ini.IniReadValue("Explorer", "explore_dest_precision"));
+            m_Explorer.ExploreDestPrecision = float.Parse(debug_ini.IniReadValue("Explorer", "explore_dest_precision"));
+            m_Explorer.MaxAreaToMarkAsSmall = float.Parse(debug_ini.IniReadValue("Explorer", "max_area_to_mark_as_small"));
+            m_Explorer.MaxDimensionToMarkAsSmall = float.Parse(debug_ini.IniReadValue("Explorer", "max_dimension_to_mark_as_small"));
 
             m_BotSpeed = float.Parse(debug_ini.IniReadValue("Bot", "speed"));
         }

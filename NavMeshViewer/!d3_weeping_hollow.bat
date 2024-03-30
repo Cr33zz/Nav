@@ -1,0 +1,1 @@
+NavMeshViewer.exe --offline --load test_data\nav_exp_weeping_hollow.txt --debug_config ./debug_d3.ini 
