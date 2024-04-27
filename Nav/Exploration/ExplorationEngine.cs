@@ -31,6 +31,9 @@ namespace Nav
             UpdatesThread.Start();
         }
 
+        public event EventHandler<ExploreCell> ExploreCellAddedEvent;
+        public event EventHandler<ExploreCell> ExploreCellRemovedEvent;
+
         // called every update when heading towards an explore cell. parameters are destination explore cell and current position
         public Func<ExploreCell, Vec3, bool> AlternativeExploredCondition { get; set; }
 
@@ -577,11 +580,13 @@ namespace Nav
 
         protected virtual void OnExploreCellAdded(ExploreCell cell)
         {
+            ExploreCellAddedEvent?.Invoke(this, cell);
             Interlocked.Exchange(ref m_ForceUpdateDesiredExploreEndCell, 1);
         }
 
         protected virtual void OnExploreCellRemoved(ExploreCell cell)
         {
+            ExploreCellRemovedEvent?.Invoke(this, cell);
             Interlocked.Exchange(ref m_ForceUpdateDesiredExploreEndCell, 1);
             //Trace.WriteLine($"explore cell #{cell.GlobalId} @{cell.Position} removed");
         }
