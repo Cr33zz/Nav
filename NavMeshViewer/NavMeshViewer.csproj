@@ -31,6 +31,12 @@
     <BaseOutputPath>.\</BaseOutputPath>
   </PropertyGroup>
   <ItemGroup>
+  <Reference Include="ExileCore2">
+      <HintPath>..\..\Nav.PoE\ExileCore2.dll</HintPath>
+    </Reference>
+    <Reference Include="GameOffsets2">
+      <HintPath>..\..\Nav.PoE\GameOffsets2.dll</HintPath>
+    </Reference>
     <Reference Include="ExileCore">
       <HintPath>..\..\Nav.PoE\ExileCore.dll</HintPath>
     </Reference>
