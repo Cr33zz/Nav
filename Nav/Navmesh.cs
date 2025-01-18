@@ -512,14 +512,22 @@ namespace Nav
             return false;
         }
 
+        public bool DisableRegions { get; set; } = false;
         public uint UpdateRegionsInterval { get; set; } = 100;
 
+        protected virtual bool CanUpdateRegions() { return true; }
         private Int64 LastUpdateRegionsTime = 0;
 
         private void UpdateRegions()
         {
+            if (!CanUpdateRegions())
+                return;
+
             // copy current regions to avoid acquiring lock later
             var regions_copy = Regions;
+
+            if (DisableRegions)
+                regions_copy.Clear();
 
             AABB affected_area = AABB.ZERO;
             var blockers = new HashSet<AABB>();
