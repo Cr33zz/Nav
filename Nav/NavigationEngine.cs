@@ -608,7 +608,7 @@ namespace Nav
                     {
                         if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
                         {
-                            Trace.WriteLine($"Failed to find path between {from} and {to}, original to {original_to}, are connected {are_connected}, rough path dest {rough_path_destination}, rough_path_size {rough_path.Count}, keep using rough path dest {keep_using_rough_destination}, timed out {timed_out}, use time limit {use_time_limit}");
+                            Trace.WriteLine($"Failed to find path between {from} and {to}, original to {original_to}, start cell {start?.GlobalId ?? -1}, end cell {end?.GlobalId ?? -1}, are connected {are_connected}, rough path dest {rough_path_destination}, rough_path_size {rough_path.Count}, keep using rough path dest {keep_using_rough_destination}, timed out {timed_out}, use time limit {use_time_limit}");
                             return false;
                         }
                     }
@@ -1435,7 +1435,7 @@ namespace Nav
                         allow_rough_path: AllowRoughPath)
                         )
                     {
-                        Trace.WriteLine($"No path to {dest.pos} {dest.type} {MovementFlags} ({dest.debug_annotation ?? ""} current path dest {m_Path.path_destination.pos})");
+                        Trace.WriteLine($"No path to {dest.pos} (type: {dest.type} precision: {dest.precision} movement flags: {MovementFlags} annotation: {dest.debug_annotation ?? ""} current path dest: {m_Path.path_destination.pos})");
                         new_rough_path_destination = Vec3.ZERO; // clear rough destination just in case it is causing issues
                     }
                 }

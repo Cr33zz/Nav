@@ -47,6 +47,8 @@ namespace Nav
         public float ExploreDestPrecision { get; set; } = 20;
         // desired explore end cell must be withing that tolerance distance from desired end position
         public float DesiredExploreEndPositionTolerance { get; set; } = 100;
+        // when looking for unexplored cells this is the tolerance used to find patches that will have to match patches of the explore cells' cells
+        public float AgentSnapToExploreCellTolerance { get; set; } = 10;
 
         // change it via ChangeExploreCellSize function
         public int ExploreCellSize { get; private set; }
@@ -661,14 +663,14 @@ namespace Nav
 
         private class UnexploredSelector : Algorihms.IVisitor<ExploreCell>
         {
-            public UnexploredSelector(List<AABB> contraints, Func<ExploreCell, bool> filter, bool ignore_small, Vec3 agent_pos, Navmesh navmesh)
+            public UnexploredSelector(List<AABB> contraints, Func<ExploreCell, bool> filter, bool ignore_small, Vec3 agent_pos, float agent_patches_tolerance, Navmesh navmesh)
             {
                 this.constraints = contraints;
                 this.filter = filter;
                 this.ignore_small = ignore_small;
                 this.agent_pos = agent_pos;
                 this.navmesh = navmesh;
-                this.agent_patches_ids = navmesh.GetPatchesIds(agent_pos, MovementFlag.Walk, 10);
+                this.agent_patches_ids = navmesh.GetPatchesIds(agent_pos, MovementFlag.Walk, agent_patches_tolerance);
             }
 
             public void Visit(ExploreCell cell)
@@ -712,7 +714,7 @@ namespace Nav
                 UnexploredSelector selector;
                 using (new ReadLock(m_Navmesh.PatchesDataLock, false, "PatchesDataLock - ExplorationEngine.GetUnexploredCells")) // this enforces using the same patches throughout visitation process
                 {
-                    selector = new UnexploredSelector(ExploreConstraints, ExploreFilter, IgnoreSmall, agent_pos, m_Navmesh);
+                    selector = new UnexploredSelector(ExploreConstraints, ExploreFilter, IgnoreSmall, agent_pos, AgentSnapToExploreCellTolerance, m_Navmesh);
                     Algorihms.Visit<ExploreCell>(origin_cell, MovementFlag.None, -1, null, selector);
                 }
 
@@ -798,7 +800,7 @@ namespace Nav
                 bool validate_dest_cell = Interlocked.CompareExchange(ref m_ValidateDestCell, 0, 1) == 1;
                 bool mark_dest_cell_as_explored = false;
                 // perform connection check only when reevaluation is forced (usually due to navigation data change)
-                bool is_dest_cell_connected = (!force_reevaluation && !validate_dest_cell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, 0, 10, out var unused1, out var unused2);
+                bool is_dest_cell_connected = (!force_reevaluation && !validate_dest_cell) || m_Navmesh.AreConnected(GetDestinationCellPosition(), current_pos, MovementFlag.Walk, 0, AgentSnapToExploreCellTolerance, out var unused1, out var unused2);
                 
                 // delay exploration of currently unconnected explore cells, unless they are already delayed (mark them as explored in that case)
                 if (!is_dest_cell_connected)

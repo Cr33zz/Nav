@@ -663,7 +663,10 @@ namespace Nav
             Random rng = new Random();
 
             if (start == null || !strategy.IsValid())
+            {
+                Trace.WriteLine($"path finding not started (start valid: {start != null}, strategy valid: {strategy.IsValid()}[{strategy.GetType()}])");
                 return false;
+            }
 
             NodeInfo s = new NodeInfo(start, from, null, 0, strategy.GetMinDistance(start));
             open.Add(s);
@@ -754,6 +757,7 @@ namespace Nav
                 return true;
             }
 
+            Trace.WriteLine($"no path (allow disconnected: {allow_disconnected}, closed count: {closed.Count})");
             return false;
         }
 
