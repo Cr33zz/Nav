@@ -871,13 +871,13 @@ namespace Nav
             }
         }
 
-        public static void Visit<T>(T cell, MovementFlag flags, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null) where T : Cell
+        public static void Visit<T>(T cell, MovementFlag flags, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null, bool remove_invalid_neighbours = false) where T : Cell
         {
             HashSet<T> visited = new HashSet<T>();
-            Visit<T>(cell, ref visited, flags, true, 1, max_depth, null, visitor);
+            Visit<T>(cell, ref visited, flags, true, 1, max_depth, null, visitor, remove_invalid_neighbours);
         }
 
-        public static void Visit<T>(T cell, ref HashSet<T> visited, MovementFlag flags, bool visit_disabled, int depth = 1, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null) where T : Cell
+        public static void Visit<T>(T cell, ref HashSet<T> visited, MovementFlag flags, bool visit_disabled, int depth = 1, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null, bool remove_invalid_neighbours = false) where T : Cell
         {
             if ((allowed_cells != null && !allowed_cells.Contains(cell)) || visited.Contains(cell))
                 return;
@@ -893,14 +893,32 @@ namespace Nav
 
             visited.Add(cell);
 
+            var neighbours_to_remove = new List<Cell.Neighbour>();
+
             foreach (Cell.Neighbour neighbour in cell.Neighbours)
             {
+                // there is rare bug where cell contains neigbours that are definitely not connected, with border point and distance having exactly the same values as last valid neighbour
+                var neighbour_dist = cell.Center.Distance2D(neighbour.cell.Center);
+                if (neighbour_dist > neighbour.distance)
+                {
+                    Trace.WriteLine($"Cell ({cell.GlobalId}) @{cell.Center} has neigbour ({neighbour.cell.GlobalId}) further ({neighbour_dist}) than expected ({neighbour.distance})!");
+                    neighbours_to_remove.Add(neighbour);
+                    continue;
+                }
+
                 T neighbour_cell = (T)neighbour.cell;
 
                 if ((neighbour.connection_flags & flags) != flags)
                     continue;
 
-                Visit(neighbour_cell, ref visited, flags, visit_disabled, depth + 1, max_depth, allowed_cells, visitor);
+                Visit(neighbour_cell, ref visited, flags, visit_disabled, depth + 1, max_depth, allowed_cells, visitor, remove_invalid_neighbours);
+            }
+
+            if (remove_invalid_neighbours)
+            {
+                // this may not be thread safe....
+                foreach (Cell.Neighbour neighbour in neighbours_to_remove)
+                    cell.Neighbours.Remove(neighbour);
             }
         }
 

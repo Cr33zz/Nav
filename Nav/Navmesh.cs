@@ -483,7 +483,7 @@ namespace Nav
                         var patchVisitor = new Algorihms.PatchVisitor();
                         HashSet<Cell> visited = new HashSet<Cell>();
 
-                        Algorihms.Visit(start_cell, ref visited, MovementFlag.Walk, visit_disabled: false, allowed_cells: cells_copy, visitor: patchVisitor);
+                        Algorihms.Visit(start_cell, ref visited, MovementFlag.Walk, visit_disabled: false, allowed_cells: cells_copy, visitor: patchVisitor, remove_invalid_neighbours: true);
 
                         cells_patches.Add(new CellsPatch(patchVisitor.cells, patchVisitor.cells_grid, MovementFlag.Walk));
                         cells_copy.ExceptWith(patchVisitor.cells);

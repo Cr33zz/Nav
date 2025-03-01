@@ -471,6 +471,13 @@ namespace Nav
 
                 __tmp_crash_dbg = "3";
 
+                // there is very weird case rarely happening when start is null but start_on_nav_mesh is true, and at the same time end is not null while from and to are the position
+                if (start == null && end != null && from == to)
+                {
+                    Trace.WriteLine($"Failed to find start for {from}, using end cell as start cell!");
+                    start = end;
+                }
+
                 // align from position to closest cell
                 if (!start_on_nav_mesh)
                 {
@@ -608,7 +615,7 @@ namespace Nav
                     {
                         if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
                         {
-                            Trace.WriteLine($"Failed to find path between {from} and {to}, original to {original_to}, start cell {start?.GlobalId ?? -1}, end cell {end?.GlobalId ?? -1}, are connected {are_connected}, rough path dest {rough_path_destination}, rough_path_size {rough_path.Count}, keep using rough path dest {keep_using_rough_destination}, timed out {timed_out}, use time limit {use_time_limit}");
+                            Trace.WriteLine($"Failed to find path between {from} and {to}, as_close_as_possible {as_close_as_possible}, original_to {original_to}, start_cell {start?.GlobalId ?? -1}, start_on_nav_mesh {start_on_nav_mesh}, end_cell {end?.GlobalId ?? -1}, end_on_nav_mesh {end_on_nav_mesh}, are_connected {are_connected}, rough_path_dest {rough_path_destination}, rough_path_size {rough_path.Count}, keep_using_rough_destination {keep_using_rough_destination}, timed_out {timed_out}, use_time_limit {use_time_limit}");
                             return false;
                         }
                     }

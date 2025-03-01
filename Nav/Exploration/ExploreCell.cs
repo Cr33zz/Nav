@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Threading;
 
 namespace Nav
 {
@@ -41,7 +42,7 @@ namespace Nav
             Explored = false;
             Delayed = false;
             Small = false;
-            GlobalId = LastExploreCellGlobalId++;
+            GlobalId = Interlocked.Increment(ref LastExploreCellGlobalId);
         }
 
         public bool AddNeighbour(ExploreCell explore_cell, bool check_overlap = true)
