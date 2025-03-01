@@ -874,53 +874,59 @@ namespace Nav
         public static void Visit<T>(T cell, MovementFlag flags, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null, bool remove_invalid_neighbours = false) where T : Cell
         {
             HashSet<T> visited = new HashSet<T>();
-            Visit<T>(cell, ref visited, flags, true, 1, max_depth, null, visitor, remove_invalid_neighbours);
+            Visit<T>(cell, ref visited, flags, true, max_depth, null, visitor, remove_invalid_neighbours);
         }
 
-        public static void Visit<T>(T cell, ref HashSet<T> visited, MovementFlag flags, bool visit_disabled, int depth = 1, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null, bool remove_invalid_neighbours = false) where T : Cell
+        public static void Visit<T>(T cell, ref HashSet<T> visited, MovementFlag flags, bool visit_disabled, int max_depth = -1, HashSet<T> allowed_cells = null, IVisitor<T> visitor = null, bool remove_invalid_neighbours = false) where T : Cell
         {
-            if ((allowed_cells != null && !allowed_cells.Contains(cell)) || visited.Contains(cell))
-                return;
+            Stack<(T cell, int depth)> stack = new Stack<(T cell, int depth)>();
+            stack.Push((cell, 1));
 
-            if (!visit_disabled && cell.Disabled)
-                return;
-
-            if (max_depth > 0 && depth >= max_depth)
-                return;
-
-            if (visitor != null)
-                visitor.Visit(cell);
-
-            visited.Add(cell);
-
-            var neighbours_to_remove = new List<Cell.Neighbour>();
-
-            foreach (Cell.Neighbour neighbour in cell.Neighbours)
+            while (stack.Count > 0)
             {
-                // there is rare bug where cell contains neigbours that are definitely not connected, with border point and distance having exactly the same values as last valid neighbour
-                var neighbour_dist = cell.Center.Distance2D(neighbour.cell.Center);
-                if (neighbour_dist > neighbour.distance)
-                {
-                    Trace.WriteLine($"Cell ({cell.GlobalId}) @{cell.Center} has neigbour ({neighbour.cell.GlobalId}) further ({neighbour_dist}) than expected ({neighbour.distance})!");
-                    neighbours_to_remove.Add(neighbour);
+                var (currentCell, currentDepth) = stack.Pop();
+
+                if ((allowed_cells != null && !allowed_cells.Contains(currentCell)) || visited.Contains(currentCell))
                     continue;
+
+                if (!visit_disabled && currentCell.Disabled)
+                    continue;
+
+                if (max_depth > 0 && currentDepth >= max_depth)
+                    continue;
+
+                if (visitor != null)
+                    visitor.Visit(currentCell);
+
+                visited.Add(currentCell);
+
+                var neighbours_to_remove = new List<Cell.Neighbour>();
+
+                foreach (Cell.Neighbour neighbour in currentCell.Neighbours)
+                {
+                    var neighbour_dist = currentCell.Center.Distance2D(neighbour.cell.Center);
+                    if (neighbour_dist > neighbour.distance)
+                    {
+                        neighbours_to_remove.Add(neighbour);
+                        continue;
+                    }
+
+                    T neighbour_cell = (T)neighbour.cell;
+
+                    if ((neighbour.connection_flags & flags) != flags)
+                        continue;
+
+                    stack.Push((neighbour_cell, currentDepth + 1));
                 }
 
-                T neighbour_cell = (T)neighbour.cell;
-
-                if ((neighbour.connection_flags & flags) != flags)
-                    continue;
-
-                Visit(neighbour_cell, ref visited, flags, visit_disabled, depth + 1, max_depth, allowed_cells, visitor, remove_invalid_neighbours);
-            }
-
-            if (remove_invalid_neighbours)
-            {
-                // this may not be thread safe....
-                foreach (Cell.Neighbour neighbour in neighbours_to_remove)
-                    cell.Neighbours.Remove(neighbour);
+                if (remove_invalid_neighbours)
+                {
+                    foreach (Cell.Neighbour neighbour in neighbours_to_remove)
+                        currentCell.Neighbours.Remove(neighbour);
+                }
             }
         }
+
 
         internal class PatchVisitor : Algorihms.IVisitor<Cell>
         {

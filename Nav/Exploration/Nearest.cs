@@ -90,7 +90,7 @@ namespace Nav.ExploreEngine
             {
                 HashSet<ExploreCell> cells_group = new HashSet<ExploreCell>();
 
-                Algorihms.Visit(cell, ref cells_group, MovementFlag.None, true, 0, max_depth);
+                Algorihms.Visit(cell, ref cells_group, MovementFlag.None, true, max_depth);
 
                 //treat missing cells as explored thus explore edges to possibly load new navmesh data
                 int max_cells_num = (int)Math.Pow(9, max_depth);

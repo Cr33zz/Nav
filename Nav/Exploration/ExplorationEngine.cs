@@ -932,7 +932,7 @@ namespace Nav
                     HashSet<Cell> visited = new HashSet<Cell>();
 
                     using (m_Navmesh.AcquireReadDataLock("ExplorationEngine.GenerateExploreCells - visit"))
-                        Algorihms.Visit(cells_copy.First(), ref visited, movement_flags, true, 1, -1, cells_copy);
+                        Algorihms.Visit(cells_copy.First(), ref visited, movement_flags, true, -1, cells_copy);
 
                     List<AABB> intersections = new List<AABB>();
                     AABB intersections_aabb = new AABB();
