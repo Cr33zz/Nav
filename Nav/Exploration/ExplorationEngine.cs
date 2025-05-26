@@ -34,6 +34,8 @@ namespace Nav
         public event EventHandler<ExploreCell> ExploreCellAddedEvent;
         public event EventHandler<ExploreCell> ExploreCellRemovedEvent;
 
+        public bool VerboseLogs { get; set; } = false;
+
         // called every update when heading towards an explore cell. parameters are destination explore cell and current position
         public Func<ExploreCell, Vec3, bool> AlternativeExploredCondition { get; set; }
 
@@ -190,7 +192,8 @@ namespace Nav
 
                     if (current_explore_cell == null)
                     {
-                        Trace.WriteLine($"no explore cell found @{m_Navigator.CurrentPos} (total ex cells {m_ExploreCells.Count})");
+                        if (VerboseLogs)
+                            Trace.WriteLine($"no explore cell found @{m_Navigator.CurrentPos} (total ex cells {m_ExploreCells.Count})");
                         return 100;
                     }
 
@@ -388,21 +391,22 @@ namespace Nav
             return m_ExploreCells;
         }
 
-        public List<AABB> GetConstraintsFloodFill(Vec3 start_pos, float radius)
+        public List<AABB> GetConstraintsFloodFill(Vec3 start_pos, float radius, Vec3 fallback_start_pos)
         {
-            return GetConstraintsFloodFill(start_pos, x => x.CellsAABB.Overlaps2D(start_pos, radius));
+            return GetConstraintsFloodFill(start_pos, x => x.CellsAABB.Overlaps2D(start_pos, radius), fallback_start_pos);
         }
 
-        public List<AABB> GetConstraintsFloodFill(Vec3 start_pos, Func<ExploreCell, bool> pred)
+        public List<AABB> GetConstraintsFloodFill(Vec3 start_pos, Func<ExploreCell, bool> pred, Vec3 fallback_start_pos)
         {
-            return GetExploreCellsFloodFill(start_pos, pred).Select(x => new AABB(x.Position, ExploreCellSize / 100)).ToList();
+            return GetExploreCellsFloodFill(start_pos, pred, fallback_start_pos).Select(x => new AABB(x.Position, ExploreCellSize / 100)).ToList();
         }
 
-        public List<ExploreCell> GetExploreCellsFloodFill(Vec3 start_pos, Func<ExploreCell, bool> pred)
+        public List<ExploreCell> GetExploreCellsFloodFill(Vec3 start_pos, Func<ExploreCell, bool> pred, Vec3 fallback_start_pos)
         {
             using (new ReadLock(DataLock, true, "DataLock - ExplorationEngine.GetExploreCellsFloodFill"))
             {
                 ExploreCell start_cell = m_ExploreCells.FirstOrDefault(x => x.CellsAABB.Contains2D(start_pos));
+                start_cell ??= !fallback_start_pos.IsZero() ? m_ExploreCells.FirstOrDefault(x => x.CellsAABB.Contains2D(fallback_start_pos)) : null;
                 if (start_cell == null)
                     return new List<ExploreCell>();
 
@@ -438,7 +442,8 @@ namespace Nav
 
             if (dest_cell != null)
             {
-                Trace.WriteLine($"Explore cell GID {dest_cell.GlobalId} considered explored because it was reached.");
+                if (VerboseLogs)
+                    Trace.WriteLine($"Explore cell GID {dest_cell.GlobalId} considered explored because it was reached.");
                 OnCellExplored(dest_cell);
             }
 
@@ -458,7 +463,8 @@ namespace Nav
 
                 if (m_DestCell != prev_dest_cell)
                 {
-                    Trace.WriteLine($"Heading to explore cell GID {m_DestCell?.GlobalId ?? -1} @ {GetDestinationCellPosition()}");
+                    if (VerboseLogs)
+                        Trace.WriteLine($"Heading to explore cell GID {m_DestCell?.GlobalId ?? -1} @ {GetDestinationCellPosition()}");
                     // force reevaluation so connectivity check is performed on selected cell (it is cheaper than checking connectivity for all unexplored cells)
                     Interlocked.Exchange(ref m_ValidateDestCell, 1);
                 }
@@ -822,7 +828,8 @@ namespace Nav
 
                 if (mark_dest_cell_as_explored)
                 {
-                    Trace.WriteLine($"Explore cell GID {m_DestCell.GlobalId} considered explored by external logic.");
+                    if (VerboseLogs)
+                        Trace.WriteLine($"Explore cell GID {m_DestCell.GlobalId} considered explored by external logic.");
                     OnCellExplored(m_DestCell);
                 }
             }
@@ -848,14 +855,16 @@ namespace Nav
                     bool mark_explored = false;
                     if (AlternativeExploredCondition?.Invoke(travel_through_explore_cell, current_pos) ?? false)
                     {
-                        Trace.WriteLine($"Explore cell GID {travel_through_explore_cell.GlobalId} considered explored by external logic.");
+                        if (VerboseLogs)
+                            Trace.WriteLine($"Explore cell GID {travel_through_explore_cell.GlobalId} considered explored by external logic.");
                         mark_explored = true;
                     }
 
                     // mark cells as explored when passing by close enough
                     if (!mark_explored && travel_through_explore_cell.Position.Distance2D(current_pos) < ExploreDestPrecision)
                     {
-                        Trace.WriteLine($"Explore cell GID {travel_through_explore_cell.GlobalId} considered explored because of passing by.");
+                        if (VerboseLogs)
+                            Trace.WriteLine($"Explore cell GID {travel_through_explore_cell.GlobalId} considered explored because of passing by.");
                         mark_explored = true;
                     }
 
@@ -1014,7 +1023,7 @@ namespace Nav
             using (new Profiler("Rough path finding (incl. lock) took %t", 50))
             using (new ReadLock(DataLock, description: "DataLock - ExplorationEngine.FindRoughPath"))
             using (new Profiler("Rough path finding took %t", 50))
-                Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<ExploreCell>(to, end), MovementFlag.None, ref tmp_path, out var timed_out, use_cell_centers: true);
+                Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<ExploreCell>(to, end, m_Navmesh, check_connectivity: true), MovementFlag.None, ref tmp_path, out var timed_out, use_cell_centers: true);
 
             path = tmp_path.Select(x => x.pos).ToList();
             return true;

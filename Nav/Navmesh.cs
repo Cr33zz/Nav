@@ -203,15 +203,22 @@ namespace Nav
         internal static List<Cell> m_CellsCache = new List<Cell>();
 
         // Returns true when position is on navmesh. Acquires DataLock (read)
-        public bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool allow_replacement = true, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null)
+        public bool GetCellAt(Vec3 p, out Cell result_cell, MovementFlag flags = MovementFlag.Walk, bool allow_disabled = false, bool allow_replacement = true, bool nearest = false, float nearest_tolerance = -1, bool test_2d = true, float z_tolerance = 0, HashSet<Cell> exclude_cells = null, bool verbose = false)
         {
+            if (verbose)
+                Trace.WriteLine($"GetCellAt {p} (flags: {flags}, allow_disabled: {allow_disabled}, allow_replacement: {allow_replacement}, nearest: {nearest}, nearest_tolerance: {nearest_tolerance}, test_2d: {test_2d}, z_tolerance: {z_tolerance}, exclude_cells: {exclude_cells?.Count ?? 0})");
+            
             using (new ReadLock(DataLock))
             //using (new ReadLock(DataLock, context: "GetCellAt"))
             {
                 result_cell = null;
 
                 if (p.IsZero())
+                {
+                    if (verbose)
+                        Trace.WriteLine("position is zero!");
                     return false;
+                }
 
                 float min_dist = float.MaxValue;
 
@@ -223,7 +230,8 @@ namespace Nav
                         foreach (Cell cell in cells.Where(x => (allow_disabled || !x.Disabled) && (allow_replacement || !x.Replacement) && (exclude_cells == null || !exclude_cells.Contains(x)) && x.HasFlags(flags) && x.MovementCostMult != -1))
                         {
                             result_cell = cell;
-
+                            if (verbose)
+                                Trace.WriteLine($"found containing cell GID: {result_cell.GlobalId}/{cell.GlobalId}");
                             return true;
                         }
                     }
@@ -243,10 +251,15 @@ namespace Nav
                             {
                                 min_dist = dist;
                                 result_cell = cell;
+                                if (verbose)
+                                    Trace.WriteLine($"result updated with nearest cell GID: {result_cell.GlobalId} (dist: {dist})");
                             }
                         }
                     }
                 }
+
+                if (verbose)
+                    Trace.WriteLine($"nearest cell GID: {result_cell?.GlobalId ?? -1}");
 
                 return false;
             }
@@ -1259,7 +1272,7 @@ namespace Nav
             using (new Profiler("AreConnected (incl. lock) took %t", 100))
             using (new ReadLock(PatchesDataLock))
             //using (new ReadLock(DataLock, context: "AreConnected"))
-            using (new Profiler("AreConnected took %t", 10))
+            using (new Profiler("AreConnected took %t", 50))
             {
                 pos1_on_navmesh = pos1;
                 pos2_on_navmesh = pos2;

@@ -115,7 +115,7 @@ namespace Nav
 
         public static void FindExplorePath2Opt(ExploreCell start_cell, Vec3 desired_explore_end_pos, float desired_explore_end_tolerance, List<ExploreCell> explore_cells, ICellsDistancer distances, ref List<ExploreCell> path, long timeout)
         {
-            using (new Profiler($"2-Opt %t"))
+            using (new Profiler($"2-Opt %t", 300))
             {
                 path = path ?? new List<ExploreCell>();
                 path.Clear();
@@ -256,7 +256,7 @@ namespace Nav
                     }
                 }
 
-                Trace.WriteLine("[FindExplorePath 2-Opt] Final solution distance: " + GetTravelDistance(best_tour, distances));
+                //Trace.WriteLine("[FindExplorePath 2-Opt] Final solution distance: " + GetTravelDistance(best_tour, distances));
 
                 foreach (ExploreCell cell in best_tour)
                     path.Add(cell);
@@ -341,7 +341,7 @@ namespace Nav
                     temp *= alpha;
                 }
 
-                Trace.WriteLine("[FindExplorePath] Final solution distance: " + GetTravelDistance(best_solution, distances));
+                //Trace.WriteLine("[FindExplorePath] Final solution distance: " + GetTravelDistance(best_solution, distances));
 
                 foreach (ExploreCell cell in best_solution)
                     path.Add(cell);
@@ -388,10 +388,10 @@ namespace Nav
             return path.Select(x => x.Position).ToList();
         }
 
-        public static bool AreConnected<T>(T start, ref T end, MovementFlag flags) where T : Cell
+        public static bool AreConnected<T>(T start, ref T end, MovementFlag flags, Navmesh navmesh) where T : Cell
         {
             List<path_pos> path = null;
-            return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end), flags, ref path, out var timedOut);
+            return FindPath(start, Vec3.ZERO, new Algorihms.DestinationPathFindStrategy<T>(Vec3.ZERO, end, navmesh), flags, ref path, out var timedOut);
         }
 
         public static float GetPathLength(List<Vec3> path, Vec3 pos)
@@ -609,6 +609,8 @@ namespace Nav
             public abstract float GetMinDistance(T cell);
             public virtual Vec3 GetDestination() { return Vec3.ZERO;  } // center of cell
             public virtual bool UseFinalCellEntranceAsDestination() { return false; }
+            public virtual bool CheckNeighbourConnectivity() { return false; }
+            public virtual bool AreConnected(T cell_1, T cell_2) { return true; }
             public abstract bool IsDestCell(T cell);
             public T FinalDestCell { get; set; } // for storing result
         }
@@ -616,15 +618,19 @@ namespace Nav
         public class DestinationPathFindStrategy<T> : PathFindStrategy<T>
             where T : Cell
         {
-            public DestinationPathFindStrategy(Vec3 dest, T dest_cell) { Dest = dest; DestCell = dest_cell; FinalDestCell = dest_cell; }
+            public DestinationPathFindStrategy(Vec3 dest, T dest_cell, Navmesh navmesh, bool check_connectivity = false) { Dest = dest; DestCell = dest_cell; FinalDestCell = dest_cell; CheckConnectivity = check_connectivity; Navmesh = navmesh; }
 
             public override bool IsValid() { return DestCell != null; }
             public override float GetMinDistance(T cell) { return cell.AABB.Distance2D(Dest); }
             public override Vec3 GetDestination() { return Dest; }
             public override bool IsDestCell(T cell) { return cell == DestCell; }
+            public override bool CheckNeighbourConnectivity() { return CheckConnectivity; }
+            public override bool AreConnected(T cell_1, T cell_2) { return Navmesh.AreConnected(cell_1.Center, cell_2.Center, MovementFlag.All, 0, 0, false); }
 
             private Vec3 Dest;
             private T DestCell;
+            private bool CheckConnectivity = false;
+            private Navmesh Navmesh;
         }
 
         public class AvoidancePathFindStrategy<T> : PathFindStrategy<T>
@@ -639,7 +645,7 @@ namespace Nav
             public override float GetMinDistance(T cell) { return HintPos.IsZero() ? 0 : cell.AABB.Distance2D(HintPos); }
             // while path finding consider future threat regions (those with negative threat) as actual threats
             public override bool IsDestCell(T cell) { return Math.Abs(cell.Threat) < ThreatThreshold; }
-            public override bool UseFinalCellEntranceAsDestination() { return true; }
+            public override bool UseFinalCellEntranceAsDestination() { return true; }            
 
             private float ThreatThreshold;
             private Vec3 HintPos;
@@ -708,6 +714,9 @@ namespace Nav
                         Cell cell_neighbour = neighbour.cell;
 
                         if (cell_neighbour.Disabled || (neighbour.connection_flags & flags) != flags)
+                            continue;
+
+                        if (strategy.CheckNeighbourConnectivity() && !strategy.AreConnected((T)current_node.cell, (T)cell_neighbour))
                             continue;
 
                         Vec3 leading_point = use_cell_centers ? neighbour.cell.Center : neighbour.cell.AABB.Align(current_node.leading_point);

@@ -609,7 +609,7 @@ namespace Nav
                     //t.Start();
 
                     var area = new AABB(m_Navigator.CurrentPos, 1000);
-                    var result = m_Explorer.GetConstraintsFloodFill(m_Navigator.CurrentPos, (x) => x.CellsAABB.Overlaps2D(area));
+                    var result = m_Explorer.GetConstraintsFloodFill(m_Navigator.CurrentPos, (x) => x.CellsAABB.Overlaps2D(area), Vec3.ZERO);
 
                     e.Handled = true;
                 }

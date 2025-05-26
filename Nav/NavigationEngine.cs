@@ -471,13 +471,6 @@ namespace Nav
 
                 __tmp_crash_dbg = "3";
 
-                // there is very weird case rarely happening when start is null but start_on_nav_mesh is true, and at the same time end is not null while from and to are the position
-                if (start == null && end != null && from == to)
-                {
-                    Trace.WriteLine($"Failed to find start for {from}, using end cell as start cell!");
-                    start = end;
-                }
-
                 // align from position to closest cell
                 if (!start_on_nav_mesh)
                 {
@@ -590,19 +583,19 @@ namespace Nav
 
                     Vec3 bounce_dir = start.AABB.GetBounceDir2D((to - from).Normalized2D(), m_Navmesh.Rng);
                     Vec3 new_from = from + bounce_dir * BounceDist;
-                    m_Navmesh.GetCellAt(new_from, out start, flags, false, true, as_close_as_possible);
+                    m_Navmesh.GetCellAt(new_from, out var startBounce, flags, false, true, as_close_as_possible);
 
-                    if (start != null)
+                    if (startBounce != null)
                     {
-                        new_from = start.AABB.Align(new_from);
+                        new_from = startBounce.AABB.Align(new_from);
 
-                        if (!Algorihms.FindPath(start, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
+                        if (!Algorihms.FindPath(startBounce, new_from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end, m_Navmesh), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
                         {
                             Trace.WriteLine($"Failed to find bounce path between {from} and {to}, are connected {are_connected}, timed out {timed_out}, use time limit {use_time_limit}");
                             return false;
                         }
 
-                        tmp_path.Insert(0, new path_pos(start.AABB.Align(from), start));
+                        tmp_path.Insert(0, new path_pos(startBounce.AABB.Align(from), startBounce));
 
                         bounced = true;
                     }
@@ -613,9 +606,9 @@ namespace Nav
                     __tmp_crash_dbg = "11";
                     using (new Profiler($"Path finding algorithm took %t [rough: {rough_path.Count}, connected: {are_connected}]", 100))
                     {
-                        if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
+                        if (!Algorihms.FindPath(start, from, new Algorihms.DestinationPathFindStrategy<Cell>(to, end, m_Navmesh), flags, ref tmp_path, out timed_out, random_coeff, allow_disconnected: as_close_as_possible, use_cell_centers: UseCellsCenters, ignore_movement_cost: ignore_movement_cost, time_limit: use_time_limit ? PathFindingTimeLimit : -1))
                         {
-                            Trace.WriteLine($"Failed to find path between {from} and {to}, as_close_as_possible {as_close_as_possible}, original_to {original_to}, start_cell {start?.GlobalId ?? -1}, start_on_nav_mesh {start_on_nav_mesh}, end_cell {end?.GlobalId ?? -1}, end_on_nav_mesh {end_on_nav_mesh}, are_connected {are_connected}, rough_path_dest {rough_path_destination}, rough_path_size {rough_path.Count}, keep_using_rough_destination {keep_using_rough_destination}, timed_out {timed_out}, use_time_limit {use_time_limit}");
+                            Trace.WriteLine($"Failed to find path between {from} and {to}, as_close_as_possible {as_close_as_possible}, original_to {original_to}, bounce {bounce}, start_cell {start?.GlobalId ?? -1}, start_on_nav_mesh {start_on_nav_mesh}, end_cell {end?.GlobalId ?? -1}, end_on_nav_mesh {end_on_nav_mesh}, are_connected {are_connected}, rough_path_dest {rough_path_destination}, rough_path_size {rough_path.Count}, keep_using_rough_destination {keep_using_rough_destination}, timed_out {timed_out}, use_time_limit {use_time_limit}");
                             return false;
                         }
                     }
@@ -1541,7 +1534,7 @@ namespace Nav
                 {
                     GridCell current_grid = m_Navmesh.m_GridCells.FirstOrDefault(x => x.Contains2D(CurrentPos));
 
-                    GridCell destination_grid = m_Navmesh.m_GridCells.FirstOrDefault(x => destination_grids_id.Contains(x.Id) && Algorihms.AreConnected(current_grid, ref x, MovementFlag.None));
+                    GridCell destination_grid = m_Navmesh.m_GridCells.FirstOrDefault(x => destination_grids_id.Contains(x.Id) && Algorihms.AreConnected(current_grid, ref x, MovementFlag.None, m_Navmesh));
 
                     if (destination_grid != null)
                     {
