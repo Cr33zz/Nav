@@ -10,6 +10,7 @@ using System.Globalization;
 
 namespace Nav
 {
+    [Serializable]
     public struct Region : IEquatable<Region>
     {
         public Region(AABB area, float move_cost_mult, float threat = 0)
@@ -69,6 +70,11 @@ namespace Nav
             Area = new AABB(r);
             MoveCostMult = r.ReadSingle();
             Threat = r.ReadSingle();
+        }
+
+        public override string ToString()
+        {
+            return $"[area: {Area} mcm: {MoveCostMult} th: {Threat}]";
         }
     }
 

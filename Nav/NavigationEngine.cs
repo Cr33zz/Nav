@@ -1037,6 +1037,19 @@ namespace Nav
             }
         }
 
+        public bool WasNearby(Vec3 position, float proximity)
+        {
+            using (new ReadLock(InputLock))
+            {
+                foreach (var pos in m_DebugPositionsHistory)
+                {
+                    if (pos.Distance(position) <= proximity)
+                        return true;
+                }
+            }
+            return false;
+        }
+
         public List<Vec3> GetPath()
         {
             using (new ReadLock(PathLock))

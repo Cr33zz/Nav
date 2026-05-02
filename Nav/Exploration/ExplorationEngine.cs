@@ -568,6 +568,7 @@ namespace Nav
 
         public virtual void OnNavBlockersChanged()
         {
+            Trace.WriteLine("Nav blockers changed, re-evaluating exploration");
             RequestReevaluation();
             Interlocked.Exchange(ref m_ForceRefreshExploredPercent, 1);
         }

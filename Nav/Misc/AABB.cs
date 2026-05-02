@@ -421,6 +421,12 @@ namespace Nav
             return false;
         }
 
+        public override string ToString()
+        {
+            return $"[min:{Min} max:{Max}]";
+            ;
+        }
+
         public Vec3 Min;
         public Vec3 Max;
     }
